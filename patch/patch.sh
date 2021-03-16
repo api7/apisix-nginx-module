@@ -22,11 +22,12 @@ apply_patch() {
     ver="$4"
 
     dir="$root/bundle/$repo-$ver"
-    cd "$dir" || failed_to_cd "$dir"
+    pushd "$dir" || failed_to_cd "$dir"
     for patch in "$patch_dir/$repo"-*.patch; do
         echo "Start to patch $patch to $dir..."
         patch -p0 --verbose < "$patch"
     done
+    popd
 }
 
 if [[ $# != 1 ]]; then
