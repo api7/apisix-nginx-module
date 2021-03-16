@@ -15,6 +15,18 @@ index 3caabe2..6361a23 100644
  	$(INSTALL) lib/ngx/*.lua $(DESTDIR)$(LUA_LIB_DIR)/ngx/
  	$(INSTALL) lib/ngx/ssl/*.lua $(DESTDIR)$(LUA_LIB_DIR)/ngx/ssl/
  
+diff --git lib/resty/core.lua lib/resty/core.lua
+index 5472230..d6e6869 100644
+--- lib/resty/core.lua
++++ lib/resty/core.lua
+@@ -20,6 +20,7 @@ if subsystem == 'http' then
+     require "resty.core.phase"
+     require "resty.core.ndk"
+     require "resty.core.socket"
++    require "resty.core.socket.tcp"
+ end
+
+
 diff --git lib/resty/core/socket/tcp.lua lib/resty/core/socket/tcp.lua
 new file mode 100644
 index 0000000..30302f0
