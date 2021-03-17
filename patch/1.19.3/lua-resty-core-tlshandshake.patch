@@ -16,23 +16,23 @@ index 3caabe2..6361a23 100644
  	$(INSTALL) lib/ngx/ssl/*.lua $(DESTDIR)$(LUA_LIB_DIR)/ngx/ssl/
  
 diff --git lib/resty/core.lua lib/resty/core.lua
-index 5472230..d6e6869 100644
+index 5472230..7d3ab16 100644
 --- lib/resty/core.lua
 +++ lib/resty/core.lua
-@@ -20,6 +20,7 @@ if subsystem == 'http' then
-     require "resty.core.phase"
-     require "resty.core.ndk"
-     require "resty.core.socket"
-+    require "resty.core.socket.tcp"
+@@ -23,6 +23,7 @@ if subsystem == 'http' then
  end
-
-
+ 
+ 
++require "resty.core.socket.tcp"
+ require "resty.core.misc"
+ require "resty.core.ctx"
+ 
 diff --git lib/resty/core/socket/tcp.lua lib/resty/core/socket/tcp.lua
 new file mode 100644
-index 0000000..30302f0
+index 0000000..4b59adb
 --- /dev/null
 +++ lib/resty/core/socket/tcp.lua
-@@ -0,0 +1,236 @@
+@@ -0,0 +1,273 @@
 +-- Copyright (C) by OpenResty Inc.
 +
 +
@@ -59,9 +59,15 @@ index 0000000..30302f0
 +local select = select
 +local co_yield = coroutine._yield
 +local io_open = io.open
++local subsystem = ngx.config.subsystem
 +
 +
-+ffi.cdef[[
++local ngx_lua_ffi_socket_tcp_tlshandshake
++local ngx_lua_ffi_socket_tcp_get_tlshandshake_result
++local ngx_lua_ffi_tls_free_session
++
++if subsystem == 'http' then
++    ffi.cdef[[
 +typedef struct ngx_http_lua_socket_tcp_upstream_s
 +    ngx_http_lua_socket_tcp_upstream_t;
 +
@@ -76,6 +82,37 @@ index 0000000..30302f0
 +
 +void ngx_http_lua_ffi_tls_free_session(void *sess);
 +]]
++
++    ngx_lua_ffi_socket_tcp_tlshandshake =
++        C.ngx_http_lua_ffi_socket_tcp_tlshandshake
++    ngx_lua_ffi_socket_tcp_get_tlshandshake_result =
++        C.ngx_http_lua_ffi_socket_tcp_get_tlshandshake_result
++    ngx_lua_ffi_tls_free_session = C.ngx_http_lua_ffi_tls_free_session
++
++elseif subsystem == 'stream' then
++    ffi.cdef[[
++typedef struct ngx_stream_lua_socket_tcp_upstream_s
++    ngx_stream_lua_socket_tcp_upstream_t;
++
++int ngx_stream_lua_ffi_socket_tcp_tlshandshake(ngx_stream_lua_request_t *r,
++    ngx_stream_lua_socket_tcp_upstream_t *u, void *sess,
++    int enable_session_reuse, ngx_str_t *server_name, int verify,
++    int ocsp_status_req, void *chain, void *pkey, char **errmsg);
++
++int ngx_stream_lua_ffi_socket_tcp_get_tlshandshake_result(
++    ngx_stream_lua_request_t *r,
++    ngx_stream_lua_socket_tcp_upstream_t *u, void **sess, char **errmsg,
++    int *openssl_error_code);
++
++void ngx_stream_lua_ffi_tls_free_session(void *sess);
++]]
++
++    ngx_lua_ffi_socket_tcp_tlshandshake =
++        C.ngx_stream_lua_ffi_socket_tcp_tlshandshake
++    ngx_lua_ffi_socket_tcp_get_tlshandshake_result =
++        C.ngx_stream_lua_ffi_socket_tcp_get_tlshandshake_result
++    ngx_lua_ffi_tls_free_session = C.ngx_stream_lua_ffi_tls_free_session
++end
 +
 +
 +local SOCKET_CTX_INDEX = 1
@@ -175,7 +212,7 @@ index 0000000..30302f0
 +
 +    local u = self[SOCKET_CTX_INDEX]
 +
-+    local rc = C.ngx_http_lua_ffi_socket_tcp_tlshandshake(r, u,
++    local rc = ngx_lua_ffi_socket_tcp_tlshandshake(r, u,
 +                   session_ptr[0],
 +                   reused_session ~= false,
 +                   server_name_str,
@@ -205,7 +242,7 @@ index 0000000..30302f0
 +                return true
 +            end
 +
-+            rc = C.ngx_http_lua_ffi_socket_tcp_get_tlshandshake_result(r, u,
++            rc = ngx_lua_ffi_socket_tcp_get_tlshandshake_result(r, u,
 +                     session_ptr, errmsg, openssl_error_code)
 +
 +            assert(rc == FFI_OK)
@@ -214,14 +251,14 @@ index 0000000..30302f0
 +                return nil
 +            end
 +
-+            return ffi_gc(session_ptr[0], C.ngx_http_lua_ffi_tls_free_session)
++            return ffi_gc(session_ptr[0], ngx_lua_ffi_tls_free_session)
 +        end
 +
 +        assert(rc == FFI_AGAIN)
 +
 +        co_yield()
 +
-+        rc = C.ngx_http_lua_ffi_socket_tcp_get_tlshandshake_result(r, u,
++        rc = ngx_lua_ffi_socket_tcp_get_tlshandshake_result(r, u,
 +                 session_ptr, errmsg, openssl_error_code)
 +    end
 +end
