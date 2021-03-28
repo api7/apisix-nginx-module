@@ -1,0 +1,11 @@
+ngx_module_type=HTTP
+ngx_module_name=ngx_http_apisix_module
+ngx_module_srcs="$ngx_addon_dir/src/ngx_http_apisix_module.c"
+ngx_module_deps=$ngx_addon_dir/src/ngx_http_apisix_module.h
+ngx_module_incs="$ngx_addon_dir/src"
+
+. auto/module
+
+ngx_addon_name=$ngx_module_name
+
+have=NGX_HTTP_APISIX . auto/have
