@@ -2,7 +2,6 @@ local ffi = require("ffi")
 local base = require("resty.core.base")
 local get_request = base.get_request
 local C = ffi.C
-local error = error
 local NGX_ERROR = ngx.ERROR
 
 
