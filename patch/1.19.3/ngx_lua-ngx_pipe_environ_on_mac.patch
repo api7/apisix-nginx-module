@@ -1,7 +1,7 @@
 diff --git a/src/ngx_http_lua_pipe.c b/src/ngx_http_lua_pipe.c
 index c555d7bc..e97fb0a8 100644
---- a/src/ngx_http_lua_pipe.c
-+++ b/src/ngx_http_lua_pipe.c
+--- src/ngx_http_lua_pipe.c
++++ src/ngx_http_lua_pipe.c
 @@ -545,6 +545,21 @@ ngx_http_lua_pipe_fd_write(ngx_connection_t *c, u_char *buf, size_t size)
  }
  
