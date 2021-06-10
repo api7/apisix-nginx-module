@@ -29,10 +29,10 @@ index 5472230..7d3ab16 100644
  
 diff --git lib/resty/core/socket/tcp.lua lib/resty/core/socket/tcp.lua
 new file mode 100644
-index 0000000..4b59adb
+index 0000000..89454ad
 --- /dev/null
 +++ lib/resty/core/socket/tcp.lua
-@@ -0,0 +1,273 @@
+@@ -0,0 +1,277 @@
 +-- Copyright (C) by OpenResty Inc.
 +
 +
@@ -224,19 +224,15 @@ index 0000000..4b59adb
 +        error("no request ctx found", 2)
 +    end
 +
++    if rc == FFI_ERROR then
++        return nil, ffi_str(errmsg[0])
++    end
++
++    if rc == FFI_DONE then
++        return reused_session
++    end
++
 +    while true do
-+        if rc == FFI_ERROR then
-+            if openssl_error_code[0] ~= 0 then
-+                return nil, openssl_error_code[0] .. ": " .. ffi_str(errmsg[0])
-+            end
-+
-+            return nil, ffi_str(errmsg[0])
-+        end
-+
-+        if rc == FFI_DONE then
-+            return reused_session
-+        end
-+
 +        if rc == FFI_OK then
 +            if reused_session == false then
 +                return true
@@ -260,6 +256,14 @@ index 0000000..4b59adb
 +
 +        rc = ngx_lua_ffi_socket_tcp_get_tlshandshake_result(r, u,
 +                 session_ptr, errmsg, openssl_error_code)
++
++        if rc == FFI_ERROR then
++            if openssl_error_code[0] ~= 0 then
++                return nil, openssl_error_code[0] .. ": " .. ffi_str(errmsg[0])
++            end
++
++            return nil, ffi_str(errmsg[0])
++        end
 +    end
 +end
 +
