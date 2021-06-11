@@ -4,6 +4,23 @@
 #include "ngx_http_apisix_module.h"
 
 
+static void *ngx_http_apisix_create_loc_conf(ngx_conf_t *cf);
+static char *ngx_http_apisix_merge_loc_conf(ngx_conf_t *cf, void *parent,
+    void *child);
+
+
+static ngx_command_t ngx_http_apisix_cmds[] = {
+    { ngx_string("apisix_delay_client_max_body_check"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_apisix_loc_conf_t, delay_client_max_body_check),
+      NULL },
+
+    ngx_null_command
+};
+
+
 static ngx_http_module_t ngx_http_apisix_module_ctx = {
     NULL,                                    /* preconfiguration */
     NULL,                                    /* postconfiguration */
@@ -14,15 +31,15 @@ static ngx_http_module_t ngx_http_apisix_module_ctx = {
     NULL,                                    /* create server configuration */
     NULL,                                    /* merge server configuration */
 
-    NULL,                                    /* create location configuration */
-    NULL                                     /* merge location configuration */
+    ngx_http_apisix_create_loc_conf,         /* create location configuration */
+    ngx_http_apisix_merge_loc_conf           /* merge location configuration */
 };
 
 
 ngx_module_t ngx_http_apisix_module = {
     NGX_MODULE_V1,
     &ngx_http_apisix_module_ctx,         /* module context */
-    NULL,                                /* module directives */
+    ngx_http_apisix_cmds,                /* module directives */
     NGX_HTTP_MODULE,                     /* module type */
     NULL,                                /* init master */
     NULL,                                /* init module */
@@ -34,6 +51,34 @@ ngx_module_t ngx_http_apisix_module = {
     NGX_MODULE_V1_PADDING
 };
 
+
+static void *
+ngx_http_apisix_create_loc_conf(ngx_conf_t *cf)
+{
+    ngx_http_apisix_loc_conf_t *conf;
+
+    conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_apisix_loc_conf_t));
+    if (conf == NULL) {
+        return NULL;
+    }
+
+    conf->delay_client_max_body_check = NGX_CONF_UNSET;
+
+    return conf;
+}
+
+
+static char *
+ngx_http_apisix_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
+{
+    ngx_http_apisix_loc_conf_t *prev = parent;
+    ngx_http_apisix_loc_conf_t *conf = child;
+
+    ngx_conf_merge_value(conf->delay_client_max_body_check,
+                         prev->delay_client_max_body_check, 0);
+
+    return NGX_CONF_OK;
+}
 
 
 #if (NGX_HTTP_SSL)
@@ -230,3 +275,56 @@ failed:
     ngx_http_apisix_flush_ssl_error();
 }
 #endif
+
+
+ngx_flag_t
+ngx_http_apisix_delay_client_max_body_check(ngx_http_request_t *r)
+{
+    ngx_http_apisix_loc_conf_t  *alcf;
+
+    alcf = ngx_http_get_module_loc_conf(r, ngx_http_apisix_module);
+    return alcf->delay_client_max_body_check;
+}
+
+
+ngx_int_t
+ngx_http_apisix_client_set_max_body_size(ngx_http_request_t *r,
+                                         off_t bytes)
+{
+    ngx_http_apisix_ctx_t       *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "set client max body size %O",
+                   ctx->client_max_body_size);
+
+    ctx->client_max_body_size = bytes;
+
+    return NGX_OK;
+}
+
+
+off_t
+ngx_http_apisix_client_max_body_size(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t     *ctx;
+    ngx_http_core_loc_conf_t  *clcf;
+
+    ctx = ngx_http_get_module_ctx(r, ngx_http_apisix_module);
+
+    if (ctx != NULL && ctx->client_max_body_size) {
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                       "get client max body size %O",
+                       ctx->client_max_body_size);
+        return ctx->client_max_body_size;
+    }
+
+    clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+
+    return clcf->client_max_body_size;
+}
