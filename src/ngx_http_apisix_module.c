@@ -304,6 +304,7 @@ ngx_http_apisix_client_set_max_body_size(ngx_http_request_t *r,
                    ctx->client_max_body_size);
 
     ctx->client_max_body_size = bytes;
+    ctx->client_max_body_size_set = 1;
 
     return NGX_OK;
 }
@@ -317,7 +318,7 @@ ngx_http_apisix_client_max_body_size(ngx_http_request_t *r)
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_apisix_module);
 
-    if (ctx != NULL && ctx->client_max_body_size) {
+    if (ctx != NULL && ctx->client_max_body_size_set) {
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                        "get client max body size %O",
                        ctx->client_max_body_size);

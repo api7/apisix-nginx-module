@@ -15,6 +15,8 @@ typedef struct {
     EVP_PKEY            *upstream_pkey;
 
     off_t                client_max_body_size;
+
+    unsigned             client_max_body_size_set:1;
 } ngx_http_apisix_ctx_t;
 
 

@@ -215,3 +215,22 @@ POST /t
 --- error_code: 413
 --- error_log
 client intended to send too large body
+
+
+
+=== TEST 11: set client_max_body_size to 0 means no limitation
+--- config
+    location /up {
+        return 200;
+    }
+    location /t {
+        client_max_body_size 1;
+        access_by_lua_block {
+            local client = require("resty.apisix.client")
+            assert(client.set_client_max_body_size(0))
+        }
+        proxy_pass http://127.0.0.1:1984/up;
+    }
+--- request
+POST /t
+1234
