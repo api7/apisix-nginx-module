@@ -91,17 +91,23 @@ client intended to send too large body
         client_max_body_size 1;
         access_by_lua_block {
             local client = require("resty.apisix.client")
-            assert(client.set_client_max_body_size(126))
+            assert(client.set_client_max_body_size(5))
         }
         content_by_lua_block {
             ngx.req.read_body()
             ngx.exit(200)
         }
     }
---- request eval
-qq{POST /t\n-----------------------------820127721219505131303151179\r
+--- raw_request eval
+qq{POST /t HTTP/1.1\r
+Host: localhost\r
+Transfer-Encoding: chunked\r
+Connection: close\r
 \r
-Hello\r\n-----------------------------820127721219505131303151179--\r
+5\r
+Hello\r
+0\r
+\r
 }
 
 
@@ -112,21 +118,27 @@ Hello\r\n-----------------------------820127721219505131303151179--\r
         client_max_body_size 1;
         access_by_lua_block {
             local client = require("resty.apisix.client")
-            assert(client.set_client_max_body_size(2))
+            assert(client.set_client_max_body_size(4))
         }
         content_by_lua_block {
             ngx.req.read_body()
             ngx.exit(200)
         }
     }
---- request eval
-qq{POST /t\n-----------------------------820127721219505131303151179\r
+--- raw_request eval
+qq{POST /t HTTP/1.1\r
+Host: localhost\r
+Transfer-Encoding: chunked\r
+Connection: close\r
 \r
-Hello\r\n-----------------------------820127721219505131303151179--\r
+5\r
+Hello\r
+0\r
+\r
 }
 --- error_code: 413
 --- error_log
-client intended to send too large body
+client intended to send too large chunked body
 
 
 
@@ -143,10 +155,14 @@ client intended to send too large body
             ngx.exit(200)
         }
     }
+--- more_headers
+Transfer-Encoding: chunked
 --- request eval
-qq{POST /t\n-----------------------------820127721219505131303151179\r
+qq{POST /t
+5\r
+Hello\r
+0\r
 \r
-Hello\r\n-----------------------------820127721219505131303151179--\r
 }
 --- use_http2
 
@@ -165,15 +181,19 @@ Hello\r\n-----------------------------820127721219505131303151179--\r
             ngx.exit(200)
         }
     }
+--- more_headers
+Transfer-Encoding: chunked
 --- request eval
-qq{POST /t\n-----------------------------820127721219505131303151179\r
+qq{POST /t
+11\r
+Hello World\r
+0\r
 \r
-Hello\r\n-----------------------------820127721219505131303151179--\r
 }
 --- use_http2
 --- error_code: 413
 --- error_log
-client intended to send too large body
+client intended to send too large chunked body
 
 
 
