@@ -199,3 +199,13 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+========================================================================
+Apache 2.0 licenses
+========================================================================
+
+The following components are provided under the Apache License. See project link for details.
+The text of each license is the standard Apache 2.0 license.
+
+   files from kong/kong-build-tools: https://github.com/kong/kong-build-tools Apache 2.0
+   files from kong/lua-kong-nginx-module: https://github.com/kong/lua-kong-nginx-module Apache 2.0
