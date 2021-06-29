@@ -7,3 +7,7 @@ The `*-upstream_mtls` patches originally come from the Kong's kong-build-tools a
 projects, which is also under Apache-2.0 License.
 
 The `*-ngx_pipe_environ_on_mac` patches support the environ argument of the ngx.pipe.spawn function on macos.
+
+The `*-enable_keepalive` patches originally come from:
+https://github.com/openresty/lua-nginx-module/pull/1600
+https://github.com/openresty/lua-resty-core/pull/276
