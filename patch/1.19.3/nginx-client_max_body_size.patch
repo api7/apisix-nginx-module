@@ -1,8 +1,18 @@
 diff --git src/http/ngx_http_core_module.c src/http/ngx_http_core_module.c
-index 6388140..a500aab 100644
+index 6388140..b900467 100644
 --- src/http/ngx_http_core_module.c
 +++ src/http/ngx_http_core_module.c
-@@ -985,7 +985,12 @@ ngx_http_core_find_config_phase(ngx_http_request_t *r,
+@@ -8,6 +8,9 @@
+ #include <ngx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_http.h>
++#if (NGX_HTTP_APISIX)
++#include <ngx_http_apisix_module.h>
++#endif
+ 
+ 
+ typedef struct {
+@@ -985,7 +988,12 @@ ngx_http_core_find_config_phase(ngx_http_request_t *r,
                     "http cl:%O max:%O",
                     r->headers_in.content_length_n, clcf->client_max_body_size);
  
@@ -81,10 +91,20 @@ index 71d7e9a..2844be9 100644
                  {
                      ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
 diff --git src/http/v2/ngx_http_v2.c src/http/v2/ngx_http_v2.c
-index 43a4fde..d22eb4d 100644
+index 43a4fde..43c78f9 100644
 --- src/http/v2/ngx_http_v2.c
 +++ src/http/v2/ngx_http_v2.c
-@@ -4211,10 +4211,18 @@ ngx_http_v2_filter_request_body(ngx_http_request_t *r)
+@@ -9,6 +9,9 @@
+ #include <ngx_core.h>
+ #include <ngx_http.h>
+ #include <ngx_http_v2_module.h>
++#if (NGX_HTTP_APISIX)
++#include <ngx_http_apisix_module.h>
++#endif
+ 
+ 
+ typedef struct {
+@@ -4211,10 +4214,18 @@ ngx_http_v2_filter_request_body(ngx_http_request_t *r)
              }
  
          } else {
