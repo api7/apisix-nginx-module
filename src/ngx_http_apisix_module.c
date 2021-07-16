@@ -329,3 +329,83 @@ ngx_http_apisix_client_max_body_size(ngx_http_request_t *r)
 
     return clcf->client_max_body_size;
 }
+
+
+ngx_int_t
+ngx_http_apisix_is_gzip_set(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r->main);
+    if (ctx == NULL || ctx->gzip == NULL) {
+        return 0;
+    }
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "apisix gzip set");
+
+    return 1;
+}
+
+
+ngx_int_t
+ngx_http_apisix_get_gzip_buffer_conf(ngx_http_request_t *r, ngx_int_t *num,
+    size_t *size)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r->main);
+    if (ctx == NULL || ctx->gzip == NULL) {
+        return NGX_DECLINED;
+    }
+
+    *num = ctx->gzip->buffer_num;
+    *size = ctx->gzip->buffer_size;
+
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "apisix gzip num:%i size:%z", *num, *size);
+
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_http_apisix_get_gzip_compress_level(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r->main);
+    if (ctx == NULL || ctx->gzip == NULL) {
+        return NGX_DECLINED;
+    }
+
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "apisix gzip level:%i", ctx->gzip->level);
+
+    return ctx->gzip->level;
+}
+
+
+ngx_int_t
+ngx_http_apisix_set_gzip(ngx_http_request_t *r, ngx_int_t num, size_t size,
+    ngx_int_t level)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+    ngx_http_apisix_gzip_t         *gzip;
+
+    ctx = ngx_http_apisix_get_module_ctx(r->main);
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    gzip = ngx_palloc(r->pool, sizeof(ngx_http_apisix_gzip_t));
+    if (gzip == NULL) {
+        return NGX_ERROR;
+    }
+
+    gzip->level = level;
+    gzip->buffer_num = num;
+    gzip->buffer_size = size;
+
+    ctx->gzip = gzip;
+    return NGX_OK;
+}
