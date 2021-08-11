@@ -1,7 +1,15 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
+#include <ngx_http.h>
+#include <ngx_http_realip_module.h>
 #include "ngx_http_apisix_module.h"
+
+
+static ngx_str_t remote_addr = ngx_string("remote_addr");
+static ngx_str_t remote_port = ngx_string("remote_port");
+static ngx_str_t realip_remote_addr = ngx_string("realip_remote_addr");
+static ngx_str_t realip_remote_port = ngx_string("realip_remote_port");
 
 
 static void *ngx_http_apisix_create_loc_conf(ngx_conf_t *cf);
@@ -407,5 +415,61 @@ ngx_http_apisix_set_gzip(ngx_http_request_t *r, ngx_int_t num, size_t size,
     gzip->buffer_size = size;
 
     ctx->gzip = gzip;
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_http_apisix_flush_var(ngx_http_request_t *r, ngx_str_t *name)
+{
+    ngx_uint_t                  hash;
+    ngx_http_variable_t        *v;
+    ngx_http_variable_value_t  *vv;
+    ngx_http_core_main_conf_t  *cmcf;
+
+    hash = ngx_hash_key(name->data, name->len);
+
+    cmcf = ngx_http_get_module_main_conf(r, ngx_http_core_module);
+
+    v = ngx_hash_find(&cmcf->variables_hash, hash, name->data, name->len);
+
+    if (v) {
+        vv = &r->variables[v->index];
+        vv->valid = 0;
+
+        return NGX_OK;
+    }
+
+    return NGX_DECLINED;
+}
+
+
+ngx_int_t
+ngx_http_apisix_set_real_ip(ngx_http_request_t *r, const u_char *text, size_t len,
+                            unsigned int port)
+{
+    ngx_int_t           rc;
+    ngx_addr_t          addr;
+
+    rc = ngx_parse_addr(r->connection->pool, &addr, (u_char *) text, len);
+    if (rc != NGX_OK) {
+        return rc;
+    }
+
+    if (port == 0) {
+        port = ngx_inet_get_port(r->connection->sockaddr);
+    }
+    ngx_inet_set_port(addr.sockaddr, (in_port_t) port);
+
+    rc = ngx_http_realip_set_real_addr(r, &addr);
+    if (rc != NGX_DECLINED) {
+        return rc;
+    }
+
+    ngx_http_apisix_flush_var(r, &remote_addr);
+    ngx_http_apisix_flush_var(r, &remote_port);
+    ngx_http_apisix_flush_var(r, &realip_remote_addr);
+    ngx_http_apisix_flush_var(r, &realip_remote_port);
+
     return NGX_OK;
 }
