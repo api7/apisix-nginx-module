@@ -26,7 +26,7 @@ index 6388140..b900467 100644
          && clcf->client_max_body_size
          && clcf->client_max_body_size < r->headers_in.content_length_n)
 diff --git src/http/ngx_http_request_body.c src/http/ngx_http_request_body.c
-index 71d7e9a..2844be9 100644
+index 71d7e9a..99fcbad 100644
 --- src/http/ngx_http_request_body.c
 +++ src/http/ngx_http_request_body.c
 @@ -8,6 +8,9 @@
@@ -76,11 +76,13 @@ index 71d7e9a..2844be9 100644
      for (cl = in; cl; cl = cl->next) {
  
          b = NULL;
-@@ -1048,8 +1074,13 @@ ngx_http_request_body_chunked_filter(ngx_http_request_t *r, ngx_chain_t *in)
+@@ -1048,8 +1074,15 @@ ngx_http_request_body_chunked_filter(ngx_http_request_t *r, ngx_chain_t *in)
  
                  clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
  
 +#if (NGX_HTTP_APISIX)
++                (void) clcf; /* unused */
++
 +                if (max_body_size
 +                    && max_body_size
 +#else
