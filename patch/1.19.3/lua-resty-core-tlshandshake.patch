@@ -32,7 +32,7 @@ new file mode 100644
 index 0000000..89454ad
 --- /dev/null
 +++ lib/resty/core/socket/tcp.lua
-@@ -0,0 +1,277 @@
+@@ -0,0 +1,284 @@
 +-- Copyright (C) by OpenResty Inc.
 +
 +
@@ -141,6 +141,15 @@ index 0000000..89454ad
 +end
 +
 +
++local function report_handshake_error(errmsg, openssl_error_code)
++    if openssl_error_code[0] ~= 0 then
++        return nil, openssl_error_code[0] .. ": " .. ffi_str(errmsg[0])
++    end
++
++    return nil, ffi_str(errmsg[0])
++end
++
++
 +local function tlshandshake(self, options)
 +    if not options then
 +        clear_tab(cached_options)
@@ -241,7 +250,9 @@ index 0000000..89454ad
 +            rc = ngx_lua_ffi_socket_tcp_get_tlshandshake_result(r, u,
 +                     session_ptr, errmsg, openssl_error_code)
 +
-+            assert(rc == FFI_OK)
++            if rc == FFI_ERROR then
++                return report_handshake_error(errmsg, openssl_error_code)
++            end
 +
 +            if session_ptr[0] == nil then
 +                return nil
@@ -258,11 +269,7 @@ index 0000000..89454ad
 +                 session_ptr, errmsg, openssl_error_code)
 +
 +        if rc == FFI_ERROR then
-+            if openssl_error_code[0] ~= 0 then
-+                return nil, openssl_error_code[0] .. ": " .. ffi_str(errmsg[0])
-+            end
-+
-+            return nil, ffi_str(errmsg[0])
++            return report_handshake_error(errmsg, openssl_error_code)
 +        end
 +    end
 +end
