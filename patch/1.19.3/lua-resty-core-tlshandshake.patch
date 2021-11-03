@@ -32,7 +32,7 @@ new file mode 100644
 index 0000000..89454ad
 --- /dev/null
 +++ lib/resty/core/socket/tcp.lua
-@@ -0,0 +1,284 @@
+@@ -0,0 +1,254 @@
 +-- Copyright (C) by OpenResty Inc.
 +
 +
