@@ -41,6 +41,12 @@ if [[ "$root" == *openresty-1.19.3.* ]]; then
     apply_patch "$patch_dir" "$root" "lua-resty-core" "0.1.21"
     apply_patch "$patch_dir" "$root" "ngx_lua" "0.10.19"
     apply_patch "$patch_dir" "$root" "ngx_stream_lua" "0.0.9"
+elif [[ "$root" == *openresty-1.19.9.* ]]; then
+    patch_dir="$PWD/1.19.9"
+    apply_patch "$patch_dir" "$root" "nginx" "1.19.9"
+    apply_patch "$patch_dir" "$root" "lua-resty-core" "0.1.22"
+    apply_patch "$patch_dir" "$root" "ngx_lua" "0.10.20"
+    apply_patch "$patch_dir" "$root" "ngx_stream_lua" "0.0.10"
 else
     err "can't detect OpenResty version"
     exit 1

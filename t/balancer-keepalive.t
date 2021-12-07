@@ -13,6 +13,7 @@ our $UpstreamSrvConfig = <<_EOC_;
         ssl_certificate_key     $ENV{TEST_NGINX_CERT_DIR}/test.key;
         ssl_session_tickets     off;
         ssl_verify_client       optional_no_ca;
+        ssl_protocols           TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;
 
         keepalive_requests 1000;
 
@@ -330,14 +331,6 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
     proxy_http_version            1.1;
     proxy_set_header              Connection '';
 
-    location ~ ^/client_one/tls11/proxy/(?<upstream_uri>.*) {
-        proxy_ssl_protocols       TLSv1.1;
-        proxy_ssl_certificate     $TEST_NGINX_CERT_DIR/test.crt;
-        proxy_ssl_certificate_key $TEST_NGINX_CERT_DIR/test.key;
-
-        proxy_pass                https://test_upstream/$upstream_uri;
-    }
-
     location ~ ^/client_one/tls12/proxy/(?<upstream_uri>.*) {
         proxy_ssl_protocols       TLSv1.2;
         proxy_ssl_certificate     $TEST_NGINX_CERT_DIR/test.crt;
@@ -346,10 +339,10 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
         proxy_pass                https://test_upstream/$upstream_uri;
     }
 
-    location ~ ^/client_two/tls11/proxy/(?<upstream_uri>.*) {
-        proxy_ssl_protocols       TLSv1.1;
-        proxy_ssl_certificate     $TEST_NGINX_CERT_DIR/test2.crt;
-        proxy_ssl_certificate_key $TEST_NGINX_CERT_DIR/test2.key;
+    location ~ ^/client_one/tls13/proxy/(?<upstream_uri>.*) {
+        proxy_ssl_protocols       TLSv1.3;
+        proxy_ssl_certificate     $TEST_NGINX_CERT_DIR/test.crt;
+        proxy_ssl_certificate_key $TEST_NGINX_CERT_DIR/test.key;
 
         proxy_pass                https://test_upstream/$upstream_uri;
     }
@@ -362,17 +355,25 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
         proxy_pass                https://test_upstream/$upstream_uri;
     }
 
+    location ~ ^/client_two/tls13/proxy/(?<upstream_uri>.*) {
+        proxy_ssl_protocols       TLSv1.3;
+        proxy_ssl_certificate     $TEST_NGINX_CERT_DIR/test2.crt;
+        proxy_ssl_certificate_key $TEST_NGINX_CERT_DIR/test2.key;
+
+        proxy_pass                https://test_upstream/$upstream_uri;
+    }
+
     location = /t {
-        echo_subrequest GET '/client_one/tls11/proxy/echo_ssl_client_s_dn_and_protocol';
         echo_subrequest GET '/client_one/tls12/proxy/echo_ssl_client_s_dn_and_protocol';
-        echo_subrequest GET '/client_two/tls11/proxy/echo_ssl_client_s_dn_and_protocol';
+        echo_subrequest GET '/client_two/tls13/proxy/echo_ssl_client_s_dn_and_protocol';
         echo_subrequest GET '/client_two/tls12/proxy/echo_ssl_client_s_dn_and_protocol';
+        echo_subrequest GET '/client_two/tls13/proxy/echo_ssl_client_s_dn_and_protocol';
     }
 --- response_body_like
-ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.1
-ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.1
-ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.1
-ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.1
+ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.2
+ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.2
+ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.2
+ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.2
 --- grep_error_log_out
 
 
@@ -405,16 +406,6 @@ ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.1
     proxy_http_version            1.1;
     proxy_set_header              Connection '';
 
-    location ~ ^/client_one/tls11/proxy/(?<upstream_uri>.*) {
-        set                       $client_cert 'test.crt';
-        set                       $client_protocol 'TLSv1.1';
-        proxy_ssl_protocols       TLSv1.1;
-        proxy_ssl_certificate     $TEST_NGINX_CERT_DIR/test.crt;
-        proxy_ssl_certificate_key $TEST_NGINX_CERT_DIR/test.key;
-
-        proxy_pass                https://test_upstream/$upstream_uri;
-    }
-
     location ~ ^/client_one/tls12/proxy/(?<upstream_uri>.*) {
         set                       $client_cert 'test.crt';
         set                       $client_protocol 'TLSv1.2';
@@ -425,12 +416,12 @@ ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.1
         proxy_pass                https://test_upstream/$upstream_uri;
     }
 
-    location ~ ^/client_two/tls11/proxy/(?<upstream_uri>.*) {
-        set                       $client_cert 'test2.crt';
-        set                       $client_protocol 'TLSv1.1';
-        proxy_ssl_protocols       TLSv1.1;
-        proxy_ssl_certificate     $TEST_NGINX_CERT_DIR/test2.crt;
-        proxy_ssl_certificate_key $TEST_NGINX_CERT_DIR/test2.key;
+    location ~ ^/client_one/tls13/proxy/(?<upstream_uri>.*) {
+        set                       $client_cert 'test.crt';
+        set                       $client_protocol 'TLSv1.3';
+        proxy_ssl_protocols       TLSv1.3;
+        proxy_ssl_certificate     $TEST_NGINX_CERT_DIR/test.crt;
+        proxy_ssl_certificate_key $TEST_NGINX_CERT_DIR/test.key;
 
         proxy_pass                https://test_upstream/$upstream_uri;
     }
@@ -445,17 +436,27 @@ ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.1
         proxy_pass                https://test_upstream/$upstream_uri;
     }
 
+    location ~ ^/client_two/tls13/proxy/(?<upstream_uri>.*) {
+        set                       $client_cert 'test2.crt';
+        set                       $client_protocol 'TLSv1.3';
+        proxy_ssl_protocols       TLSv1.3;
+        proxy_ssl_certificate     $TEST_NGINX_CERT_DIR/test2.crt;
+        proxy_ssl_certificate_key $TEST_NGINX_CERT_DIR/test2.key;
+
+        proxy_pass                https://test_upstream/$upstream_uri;
+    }
+
     location = /t {
-        echo_subrequest GET '/client_one/tls11/proxy/echo_ssl_client_s_dn_and_protocol';
         echo_subrequest GET '/client_one/tls12/proxy/echo_ssl_client_s_dn_and_protocol';
-        echo_subrequest GET '/client_two/tls11/proxy/echo_ssl_client_s_dn_and_protocol';
+        echo_subrequest GET '/client_one/tls13/proxy/echo_ssl_client_s_dn_and_protocol';
         echo_subrequest GET '/client_two/tls12/proxy/echo_ssl_client_s_dn_and_protocol';
+        echo_subrequest GET '/client_two/tls13/proxy/echo_ssl_client_s_dn_and_protocol';
     }
 --- response_body_like
-ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.1
 ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.2
-ssl_client_s_dn=.*?CN=test2\.com.*? ssl_protocol=TLSv1\.1
+ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.3
 ssl_client_s_dn=.*?CN=test2\.com.*? ssl_protocol=TLSv1\.2
+ssl_client_s_dn=.*?CN=test2\.com.*? ssl_protocol=TLSv1\.3
 --- grep_error_log_out eval
 qr/^lua balancer: keepalive create pool, crc32: \d+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
