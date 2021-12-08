@@ -1,0 +1,25 @@
+diff --git src/http/ngx_http_upstream.c src/http/ngx_http_upstream.c
+index 76045c4..cee3e2a 100644
+--- src/http/ngx_http_upstream.c
++++ src/http/ngx_http_upstream.c
+@@ -8,6 +8,9 @@
+ #include <ngx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_http.h>
++#if (NGX_HTTP_APISIX)
++#include <ngx_http_apisix_module.h>
++#endif
+ 
+ #if (T_NGX_MULTI_UPSTREAM)
+ #include <ngx_http_multi_upstream_module.h>
+@@ -1766,6 +1769,10 @@ ngx_http_upstream_ssl_init_connection(ngx_http_request_t *r,
+ 
+     r->connection->log->action = "SSL handshaking to upstream";
+ 
++#if (NGX_HTTP_APISIX)
++    ngx_http_apisix_set_upstream_ssl(r, c);
++#endif
++
+     rc = ngx_ssl_handshake(c);
+ 
+     if (rc == NGX_AGAIN) {
