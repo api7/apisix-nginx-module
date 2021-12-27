@@ -472,3 +472,29 @@ ngx_http_apisix_set_real_ip(ngx_http_request_t *r, const u_char *text, size_t le
 
     return NGX_OK;
 }
+
+
+ngx_int_t
+ngx_http_apisix_enable_mirror(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t       *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    ctx->mirror_enabled = 1;
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_http_apisix_is_mirror_enabled(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+    return ctx != NULL && ctx->mirror_enabled;
+}
