@@ -26,6 +26,7 @@ typedef struct {
     ngx_http_apisix_gzip_t *gzip;
 
     unsigned             client_max_body_size_set:1;
+    unsigned             mirror_enabled:1;
 } ngx_http_apisix_ctx_t;
 
 
@@ -38,6 +39,8 @@ ngx_int_t ngx_http_apisix_is_gzip_set(ngx_http_request_t *r);
 ngx_int_t ngx_http_apisix_get_gzip_buffer_conf(ngx_http_request_t *r,
     ngx_int_t *num, size_t *size);
 ngx_int_t ngx_http_apisix_get_gzip_compress_level(ngx_http_request_t *r);
+
+ngx_int_t ngx_http_apisix_is_mirror_enabled(ngx_http_request_t *r);
 
 
 #endif /* _NGX_HTTP_APISIX_H_INCLUDED_ */

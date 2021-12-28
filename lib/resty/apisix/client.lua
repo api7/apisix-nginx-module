@@ -18,6 +18,9 @@ ngx_int_t
 ngx_http_apisix_client_set_max_body_size(ngx_http_request_t *r, off_t bytes);
 
 ngx_int_t
+ngx_http_apisix_enable_mirror(ngx_http_request_t *r);
+
+ngx_int_t
 ngx_http_apisix_set_real_ip(ngx_http_request_t *r, const u_char *text, size_t len,
                             unsigned int port);
 ]])
@@ -29,6 +32,17 @@ function _M.set_client_max_body_size(bytes)
     local ret = C.ngx_http_apisix_client_set_max_body_size(r, tonumber(bytes))
     if ret == NGX_ERROR then
         return nil, "error while setting client max body size"
+    end
+
+    return true
+end
+
+
+function _M.enable_mirror()
+    local r = get_request()
+    local ret = C.ngx_http_apisix_enable_mirror(r)
+    if ret == NGX_ERROR then
+        return nil, "error while disaling mirror"
     end
 
     return true
