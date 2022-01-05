@@ -18,20 +18,31 @@ $ENV{TEST_NGINX_SERVER_SSL_PORT} = 23456;
 add_block_preprocessor(sub {
     my ($block) = @_;
 
-    if (!$block->request) {
-        $block->set_value("request", "GET /t");
-    }
-
     if (!$block->no_error_log && !$block->error_log) {
         $block->set_value("no_error_log", "[error]\n[alert]");
     }
 
-    my $http_config = $block->http_config // '';
-    $http_config .= <<_EOC_;
-    lua_package_path "lib/?.lua;;";
+    if (defined $block->config) {
+        if (!$block->request) {
+            $block->set_value("request", "GET /t");
+        }
+
+        my $http_config = $block->http_config // '';
+        $http_config .= <<_EOC_;
+        lua_package_path "lib/?.lua;;";
 _EOC_
 
-    $block->set_value("http_config", $http_config);
+        $block->set_value("http_config", $http_config);
+    }
+
+    if (defined $block->stream_server_config) {
+        my $stream_config = $block->stream_config // '';
+        $stream_config .= <<_EOC_;
+        lua_package_path "lib/?.lua;;";
+_EOC_
+
+        $block->set_value("stream_config", $stream_config);
+    }
 });
 
 
