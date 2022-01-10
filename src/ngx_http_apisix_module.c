@@ -498,3 +498,36 @@ ngx_http_apisix_is_mirror_enabled(ngx_http_request_t *r)
     ctx = ngx_http_apisix_get_module_ctx(r);
     return ctx != NULL && ctx->mirror_enabled;
 }
+
+
+ngx_int_t
+ngx_http_apisix_set_proxy_request_buffering(ngx_http_request_t *r, int on)
+{
+    ngx_http_apisix_ctx_t       *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    ctx->request_buffering = on;
+    ctx->request_buffering_set = 1;
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_http_apisix_is_request_buffering(ngx_http_request_t *r, ngx_flag_t static_conf)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx != NULL && ctx->request_buffering_set) {
+        return ctx->request_buffering;
+    }
+
+    /* use the static conf if we haven't changed it dynamically */
+    return static_conf;
+}
