@@ -27,6 +27,8 @@ typedef struct {
 
     unsigned             client_max_body_size_set:1;
     unsigned             mirror_enabled:1;
+    unsigned             request_buffering:1;
+    unsigned             request_buffering_set:1;
 } ngx_http_apisix_ctx_t;
 
 
@@ -42,5 +44,7 @@ ngx_int_t ngx_http_apisix_get_gzip_compress_level(ngx_http_request_t *r);
 
 ngx_int_t ngx_http_apisix_is_mirror_enabled(ngx_http_request_t *r);
 
+
+ngx_int_t ngx_http_apisix_is_request_buffering(ngx_http_request_t *r, ngx_flag_t static_conf);
 
 #endif /* _NGX_HTTP_APISIX_H_INCLUDED_ */
