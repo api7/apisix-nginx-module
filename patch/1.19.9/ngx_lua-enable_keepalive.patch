@@ -532,7 +532,7 @@ index e4ac57a..b5ffe2e 100644
      return rc;
  }
  
-@@ -403,24 +567,337 @@ static void
+@@ -403,24 +567,335 @@ static void
  ngx_http_lua_balancer_free_peer(ngx_peer_connection_t *pc, void *data,
      ngx_uint_t state)
  {
@@ -715,8 +715,6 @@ index e4ac57a..b5ffe2e 100644
 +    lua_pop(L, 1); /* orig stack */
 +
 +    items = (ngx_http_lua_balancer_keepalive_item_t *) (&upool->free + 1);
-+
-+    ngx_http_lua_assert((void *) items == ngx_align_ptr(items, NGX_ALIGNMENT));
 +
 +    for (i = 0; i < cpool_size; i++) {
 +        ngx_queue_insert_head(&upool->free, &items[i].queue);
