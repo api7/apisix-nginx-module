@@ -581,7 +581,7 @@ ngx_http_apisix_set_proxy_ignore_headers(ngx_http_request_t *r, ngx_uint_t mask)
 
     *proxy_ignore_headers = mask;
 
-    ctx->proxy_ignore_headers = proxy_ignore_headers
+    ctx->proxy_ignore_headers = proxy_ignore_headers;
 
     return NGX_OK;
 }
