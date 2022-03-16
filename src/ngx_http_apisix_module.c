@@ -531,3 +531,57 @@ ngx_http_apisix_is_request_buffering(ngx_http_request_t *r, ngx_flag_t static_co
     /* use the static conf if we haven't changed it dynamically */
     return static_conf;
 }
+
+ngx_int_t
+ngx_http_apisix_is_proxy_ignore_headers_set(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r->main);
+    if (ctx == NULL || ctx->proxy_ignore_headers == NULL) {
+        return 0;
+    }
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "apisix proxy_ignore_headers set");
+
+    return 1;
+}
+
+ngx_int_t
+ngx_http_apisix_get_proxy_ignore_headers(ngx_http_request_t *r, ngx_uint_t * mask)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r->main);
+    if (ctx == NULL || ctx->proxy_ignore_headers == NULL) {
+        return NGX_DECLINED;
+    }
+
+    *mask = *(ctx->proxy_ignore_headers);
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "apisix proxy_ignore_headers num:%i size:%z", *num, );
+
+    return NGX_OK;
+}
+
+ngx_int_t
+ngx_http_apisix_set_proxy_ignore_headers(ngx_http_request_t *r, ngx_uint_t mask){
+     ngx_http_apisix_ctx_t          *ctx;
+     ngx_uint_t                     *proxy_ignore_headers;
+
+    ctx = ngx_http_apisix_get_module_ctx(r->main);
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    proxy_ignore_headers = ngx_palloc(r->pool, sizeof(ngx_uint_t));
+    if (proxy_ignore_headers == NULL) {
+        return NGX_ERROR;
+    }
+
+    *proxy_ignore_headers = mask;
+
+    ctx->proxy_ignore_headers = proxy_ignore_headers
+
+    return NGX_OK;
+}

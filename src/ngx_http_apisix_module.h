@@ -24,6 +24,7 @@ typedef struct {
     off_t                client_max_body_size;
 
     ngx_http_apisix_gzip_t *gzip;
+    ngx_uint_t             *proxy_ignore_headers;
 
     unsigned             client_max_body_size_set:1;
     unsigned             mirror_enabled:1;
@@ -46,5 +47,9 @@ ngx_int_t ngx_http_apisix_is_mirror_enabled(ngx_http_request_t *r);
 
 
 ngx_int_t ngx_http_apisix_is_request_buffering(ngx_http_request_t *r, ngx_flag_t static_conf);
+
+ngx_int_t ngx_http_apisix_is_proxy_ignore_headers_set(ngx_http_request_t *r);
+ngx_int_t ngx_http_apisix_get_proxy_ignore_headers(ngx_http_request_t *r, ngx_uint_t * mask);
+ngx_int_t ngx_http_apisix_set_proxy_ignore_headers(ngx_http_request_t *r, ngx_uint_t mask);
 
 #endif /* _NGX_HTTP_APISIX_H_INCLUDED_ */
