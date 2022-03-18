@@ -1,5 +1,5 @@
 diff --git src/http/ngx_http_upstream.c src/http/ngx_http_upstream.c
-index 8c0b5244..99f240f6 100644
+index 8c0b5244..b73206d1 100644
 --- src/http/ngx_http_upstream.c
 +++ src/http/ngx_http_upstream.c
 @@ -8,6 +8,9 @@
@@ -46,45 +46,55 @@ index 8c0b5244..99f240f6 100644
          ngx_http_upstream_finalize_request(r, u, NGX_DECLINED);
  
          part = &u->headers_in.headers.part;
-@@ -2892,7 +2910,17 @@ ngx_http_upstream_process_headers(ngx_http_request_t *r, ngx_http_upstream_t *u)
+@@ -2892,9 +2910,20 @@ ngx_http_upstream_process_headers(ngx_http_request_t *r, ngx_http_upstream_t *u)
              h = part->elts;
              i = 0;
          }
 -
+-        if (ngx_hash_find(&u->conf->hide_headers_hash, h[i].hash,
+-                          h[i].lowcase_key, h[i].key.len))
 +#if (NGX_HTTP_APISIX)
 +        if (ngx_http_apisix_is_proxy_hide_headers_set(r))
 +        {
 +            ngx_uint_t in = 0;
-+            if (ngx_http_apisix_in_proxy_hide_headers(r, s & h[i], &in) == NGX_OK)
++            if (ngx_http_apisix_in_proxy_hide_headers(r, &h[i], &in) == NGX_OK)
 +            {
 +                if (*in)
 +                    continue;
 +            }
-+        }else
++        }
++        else
 +#endif
-         if (ngx_hash_find(&u->conf->hide_headers_hash, h[i].hash,
-                           h[i].lowcase_key, h[i].key.len))
++            if (ngx_hash_find(&u->conf->hide_headers_hash, h[i].hash,
++                              h[i].lowcase_key, h[i].key.len))
          {
-@@ -2977,7 +3005,17 @@ ngx_http_upstream_process_trailers(ngx_http_request_t *r,
+             continue;
+         }
+@@ -2977,9 +3006,20 @@ ngx_http_upstream_process_trailers(ngx_http_request_t *r,
              h = part->elts;
              i = 0;
          }
 -
+-        if (ngx_hash_find(&u->conf->hide_headers_hash, h[i].hash,
+-                          h[i].lowcase_key, h[i].key.len))
 +#if (NGX_HTTP_APISIX)
 +        if (ngx_http_apisix_is_proxy_hide_headers_set(r))
 +        {
 +            ngx_uint_t in = 0;
-+            if (ngx_http_apisix_in_proxy_hide_headers(r, s &h[i], &in) == NGX_OK)
++            if (ngx_http_apisix_in_proxy_hide_headers(r, &h[i], &in) == NGX_OK)
 +            {
 +                if (*in)
 +                    continue;
 +            }
-+        }else
++        }
++        else
 +#endif
-         if (ngx_hash_find(&u->conf->hide_headers_hash, h[i].hash,
-                           h[i].lowcase_key, h[i].key.len))
++            if (ngx_hash_find(&u->conf->hide_headers_hash, h[i].hash,
++                              h[i].lowcase_key, h[i].key.len))
          {
-@@ -4708,9 +4746,21 @@ ngx_http_upstream_process_set_cookie(ngx_http_request_t *r, ngx_table_elt_t *h,
+             continue;
+         }
+@@ -4708,9 +4748,21 @@ ngx_http_upstream_process_set_cookie(ngx_http_request_t *r, ngx_table_elt_t *h,
      *ph = h;
  
  #if (NGX_HTTP_CACHE)
@@ -106,7 +116,7 @@ index 8c0b5244..99f240f6 100644
  #endif
  
      return NGX_OK;
-@@ -4746,8 +4796,17 @@ ngx_http_upstream_process_cache_control(ngx_http_request_t *r,
+@@ -4746,8 +4798,17 @@ ngx_http_upstream_process_cache_control(ngx_http_request_t *r,
      {
      u_char     *p, *start, *last;
      ngx_int_t   n;
@@ -125,7 +135,7 @@ index 8c0b5244..99f240f6 100644
          return NGX_OK;
      }
  
-@@ -4867,8 +4926,17 @@ ngx_http_upstream_process_expires(ngx_http_request_t *r, ngx_table_elt_t *h,
+@@ -4867,8 +4928,17 @@ ngx_http_upstream_process_expires(ngx_http_request_t *r, ngx_table_elt_t *h,
  #if (NGX_HTTP_CACHE)
      {
      time_t  expires;
@@ -144,7 +154,7 @@ index 8c0b5244..99f240f6 100644
          return NGX_OK;
      }
  
-@@ -4909,8 +4977,17 @@ ngx_http_upstream_process_accel_expires(ngx_http_request_t *r,
+@@ -4909,8 +4979,17 @@ ngx_http_upstream_process_accel_expires(ngx_http_request_t *r,
      u_char     *p;
      size_t      len;
      ngx_int_t   n;
@@ -163,7 +173,7 @@ index 8c0b5244..99f240f6 100644
          return NGX_OK;
      }
  
-@@ -4962,8 +5039,17 @@ ngx_http_upstream_process_limit_rate(ngx_http_request_t *r, ngx_table_elt_t *h,
+@@ -4962,8 +5041,17 @@ ngx_http_upstream_process_limit_rate(ngx_http_request_t *r, ngx_table_elt_t *h,
  
      u = r->upstream;
      u->headers_in.x_accel_limit_rate = h;
@@ -182,7 +192,7 @@ index 8c0b5244..99f240f6 100644
          return NGX_OK;
      }
  
-@@ -4987,7 +5073,17 @@ ngx_http_upstream_process_buffering(ngx_http_request_t *r, ngx_table_elt_t *h,
+@@ -4987,7 +5075,17 @@ ngx_http_upstream_process_buffering(ngx_http_request_t *r, ngx_table_elt_t *h,
  
      u = r->upstream;
  
@@ -200,7 +210,7 @@ index 8c0b5244..99f240f6 100644
          return NGX_OK;
      }
  
-@@ -5020,7 +5116,17 @@ static ngx_int_t
+@@ -5020,7 +5118,17 @@ static ngx_int_t
  ngx_http_upstream_process_charset(ngx_http_request_t *r, ngx_table_elt_t *h,
      ngx_uint_t offset)
  {
@@ -218,7 +228,7 @@ index 8c0b5244..99f240f6 100644
          return NGX_OK;
      }
  
-@@ -5074,8 +5180,17 @@ ngx_http_upstream_process_vary(ngx_http_request_t *r,
+@@ -5074,8 +5182,17 @@ ngx_http_upstream_process_vary(ngx_http_request_t *r,
      u->headers_in.vary = h;
  
  #if (NGX_HTTP_CACHE)
