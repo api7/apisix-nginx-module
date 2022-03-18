@@ -68,7 +68,7 @@ function _M.set_proxy_hide_headers(opts)
 
     local index = 0
     for _, value in ipairs(opts.headers) do
-        if type(value) == "string" then
+        if type(value) ~= "string" then
             return false, "input headers must is str"
         end
         arr[index].len = #value
