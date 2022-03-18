@@ -535,10 +535,11 @@ ngx_http_apisix_is_request_buffering(ngx_http_request_t *r, ngx_flag_t static_co
 ngx_int_t
 ngx_http_apisix_is_proxy_ignore_headers_set(ngx_http_request_t *r)
 {
-    ngx_http_apisix_ctx_t          *ctx;
+    ngx_http_apisix_ctx_t *ctx;
 
     ctx = ngx_http_apisix_get_module_ctx(r->main);
-    if (ctx == NULL || ctx->proxy_ignore_headers == NULL) {
+    if (ctx == NULL || ctx->proxy_ignore_headers == NULL)
+    {
         return 0;
     }
 
@@ -548,40 +549,131 @@ ngx_http_apisix_is_proxy_ignore_headers_set(ngx_http_request_t *r)
 }
 
 ngx_int_t
-ngx_http_apisix_get_proxy_ignore_headers(ngx_http_request_t *r, ngx_uint_t * mask)
+ngx_http_apisix_get_proxy_ignore_headers(ngx_http_request_t *r, ngx_uint_t *mask)
 {
-    ngx_http_apisix_ctx_t          *ctx;
+    ngx_http_apisix_ctx_t *ctx;
 
     ctx = ngx_http_apisix_get_module_ctx(r->main);
-    if (ctx == NULL || ctx->proxy_ignore_headers == NULL) {
+    if (ctx == NULL || ctx->proxy_ignore_headers == NULL)
+    {
         return NGX_DECLINED;
     }
 
     *mask = *(ctx->proxy_ignore_headers);
-    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                   "apisix proxy_ignore_headers num:%i size:%z", *num, );
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "apisix get proxy_ignore_headers mask:%d", *mask);
 
     return NGX_OK;
 }
 
 ngx_int_t
-ngx_http_apisix_set_proxy_ignore_headers(ngx_http_request_t *r, ngx_uint_t mask){
-     ngx_http_apisix_ctx_t          *ctx;
-     ngx_uint_t                     *proxy_ignore_headers;
+ngx_http_apisix_set_proxy_ignore_headers(ngx_http_request_t *r, ngx_uint_t mask)
+{
+    ngx_http_apisix_ctx_t *ctx;
+    ngx_uint_t *proxy_ignore_headers;
 
     ctx = ngx_http_apisix_get_module_ctx(r->main);
-    if (ctx == NULL) {
+    if (ctx == NULL)
+    {
         return NGX_ERROR;
     }
 
     proxy_ignore_headers = ngx_palloc(r->pool, sizeof(ngx_uint_t));
-    if (proxy_ignore_headers == NULL) {
+    if (proxy_ignore_headers == NULL)
+    {
         return NGX_ERROR;
     }
 
     *proxy_ignore_headers = mask;
 
     ctx->proxy_ignore_headers = proxy_ignore_headers;
+
+    return NGX_OK;
+}
+
+ngx_int_t
+ngx_http_apisix_is_proxy_hide_headers_set(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r->main);
+    if (ctx == NULL || ctx->hide_headers == NULL)
+    {
+        return 0;
+    }
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "apisix hide_headers set");
+
+    return 1;
+}
+
+ngx_int_t
+ngx_http_apisix_in_proxy_hide_headers(ngx_http_request_t *r, ngx_table_elt_t *h, ngx_uint_t *in)
+{
+    ngx_http_apisix_ctx_t *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r->main);
+    if (ctx == NULL || ctx->hide_headers == NULL)
+    {
+        return NGX_DECLINED;
+    }
+
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "apisix hide_headers name:%s", h[i].lowcase_key);
+
+    if (ngx_hash_find(&ctx->hide_headers_hash, h->hash,
+                      h->lowcase_key, h->key.len))
+    {
+        *in = 1;
+    }
+    return NGX_OK;
+}
+
+ngx_int_t
+ngx_http_apisix_set_proxy_hide_headers(ngx_http_request_t *r, ngx_str_t *input_hide_headers)
+{
+    ngx_http_apisix_ctx_t *ctx;
+    ngx_array_t hide_headers;
+    ngx_str_t *h;
+    ngx_hash_key_t *hk;
+    ngx_hash_init_t             hash;
+
+    ctx = ngx_http_apisix_get_module_ctx(r->main);
+    if (ctx == NULL)
+    {
+        return NGX_ERROR;
+    }
+
+    if (ngx_array_init(&hide_headers, r->pool, 4, sizeof(ngx_hash_key_t)) != NGX_OK)
+    {
+        return NGX_ERROR;
+    }
+
+    for (h = input_hide_headers; h->len; h++)
+    {
+        hk = ngx_array_push(&hide_headers);
+        if (hk == NULL)
+        {
+            return NGX_ERROR;
+        }
+
+        hk->key = *h;
+        hk->key_hash = ngx_hash_key_lc(h->data, h->len);
+        hk->value = (void *)1;
+    }
+    hash.max_size = 512;
+    hash.bucket_size = 64;
+    hash.name = "proxy_headers_hash";
+    hash.hash = &ctx->hide_headers_hash;
+    hash.key = ngx_hash_key_lc;
+    hash.pool = r->pool;
+    hash.temp_pool = NULL;
+
+    if (ngx_hash_init(&hash, hide_headers.elts, hide_headers.nelts) != NGX_OK) {
+        return NGX_ERROR;
+    }
+
+    ctx->hide_headers = NGX_CONF_UNSET_PTR;
 
     return NGX_OK;
 }
