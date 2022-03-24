@@ -1,0 +1,72 @@
+diff --git src/os/unix/ngx_process_cycle.c src/os/unix/ngx_process_cycle.c
+index fe5f34a..e8ebf3d 100644
+--- src/os/unix/ngx_process_cycle.c
++++ src/os/unix/ngx_process_cycle.c
+@@ -45,6 +45,9 @@ sig_atomic_t  ngx_debug_quit;
+ ngx_uint_t    ngx_exiting;
+ sig_atomic_t  ngx_reconfigure;
+ sig_atomic_t  ngx_reopen;
++#if (NGX_HTTP_APISIX)
++ngx_uint_t    ngx_last_reopen_msec;
++#endif
+ 
+ sig_atomic_t  ngx_change_binary;
+ ngx_pid_t     ngx_new_binary;
+@@ -287,6 +290,9 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
+ void
+ ngx_single_process_cycle(ngx_cycle_t *cycle)
+ {
++#if (NGX_HTTP_APISIX)
++    ngx_time_t              *tp;
++#endif
+     ngx_uint_t  i;
+ 
+     if (ngx_set_environment(cycle, NULL) == NULL) {
+@@ -363,6 +369,10 @@ ngx_single_process_cycle(ngx_cycle_t *cycle)
+ 
+         if (ngx_reopen) {
+             ngx_reopen = 0;
++#if (NGX_HTTP_APISIX)
++            tp = ngx_timeofday();
++            ngx_last_reopen_msec = tp->sec * 1000 + tp->msec;
++#endif
+             ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "reopening logs");
+             ngx_reopen_files(cycle, (ngx_uid_t) -1);
+         }
+@@ -759,6 +769,9 @@ ngx_master_process_exit(ngx_cycle_t *cycle)
+ static void
+ ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)
+ {
++#if (NGX_HTTP_APISIX)
++    ngx_time_t              *tp;
++#endif
+     ngx_int_t worker = (intptr_t) data;
+ 
+     ngx_process = NGX_PROCESS_WORKER;
+@@ -802,6 +815,10 @@ ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)
+ 
+         if (ngx_reopen) {
+             ngx_reopen = 0;
++#if (NGX_HTTP_APISIX)
++            tp = ngx_timeofday();
++            ngx_last_reopen_msec = tp->sec * 1000 + tp->msec;
++#endif
+             ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "reopening logs");
+             ngx_reopen_files(cycle, -1);
+         }
+@@ -809,6 +826,15 @@ ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)
+ }
+ 
+ 
++#if (NGX_HTTP_APISIX)
++ngx_uint_t
++ngx_worker_process_get_last_reopen_ms()
++{
++    return ngx_last_reopen_msec;
++}
++#endif
++
++
+ static void
+ ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker)
+ {
