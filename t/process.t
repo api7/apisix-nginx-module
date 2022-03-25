@@ -36,8 +36,9 @@ __DATA__
             ngx.sleep(0.1)
 
             local ap = require("resty.apisix.process")
-            if ap.get_last_reopen_ms() <= now then
-                ngx.say(ap.get_last_reopen_ms(), " ", now)
+            local ms = ap.get_last_reopen_ms()
+            if ms == 0 or ms <= now then
+                ngx.say(ms, " ", now)
             else
                 ngx.say("ok")
             end
