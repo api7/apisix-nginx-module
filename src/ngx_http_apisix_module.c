@@ -531,3 +531,46 @@ ngx_http_apisix_is_request_buffering(ngx_http_request_t *r, ngx_flag_t static_co
     /* use the static conf if we haven't changed it dynamically */
     return static_conf;
 }
+
+
+ngx_int_t
+ngx_http_apisix_is_request_header_set(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx != NULL) {
+        return ctx->request_header_set;
+    }
+
+    return 0;
+}
+
+
+void
+ngx_http_apisix_clear_request_header(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx != NULL) {
+        ctx->request_header_set = 0;
+    }
+}
+
+
+void
+ngx_http_apisix_mark_request_header_set(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+    if (ctx == NULL) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "no memory to mark request headers");
+        return;
+    }
+
+    ctx->request_header_set = 1;
+}
