@@ -8,3 +8,5 @@ install:
 	$(INSTALL) -m 664 lib/resty/apisix/*.lua $(OPENRESTY_PREFIX)/lualib/resty/apisix/
 	$(INSTALL) -d $(OPENRESTY_PREFIX)/lualib/resty/apisix/stream
 	$(INSTALL) -m 664 lib/resty/apisix/stream/*.lua $(OPENRESTY_PREFIX)/lualib/resty/apisix/stream
+	$(INSTALL) -d $(OPENRESTY_PREFIX)/lualib/resty/apisix/stream/xrpc
+	$(INSTALL) -m 664 lib/resty/apisix/stream/xrpc/*.lua $(OPENRESTY_PREFIX)/lualib/resty/apisix/stream/xrpc
