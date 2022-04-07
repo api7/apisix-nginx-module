@@ -29,9 +29,21 @@ int
 ngx_stream_lua_ffi_socket_tcp_get_read_buf_result(ngx_stream_lua_request_t *r,
     ngx_stream_lua_socket_tcp_upstream_t *u, u_char **res, size_t len,
     u_char *errbuf, size_t *errbuf_size);
+
+int
+ngx_stream_lua_ffi_socket_tcp_send_from_socket(ngx_stream_lua_request_t *r,
+    ngx_stream_lua_socket_tcp_upstream_t *u, ngx_stream_lua_socket_tcp_upstream_t *ds,
+    u_char *errbuf, size_t *errbuf_size);
+
+int
+ngx_stream_lua_ffi_socket_tcp_get_send_result(ngx_stream_lua_request_t *r,
+    ngx_stream_lua_socket_tcp_upstream_t *u, u_char *errbuf,
+    size_t *errbuf_size);
 ]]
 local socket_tcp_read = C.ngx_stream_lua_ffi_socket_tcp_read_buf
 local socket_tcp_get_read_result = C.ngx_stream_lua_ffi_socket_tcp_get_read_buf_result
+local socket_tcp_move = C.ngx_stream_lua_ffi_socket_tcp_send_from_socket
+local socket_tcp_get_move_result = C.ngx_stream_lua_ffi_socket_tcp_get_send_result
 
 
 local ERR_BUF_SIZE = 256
@@ -100,6 +112,58 @@ local function read_buf(cosocket, len)
 end
 
 
+-- move the buffers from src cosocket to dst cosocket. The buffers are from previous one or multiple
+-- read calls. It is equal to send multiple read buffer in the src cosocket to the dst cosocket.
+local function move(dst, src)
+    local r = get_request()
+    if not r then
+        error("no request found", 2)
+    end
+
+    if src == dst then
+        error("can't move buffer in the same socket", 2)
+    end
+
+    if not src then
+        error("no source socket found", 2)
+    end
+
+    local dst_sk = get_tcp_socket(dst)
+    local src_sk = get_tcp_socket(src)
+    if not src_sk then
+        error("no source socket found", 2)
+    end
+
+    local errbuf = get_string_buf(ERR_BUF_SIZE)
+    local errbuf_size = get_size_ptr()
+    errbuf_size[0] = ERR_BUF_SIZE
+
+    local rc = socket_tcp_move(r, dst_sk, src_sk, errbuf, errbuf_size)
+    if rc == FFI_DONE then
+        error(ffi_str(errbuf, errbuf_size[0]), 2)
+    end
+
+    while true do
+        if rc == FFI_ERROR then
+            return nil, ffi_str(errbuf, errbuf_size[0])
+        end
+
+        if rc >= 0 then
+            return true
+        end
+
+        assert(rc == FFI_AGAIN)
+
+        co_yield()
+
+        errbuf = get_string_buf(ERR_BUF_SIZE)
+        errbuf_size = get_size_ptr()
+        errbuf_size[0] = ERR_BUF_SIZE
+        rc = socket_tcp_get_move_result(r, dst_sk, errbuf, errbuf_size)
+    end
+end
+
+
 local function patch_methods(sk)
     local methods = getmetatable(sk).__index
     local copy = tab_clone(methods)
@@ -109,6 +173,7 @@ local function patch_methods(sk)
     copy.receiveuntil = nil
 
     copy.read = read_buf
+    copy.move = move
 
     return {__index = copy}
 end
