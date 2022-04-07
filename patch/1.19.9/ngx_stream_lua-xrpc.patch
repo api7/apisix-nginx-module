@@ -1,5 +1,5 @@
 diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
-index 7fcfb45..8fc96cf 100644
+index 7fcfb45..3178588 100644
 --- src/ngx_stream_lua_socket_tcp.c
 +++ src/ngx_stream_lua_socket_tcp.c
 @@ -234,6 +234,41 @@ enum {
@@ -44,7 +44,7 @@ index 7fcfb45..8fc96cf 100644
  
  static char ngx_stream_lua_raw_req_socket_metatable_key;
  static char ngx_stream_lua_tcp_socket_metatable_key;
-@@ -6005,6 +6040,576 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
+@@ -6005,6 +6040,582 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
  }
  
  
@@ -506,10 +506,16 @@ index 7fcfb45..8fc96cf 100644
 +        return NGX_DONE;
 +    }
 +
-+    /* TODO: avoid copying (it requires to modify the way cosocket sends data) */
-+    for (in_cl = src->bufs_in; in_cl; in_cl = in_cl->next) {
-+        b = in_cl->buf;
-+        cl->buf->last = ngx_copy(cl->buf->last, b->pos, b->last - b->pos);
++    if (!src->bufs_in->next) {
++        cl->buf->pos = src->bufs_in->buf->pos;
++        cl->buf->last = src->bufs_in->buf->last;
++
++    } else {
++        /* TODO: avoid copying (it requires to modify the way cosocket sends data) */
++        for (in_cl = src->bufs_in; in_cl; in_cl = in_cl->next) {
++            b = in_cl->buf;
++            cl->buf->last = ngx_copy(cl->buf->last, b->pos, b->last - b->pos);
++        }
 +    }
 +
 +    ngx_stream_lua_ffi_socket_reset_buf(ctx, src);
