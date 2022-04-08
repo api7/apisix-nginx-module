@@ -1,5 +1,5 @@
 diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
-index 7fcfb45..3178588 100644
+index 7fcfb45..13e942d 100644
 --- src/ngx_stream_lua_socket_tcp.c
 +++ src/ngx_stream_lua_socket_tcp.c
 @@ -234,6 +234,41 @@ enum {
@@ -44,7 +44,7 @@ index 7fcfb45..3178588 100644
  
  static char ngx_stream_lua_raw_req_socket_metatable_key;
  static char ngx_stream_lua_tcp_socket_metatable_key;
-@@ -6005,6 +6040,582 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
+@@ -6005,6 +6040,605 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
  }
  
  
@@ -213,7 +213,10 @@ index 7fcfb45..3178588 100644
 +        return NGX_ERROR;
 +    }
 +
-+    ngx_stream_lua_ffi_socket_push_res(r, ctx, u, buf, len);
++    if (buf != NULL) {
++        ngx_stream_lua_ffi_socket_push_res(r, ctx, u, buf, len);
++    }
++
 +    return NGX_OK;
 +}
 +
@@ -263,63 +266,83 @@ index 7fcfb45..3178588 100644
 +
 +    lctx = ngx_stream_lua_get_module_ctx(r, ngx_stream_lua_module);
 +
-+    if (u->bufs_in == NULL) {
-+        size_t buf_len = len > u->conf->buffer_size ? len : u->conf->buffer_size;
-+
-+        ngx_log_debug1(NGX_LOG_DEBUG_STREAM, r->connection->log, 0,
-+                       "stream lua tcp socket allocate new new buf of size %uz",
-+                       buf_len);
-+
-+        u->bufs_in =
-+            ngx_stream_lua_chain_get_free_buf(r->connection->log,
-+                                              r->pool,
-+                                              &lctx->free_recv_bufs,
-+                                              buf_len);
-+
++    if (buf != NULL) {
 +        if (u->bufs_in == NULL) {
-+            *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "no memory")
-+                           - errbuf;
-+            return NGX_DONE;
-+        }
-+
-+        u->buf_in = u->bufs_in;
-+        u->buffer = *u->buf_in->buf;
-+
-+    } else {
-+        size_t           remain_space = u->buffer.end - u->buffer.pos;
-+        size_t           remain_data = u->buffer.last - u->buffer.pos;
-+        size_t           buf_len;
-+        u_char          *pos;
-+        ngx_chain_t     *cl, *tmp_cl;
-+
-+        if (remain_space < len) {
-+            buf_len = len > u->conf->buffer_size ? len : u->conf->buffer_size;
++            size_t buf_len = len > u->conf->buffer_size ? len : u->conf->buffer_size;
 +
 +            ngx_log_debug1(NGX_LOG_DEBUG_STREAM, r->connection->log, 0,
 +                           "stream lua tcp socket allocate new new buf of size %uz",
 +                           buf_len);
 +
-+            cl = ngx_stream_lua_chain_get_free_buf(r->connection->log,
-+                                                   r->pool,
-+                                                   &lctx->free_recv_bufs,
-+                                                   buf_len);
-+            if (cl == NULL) {
++            u->bufs_in =
++                ngx_stream_lua_chain_get_free_buf(r->connection->log,
++                                                  r->pool,
++                                                  &lctx->free_recv_bufs,
++                                                  buf_len);
++
++            if (u->bufs_in == NULL) {
 +                *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "no memory") - errbuf;
 +                return NGX_DONE;
 +            }
 +
-+            for (tmp_cl = u->bufs_in; tmp_cl->next; tmp_cl = tmp_cl->next) {}
-+            tmp_cl->next = cl;
-+            u->buf_in = cl;
++            u->buf_in = u->bufs_in;
++            u->buffer = *u->buf_in->buf;
 +
-+            u->buffer.last = u->buffer.pos;
-+            pos = u->buffer.pos;
-+            u->buffer = *cl->buf;
++        } else {
++            size_t           remain_space = u->buffer.end - u->buffer.pos;
++            size_t           remain_data = u->buffer.last - u->buffer.pos;
++            size_t           buf_len;
++            u_char          *pos;
++            ngx_chain_t     *cl, *tmp_cl;
 +
-+            if (remain_data > 0) {
-+                u->buffer.last = ngx_copy(u->buffer.last, pos, remain_data);
++            if (remain_space < len) {
++                buf_len = len > u->conf->buffer_size ? len : u->conf->buffer_size;
++
++                ngx_log_debug1(NGX_LOG_DEBUG_STREAM, r->connection->log, 0,
++                               "stream lua tcp socket allocate new new buf of size %uz",
++                               buf_len);
++
++                cl = ngx_stream_lua_chain_get_free_buf(r->connection->log,
++                                                       r->pool,
++                                                       &lctx->free_recv_bufs,
++                                                       buf_len);
++                if (cl == NULL) {
++                    *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "no memory") - errbuf;
++                    return NGX_DONE;
++                }
++
++                for (tmp_cl = u->bufs_in; tmp_cl->next; tmp_cl = tmp_cl->next) {}
++                tmp_cl->next = cl;
++                u->buf_in = cl;
++
++                u->buffer.last = u->buffer.pos;
++                pos = u->buffer.pos;
++                u->buffer = *cl->buf;
++
++                if (remain_data > 0) {
++                    u->buffer.last = ngx_copy(u->buffer.last, pos, remain_data);
++                }
 +            }
 +        }
++
++    } else if (u->bufs_in == NULL) {
++        ngx_log_debug1(NGX_LOG_DEBUG_STREAM, r->connection->log, 0,
++                       "stream lua tcp socket allocate new new buf of size %uz",
++                       u->conf->buffer_size);
++
++        u->bufs_in =
++            ngx_stream_lua_chain_get_free_buf(r->connection->log,
++                                              r->pool,
++                                              &lctx->free_recv_bufs,
++                                              u->conf->buffer_size);
++
++        if (u->bufs_in == NULL) {
++            *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "no memory") - errbuf;
++            return NGX_DONE;
++        }
++
++        u->buf_in = u->bufs_in;
++        u->buffer = *u->buf_in->buf;
 +    }
 +
 +    dd("tcp receive: buf_in: %p, bufs_in: %p", u->buf_in, u->bufs_in);

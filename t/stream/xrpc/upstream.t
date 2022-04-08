@@ -264,3 +264,109 @@ closed
 "123456789" x 256 .
 "\n" .
 "123456789" x 512
+
+
+
+=== TEST 9: multiple drain & move
+--- stream_config
+    server {
+        listen 1995;
+        content_by_lua_block {
+            local sk = ngx.req.socket(true)
+            sk:send(("123456789"):rep(256))
+            sk:send(("abcdefghi"):rep(512))
+        }
+    }
+--- stream_server_config
+    content_by_lua_block {
+        local ffi = require("ffi")
+        local sk = require("resty.apisix.stream.xrpc.socket").upstream.socket()
+        assert(sk:connect("127.0.0.1", 1995))
+
+        sk:settimeout(5)
+        local len = 9 * 256
+        sk:drain(len)
+        sk:drain(len * 2)
+
+        local ds = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        assert(ds:move(sk))
+    }
+--- stream_request
+--- stream_response eval
+"123456789" x 256 .
+"abcdefghi" x 512
+--- grep_error_log eval
+qr/stream lua tcp socket allocate new new buf of size \d+/
+--- grep_error_log_out
+stream lua tcp socket allocate new new buf of size 4096
+
+
+
+=== TEST 10: read & drain & move
+--- stream_config
+    server {
+        listen 1995;
+        content_by_lua_block {
+            local sk = ngx.req.socket(true)
+            sk:send(("123456789"):rep(256))
+            sk:send(("abcdefghi"):rep(512))
+        }
+    }
+--- stream_server_config
+    content_by_lua_block {
+        local ffi = require("ffi")
+        local sk = require("resty.apisix.stream.xrpc.socket").upstream.socket()
+        assert(sk:connect("127.0.0.1", 1995))
+
+        sk:settimeout(5)
+        local len = 9 * 256
+        sk:read(len)
+        sk:drain(len * 2)
+
+        local ds = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        assert(ds:move(sk))
+    }
+--- stream_request
+--- stream_response eval
+"123456789" x 256 .
+"abcdefghi" x 512
+--- grep_error_log eval
+qr/stream lua tcp socket allocate new new buf of size \d+/
+--- grep_error_log_out
+stream lua tcp socket allocate new new buf of size 4096
+
+
+
+=== TEST 11: drain & read & move
+--- stream_config
+    server {
+        listen 1995;
+        content_by_lua_block {
+            local sk = ngx.req.socket(true)
+            sk:send(("123456789"):rep(256))
+            sk:send(("abcdefghi"):rep(512))
+        }
+    }
+--- stream_server_config
+    content_by_lua_block {
+        local ffi = require("ffi")
+        local sk = require("resty.apisix.stream.xrpc.socket").upstream.socket()
+        assert(sk:connect("127.0.0.1", 1995))
+
+        sk:settimeout(5)
+        local len = 9 * 256
+        sk:drain(len)
+        sk:read(len * 2)
+
+        local ds = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        assert(ds:move(sk))
+    }
+--- stream_request
+--- stream_response eval
+"123456789" x 256 .
+"abcdefghi" x 512
+--- grep_error_log eval
+qr/stream lua tcp socket allocate new new buf of size \d+/
+--- grep_error_log_out
+stream lua tcp socket allocate new new buf of size 4096
+stream lua tcp socket allocate new new buf of size 4608

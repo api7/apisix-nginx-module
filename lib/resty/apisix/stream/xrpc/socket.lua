@@ -65,28 +65,24 @@ local function get_tcp_socket(cosocket)
 end
 
 
--- read the given length of data to a buffer in C land and return the buffer address
--- return error if the read data is less than given length
-local function read_buf(cosocket, len)
-    if len <= 0 then
-        error("bad length: length of data should be positive, got " .. len, 2)
-    end
-
-    if len > 4 * 1024 * 1024 then
-        error("bad length: length of data too big, got " .. len, 2)
-    end
-
+local function _read(cosocket, len, single_buf)
     local r = get_request()
     if not r then
         error("no request found", 2)
     end
 
     local u = get_tcp_socket(cosocket)
+
+    local buf
+    if single_buf then
+        buf = resbuf
+    end
+
     local errbuf = get_string_buf(ERR_BUF_SIZE)
     local errbuf_size = get_size_ptr()
     errbuf_size[0] = ERR_BUF_SIZE
 
-    local rc = socket_tcp_read(r, u, resbuf, len, errbuf, errbuf_size)
+    local rc = socket_tcp_read(r, u, buf, len, errbuf, errbuf_size)
     if rc == FFI_DONE then
         error(ffi_str(errbuf, errbuf_size[0]), 2)
     end
@@ -97,7 +93,11 @@ local function read_buf(cosocket, len)
         end
 
         if rc >= 0 then
-            return resbuf[0]
+            if single_buf then
+                return resbuf[0]
+            end
+
+            return true
         end
 
         assert(rc == FFI_AGAIN)
@@ -107,8 +107,35 @@ local function read_buf(cosocket, len)
         errbuf = get_string_buf(ERR_BUF_SIZE)
         errbuf_size = get_size_ptr()
         errbuf_size[0] = ERR_BUF_SIZE
-        rc = socket_tcp_get_read_result(r, u, resbuf, len, errbuf, errbuf_size)
+        rc = socket_tcp_get_read_result(r, u, buf, len, errbuf, errbuf_size)
     end
+end
+
+
+-- read the given length of data to a buffer in C land and return the buffer address
+-- return error if the read data is less than given length
+local function read(cosocket, len)
+    if len <= 0 then
+        error("bad length: length of data should be positive, got " .. len, 2)
+    end
+
+    if len > 4 * 1024 * 1024 then
+        error("bad length: length of data too big, got " .. len, 2)
+    end
+
+    return _read(cosocket, len, true)
+end
+
+
+-- work like `read` but don't return the buffer address and don't guarantee all the data is
+-- in the same buffer.
+-- return error if the read data is less than given length
+local function drain(cosocket, len)
+    if len <= 0 then
+        error("bad length: length of data should be positive, got " .. len, 2)
+    end
+
+    return _read(cosocket, len, false)
 end
 
 
@@ -172,7 +199,8 @@ local function patch_methods(sk)
     copy.receiveany = nil
     copy.receiveuntil = nil
 
-    copy.read = read_buf
+    copy.read = read
+    copy.drain = drain
     copy.move = move
 
     return {__index = copy}
