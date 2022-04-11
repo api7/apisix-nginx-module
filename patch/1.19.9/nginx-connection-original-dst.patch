@@ -1,7 +1,7 @@
-diff --git a/auto/os/linux b/auto/os/linux
+diff --git auto/os/linux auto/os/linux
 index 5e280eca..086e5372 100644
---- a/auto/os/linux
-+++ b/auto/os/linux
+--- auto/os/linux
++++ auto/os/linux
 @@ -190,6 +190,21 @@ ngx_feature_test="struct __user_cap_data_struct    data;
                    (void) SYS_capset"
  . auto/feature
@@ -24,10 +24,10 @@ index 5e280eca..086e5372 100644
  
  # crypt_r()
  
-diff --git a/src/http/ngx_http_variables.c b/src/http/ngx_http_variables.c
+diff --git src/http/ngx_http_variables.c src/http/ngx_http_variables.c
 index c2113c84..1c2a06a7 100644
---- a/src/http/ngx_http_variables.c
-+++ b/src/http/ngx_http_variables.c
+--- src/http/ngx_http_variables.c
++++ src/http/ngx_http_variables.c
 @@ -130,6 +130,11 @@ static ngx_int_t ngx_http_variable_connection(ngx_http_request_t *r,
  static ngx_int_t ngx_http_variable_connection_requests(ngx_http_request_t *r,
      ngx_http_variable_value_t *v, uintptr_t data);
@@ -96,10 +96,10 @@ index c2113c84..1c2a06a7 100644
  static ngx_int_t
  ngx_http_variable_nginx_version(ngx_http_request_t *r,
      ngx_http_variable_value_t *v, uintptr_t data)
-diff --git a/src/os/unix/ngx_linux_config.h b/src/os/unix/ngx_linux_config.h
+diff --git src/os/unix/ngx_linux_config.h src/os/unix/ngx_linux_config.h
 index 3036caeb..2353e9b3 100644
---- a/src/os/unix/ngx_linux_config.h
-+++ b/src/os/unix/ngx_linux_config.h
+--- src/os/unix/ngx_linux_config.h
++++ src/os/unix/ngx_linux_config.h
 @@ -103,6 +103,9 @@ typedef struct iocb  ngx_aiocb_t;
  #include <linux/capability.h>
  #endif
