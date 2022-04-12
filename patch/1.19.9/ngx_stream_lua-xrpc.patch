@@ -1,5 +1,5 @@
 diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
-index 7fcfb45..13e942d 100644
+index 7fcfb45..007305b 100644
 --- src/ngx_stream_lua_socket_tcp.c
 +++ src/ngx_stream_lua_socket_tcp.c
 @@ -234,6 +234,41 @@ enum {
@@ -44,7 +44,7 @@ index 7fcfb45..13e942d 100644
  
  static char ngx_stream_lua_raw_req_socket_metatable_key;
  static char ngx_stream_lua_tcp_socket_metatable_key;
-@@ -6005,6 +6040,605 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
+@@ -6005,6 +6040,620 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
  }
  
  
@@ -54,6 +54,10 @@ index 7fcfb45..13e942d 100644
 +{
 +    ngx_chain_t             *cl = u->bufs_in;
 +    ngx_chain_t            **ll = NULL;
++
++    if (cl == NULL) {
++        return;
++    }
 +
 +    if (cl->next) {
 +        ll = &cl->next;
@@ -74,6 +78,17 @@ index 7fcfb45..13e942d 100644
 +        u->buf_in->buf->last = u->buffer.pos;
 +        u->buf_in->buf->pos = u->buffer.pos;
 +    }
++}
++
++
++void
++ngx_stream_lua_ffi_socket_tcp_reset_read_buf(ngx_stream_lua_request_t *r,
++    ngx_stream_lua_socket_tcp_upstream_t *u)
++{
++    ngx_stream_lua_ctx_t    *ctx;
++
++    ctx = ngx_stream_lua_get_module_ctx(r, ngx_stream_lua_module);
++    ngx_stream_lua_ffi_socket_reset_buf(ctx, u);
 +}
 +
 +
