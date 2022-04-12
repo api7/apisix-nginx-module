@@ -39,11 +39,16 @@ int
 ngx_stream_lua_ffi_socket_tcp_get_send_result(ngx_stream_lua_request_t *r,
     ngx_stream_lua_socket_tcp_upstream_t *u, u_char *errbuf,
     size_t *errbuf_size);
+
+void
+ngx_stream_lua_ffi_socket_tcp_reset_read_buf(ngx_stream_lua_request_t *r,
+    ngx_stream_lua_socket_tcp_upstream_t *u);
 ]]
 local socket_tcp_read = C.ngx_stream_lua_ffi_socket_tcp_read_buf
 local socket_tcp_get_read_result = C.ngx_stream_lua_ffi_socket_tcp_get_read_buf_result
 local socket_tcp_move = C.ngx_stream_lua_ffi_socket_tcp_send_from_socket
 local socket_tcp_get_move_result = C.ngx_stream_lua_ffi_socket_tcp_get_send_result
+local socket_tcp_reset_read_buf = C.ngx_stream_lua_ffi_socket_tcp_reset_read_buf
 
 
 local ERR_BUF_SIZE = 256
@@ -191,6 +196,19 @@ local function move(dst, src)
 end
 
 
+-- reset buffer read from methods `read` or `drain`. Should be used when you don't
+-- want to forward some buffers
+local function reset_read_buf(cosocket)
+    local r = get_request()
+    if not r then
+        error("no request found", 2)
+    end
+
+    local u = get_tcp_socket(cosocket)
+    socket_tcp_reset_read_buf(r, u)
+end
+
+
 local function patch_methods(sk)
     local methods = getmetatable(sk).__index
     local copy = tab_clone(methods)
@@ -202,6 +220,7 @@ local function patch_methods(sk)
     copy.read = read
     copy.drain = drain
     copy.move = move
+    copy.reset_read_buf = reset_read_buf
 
     return {__index = copy}
 end

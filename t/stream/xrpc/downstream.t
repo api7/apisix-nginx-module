@@ -299,3 +299,76 @@ stream lua tcp socket allocate new new buf of size 144
     }
 --- stream_request
 hello world
+
+
+
+=== TEST 11: read & drain & move & reset_read_buf
+--- stream_config
+    server {
+        listen 1995;
+        content_by_lua_block {
+            local sk = ngx.req.socket(true)
+            local data = sk:receiveany(128)
+            local exp = "rld"
+            if data ~= exp then
+                ngx.log(ngx.ERR, "actual: ", data, ", expected: ", exp)
+            end
+        }
+    }
+--- stream_server_config
+    content_by_lua_block {
+        local ffi = require("ffi")
+        local ds = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        ds:settimeout(5)
+
+        local us = require("resty.apisix.stream.xrpc.socket").upstream.socket()
+        us:settimeout(50)
+        assert(us:connect("127.0.0.1", 1995))
+
+        assert(ds:read(4))
+        assert(ds:drain(4))
+        ds:reset_read_buf()
+        assert(us:move(ds))
+        assert(ds:drain(3))
+        assert(us:move(ds))
+    }
+--- stream_request
+hello world
+
+
+
+=== TEST 12: move & reset_read_buf + read over buffer in the middle
+--- stream_config
+    server {
+        listen 1995;
+        content_by_lua_block {
+            local sk = ngx.req.socket(true)
+            local data = sk:receive(9 * 8)
+            local exp = ("123456789"):rep(8)
+            if data ~= exp then
+                ngx.log(ngx.ERR, "actual: ", data, ", expected: ", exp)
+            end
+        }
+    }
+--- stream_server_config
+    lua_socket_buffer_size 128;
+    content_by_lua_block {
+        local ffi = require("ffi")
+        local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        sk:settimeout(5)
+
+        local us = require("resty.apisix.stream.xrpc.socket").upstream.socket()
+        us:settimeout(50)
+        assert(us:connect("127.0.0.1", 1995))
+
+        local len = 9 * 8
+        local p = assert(sk:read(len))
+        local len = 9 * 16
+        local p = assert(sk:read(len))
+        sk:reset_read_buf()
+        local len = 9 * 8
+        local p = assert(sk:read(len))
+        assert(us:move(sk))
+    }
+--- stream_request eval
+"123456789" x 32
