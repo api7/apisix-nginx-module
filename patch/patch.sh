@@ -47,6 +47,7 @@ elif [[ "$root" == *openresty-1.19.9.* ]]; then
     apply_patch "$patch_dir" "$root" "lua-resty-core" "0.1.22"
     apply_patch "$patch_dir" "$root" "ngx_lua" "0.10.20"
     apply_patch "$patch_dir" "$root" "ngx_stream_lua" "0.0.10"
+    apply_patch "$patch_dir" "$root" "LuaJIT-2.1" "20210510"
 else
     err "can't detect OpenResty version"
     exit 1
