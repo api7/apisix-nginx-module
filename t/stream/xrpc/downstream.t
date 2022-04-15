@@ -372,3 +372,120 @@ hello world
     }
 --- stream_request eval
 "123456789" x 32
+
+
+
+=== TEST 13: read_line
+--- stream_server_config
+    content_by_lua_block {
+        local ffi = require("ffi")
+        local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        sk:settimeout(5)
+        for i = 1, 2 do
+            local p, err, len = sk:read_line()
+            if err then
+                ngx.say(err)
+                return
+            end
+
+            ngx.print(ffi.string(p, len))
+        end
+    }
+--- stream_request eval
+"hello world\r\n" x 2
+--- stream_response eval
+"hello world" x 2
+
+
+
+=== TEST 14: read_line, bad `\r\n`
+--- stream_server_config
+    content_by_lua_block {
+        local ffi = require("ffi")
+        local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        sk:settimeout(5)
+        for i = 1, 2 do
+            local p, err, len = sk:read_line()
+            if err then
+                ngx.say(err)
+                return
+            end
+
+            ngx.print(ffi.string(p, len))
+        end
+    }
+--- stream_request eval
+"hello worl\rd\n" x 2
+--- stream_response eval
+"hello worl\rd" x 2
+
+
+
+=== TEST 15: read_line, no `\r\n`
+--- stream_server_config
+    content_by_lua_block {
+        local ffi = require("ffi")
+        local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        sk:settimeout(5)
+        for i = 1, 2 do
+            local p, err, len = sk:read_line()
+            if err then
+                ngx.say(err)
+                return
+            end
+
+            ngx.print(ffi.string(p, len))
+        end
+    }
+--- stream_request eval
+"hello world" x 2
+--- stream_response
+timeout
+--- error_log
+socket read timed out
+
+
+
+=== TEST 16: read_line within len
+--- stream_server_config
+    content_by_lua_block {
+        local ffi = require("ffi")
+        local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        sk:settimeout(5)
+        for i = 1, 2 do
+            local p, err, len = sk:read_line(14)
+            if err then
+                ngx.say(err)
+                return
+            end
+
+            ngx.print(ffi.string(p, len))
+        end
+    }
+--- stream_request eval
+"hello world\r\n" x 2
+--- stream_response eval
+"hello world" x 2
+
+
+
+=== TEST 17: read_line within len, no `\r\n`
+--- stream_server_config
+    content_by_lua_block {
+        local ffi = require("ffi")
+        local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        sk:settimeout(5)
+        for i = 1, 2 do
+            local p, err, len = sk:read_line(14)
+            if err then
+                ngx.say(err)
+                return
+            end
+
+            ngx.print(ffi.string(p, len))
+        end
+    }
+--- stream_request eval
+"hello world" x 2
+--- stream_response
+truncated

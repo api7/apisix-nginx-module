@@ -23,12 +23,12 @@ typedef struct ngx_stream_lua_socket_tcp_upstream_s
 int
 ngx_stream_lua_ffi_socket_tcp_read_buf(ngx_stream_lua_request_t *r,
     ngx_stream_lua_socket_tcp_upstream_t *u, u_char **res, size_t len,
-    u_char *errbuf, size_t *errbuf_size);
+    size_t *actual_len, u_char *errbuf, size_t *errbuf_size);
 
 int
 ngx_stream_lua_ffi_socket_tcp_get_read_buf_result(ngx_stream_lua_request_t *r,
-    ngx_stream_lua_socket_tcp_upstream_t *u, u_char **res, size_t len,
-    u_char *errbuf, size_t *errbuf_size);
+    ngx_stream_lua_socket_tcp_upstream_t *u, u_char **buf, size_t len,
+    size_t *actual_len, u_char *errbuf, size_t *errbuf_size);
 
 int
 ngx_stream_lua_ffi_socket_tcp_send_from_socket(ngx_stream_lua_request_t *r,
@@ -53,7 +53,8 @@ local socket_tcp_reset_read_buf = C.ngx_stream_lua_ffi_socket_tcp_reset_read_buf
 
 local ERR_BUF_SIZE = 256
 local SOCKET_CTX_INDEX = 1
-local resbuf = ffi.new("u_char*[1]")
+local res_buf = ffi.new("u_char*[1]")
+local actual_len_buf = ffi.new("size_t[1]")
 local Downstream = {}
 local Upstream = {}
 local downstream_mt
@@ -70,7 +71,7 @@ local function get_tcp_socket(cosocket)
 end
 
 
-local function _read(cosocket, len, single_buf)
+local function _read(cosocket, len, single_buf, eol)
     local r = get_request()
     if not r then
         error("no request found", 2)
@@ -80,14 +81,19 @@ local function _read(cosocket, len, single_buf)
 
     local buf
     if single_buf then
-        buf = resbuf
+        buf = res_buf
+    end
+
+    local len_buf
+    if eol then
+        len_buf = actual_len_buf
     end
 
     local errbuf = get_string_buf(ERR_BUF_SIZE)
     local errbuf_size = get_size_ptr()
     errbuf_size[0] = ERR_BUF_SIZE
 
-    local rc = socket_tcp_read(r, u, buf, len, errbuf, errbuf_size)
+    local rc = socket_tcp_read(r, u, buf, len, len_buf, errbuf, errbuf_size)
     if rc == FFI_DONE then
         error(ffi_str(errbuf, errbuf_size[0]), 2)
     end
@@ -99,7 +105,11 @@ local function _read(cosocket, len, single_buf)
 
         if rc >= 0 then
             if single_buf then
-                return resbuf[0]
+                if eol then
+                    return res_buf[0], nil, tonumber(len_buf[0])
+                end
+
+                return res_buf[0]
             end
 
             return true
@@ -112,13 +122,16 @@ local function _read(cosocket, len, single_buf)
         errbuf = get_string_buf(ERR_BUF_SIZE)
         errbuf_size = get_size_ptr()
         errbuf_size[0] = ERR_BUF_SIZE
-        rc = socket_tcp_get_read_result(r, u, buf, len, errbuf, errbuf_size)
+        rc = socket_tcp_get_read_result(r, u, buf, len, len_buf, errbuf, errbuf_size)
     end
 end
 
 
 -- read the given length of data to a buffer in C land and return the buffer address
 -- return error if the read data is less than given length
+--
+-- Note: we will allocate a buffer with the given length, so better avoid to specify
+-- a length which is too big.
 local function read(cosocket, len)
     if len <= 0 then
         error("bad length: length of data should be positive, got " .. len, 2)
@@ -128,7 +141,32 @@ local function read(cosocket, len)
         error("bad length: length of data too big, got " .. len, 2)
     end
 
-    return _read(cosocket, len, true)
+    return _read(cosocket, len, true, false)
+end
+
+
+-- read_line like `read` method but read until hitting the `\n` or the read data
+-- is equal to the given length.
+-- return nil, error if the `\n` is not found.
+-- return buffer address, nil, actual read len (excluding `\n` and optional `\r` before `\n`)
+-- if the `\n` is found.
+--
+-- Note: we will allocate a buffer with the given length, so better avoid to specify
+-- a length which is too big. And the specified length contains the '\n' and optional '\r'.
+local function read_line(cosocket, len)
+    if len == nil then
+        len = 4096
+    end
+
+    if len <= 0 then
+        error("bad length: length of data should be positive, got " .. len, 2)
+    end
+
+    if len > 4 * 1024 * 1024 then
+        error("bad length: length of data too big, got " .. len, 2)
+    end
+
+    return _read(cosocket, len, true, true)
 end
 
 
@@ -140,7 +178,7 @@ local function drain(cosocket, len)
         error("bad length: length of data should be positive, got " .. len, 2)
     end
 
-    return _read(cosocket, len, false)
+    return _read(cosocket, len, false, false)
 end
 
 
@@ -219,6 +257,7 @@ local function patch_methods(sk)
 
     copy.read = read
     copy.drain = drain
+    copy.read_line = read_line
     copy.move = move
     copy.reset_read_buf = reset_read_buf
 

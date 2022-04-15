@@ -217,3 +217,49 @@ __DATA__
 --- stream_response eval
 "123456789" x 1280
 --- timeout: 5
+
+
+
+=== TEST 6: read_line
+--- stream_config
+    lua_socket_buffer_size 128;
+    server {
+        listen 1995;
+        content_by_lua_block {
+            local total = 6 * 1024
+            while total > 0 do
+                local len = math.random(1, 512)
+                if len > total then
+                    len = total
+                end
+                total = total - len
+                ngx.print(("a"):rep(len) .. "\r\n")
+                ngx.flush(true)
+                ngx.sleep(0.01)
+            end
+        }
+    }
+--- stream_server_config
+    lua_socket_buffer_size 128;
+    content_by_lua_block {
+        math.randomseed(ngx.time())
+
+        local ffi = require("ffi")
+        local sk = require("resty.apisix.stream.xrpc.socket").upstream.socket()
+        local dsk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        assert(sk:connect("127.0.0.1", 1995))
+        sk:settimeout(500)
+        while true do
+            local p, err, len = sk:read_line(514)
+            if not p then
+                if err ~= "closed" then
+                    ngx.log(ngx.ERR, err)
+                end
+                return
+            end
+            assert(dsk:send(ffi.string(p, len)))
+        end
+    }
+--- stream_request
+--- stream_response eval
+"aaaaaa" x 1024
