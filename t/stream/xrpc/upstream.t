@@ -390,14 +390,14 @@ stream lua tcp socket allocate new new buf of size 4608
         sk:settimeout(5)
 
         sk:read(4)
-        sk:read_line()
+        sk:read_line(128)
         sk:drain(5)
-        sk:read_line()
+        sk:read_line(128)
 
         local ds = require("resty.apisix.stream.xrpc.socket").downstream.socket()
         assert(ds:move(sk))
 
-        sk:read_line()
+        sk:read_line(128)
         assert(ds:move(sk))
     }
 --- stream_request

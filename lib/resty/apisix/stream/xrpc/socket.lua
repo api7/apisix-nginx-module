@@ -154,10 +154,6 @@ end
 -- Note: we will allocate a buffer with the given length, so better avoid to specify
 -- a length which is too big. And the specified length contains the '\n' and optional '\r'.
 local function read_line(cosocket, len)
-    if len == nil then
-        len = 4096
-    end
-
     if len <= 0 then
         error("bad length: length of data should be positive, got " .. len, 2)
     end

@@ -382,7 +382,7 @@ hello world
         local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
         sk:settimeout(5)
         for i = 1, 2 do
-            local p, err, len = sk:read_line()
+            local p, err, len = sk:read_line(128)
             if err then
                 ngx.say(err)
                 return
@@ -405,7 +405,7 @@ hello world
         local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
         sk:settimeout(5)
         for i = 1, 2 do
-            local p, err, len = sk:read_line()
+            local p, err, len = sk:read_line(128)
             if err then
                 ngx.say(err)
                 return
@@ -428,7 +428,7 @@ hello world
         local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
         sk:settimeout(5)
         for i = 1, 2 do
-            local p, err, len = sk:read_line()
+            local p, err, len = sk:read_line(128)
             if err then
                 ngx.say(err)
                 return
