@@ -370,3 +370,36 @@ qr/stream lua tcp socket allocate new new buf of size \d+/
 --- grep_error_log_out
 stream lua tcp socket allocate new new buf of size 4096
 stream lua tcp socket allocate new new buf of size 4608
+
+
+
+=== TEST 12: read_line & move
+--- stream_config
+    server {
+        listen 1995;
+        content_by_lua_block {
+            local sk = ngx.req.socket(true)
+            sk:send(("hello world\r\n"):rep(3))
+        }
+    }
+--- stream_server_config
+    content_by_lua_block {
+        local ffi = require("ffi")
+        local sk = require("resty.apisix.stream.xrpc.socket").upstream.socket()
+        assert(sk:connect("127.0.0.1", 1995))
+        sk:settimeout(5)
+
+        sk:read(4)
+        sk:read_line(128)
+        sk:drain(5)
+        sk:read_line(128)
+
+        local ds = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        assert(ds:move(sk))
+
+        sk:read_line(128)
+        assert(ds:move(sk))
+    }
+--- stream_request
+--- stream_response eval
+"hello world\r\n" x 3
