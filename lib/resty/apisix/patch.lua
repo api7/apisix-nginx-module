@@ -5,3 +5,6 @@
 local _M = {
     client_cert_verified_in_handshake = true
 }
+
+
+return _M
