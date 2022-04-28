@@ -43,12 +43,18 @@ ngx_stream_lua_ffi_socket_tcp_get_send_result(ngx_stream_lua_request_t *r,
 void
 ngx_stream_lua_ffi_socket_tcp_reset_read_buf(ngx_stream_lua_request_t *r,
     ngx_stream_lua_socket_tcp_upstream_t *u);
+
+int
+ngx_stream_lua_ffi_socket_tcp_has_pending_data(ngx_stream_lua_request_t *r,
+    ngx_stream_lua_socket_tcp_upstream_t *u,
+    u_char *errbuf, size_t *errbuf_size);
 ]]
 local socket_tcp_read = C.ngx_stream_lua_ffi_socket_tcp_read_buf
 local socket_tcp_get_read_result = C.ngx_stream_lua_ffi_socket_tcp_get_read_buf_result
 local socket_tcp_move = C.ngx_stream_lua_ffi_socket_tcp_send_from_socket
 local socket_tcp_get_move_result = C.ngx_stream_lua_ffi_socket_tcp_get_send_result
 local socket_tcp_reset_read_buf = C.ngx_stream_lua_ffi_socket_tcp_reset_read_buf
+local socket_tcp_has_pending_data = C.ngx_stream_lua_ffi_socket_tcp_has_pending_data
 
 
 local ERR_BUF_SIZE = 256
@@ -178,6 +184,29 @@ local function drain(cosocket, len)
 end
 
 
+-- has_pending_data check if there is unread data in the given socket.
+-- return false if there is no pending data, and return true if there may be any pending data.
+-- we require it to be called after any read methods called successfully.
+local function has_pending_data(cosocket)
+    local r = get_request()
+    if not r then
+        error("no request found", 2)
+    end
+
+    local u = get_tcp_socket(cosocket)
+
+    local errbuf = get_string_buf(ERR_BUF_SIZE)
+    local errbuf_size = get_size_ptr()
+    errbuf_size[0] = ERR_BUF_SIZE
+
+    local rc = socket_tcp_has_pending_data(r, u, errbuf, errbuf_size)
+    if rc == FFI_ERROR then
+        return nil, ffi_str(errbuf, errbuf_size[0])
+    end
+    return rc == FFI_AGAIN
+end
+
+
 -- move the buffers from src cosocket to dst cosocket. The buffers are from previous one or multiple
 -- read calls. It is equal to send multiple read buffer in the src cosocket to the dst cosocket.
 local function move(dst, src)
@@ -256,6 +285,7 @@ local function patch_methods(sk)
     copy.read_line = read_line
     copy.move = move
     copy.reset_read_buf = reset_read_buf
+    copy.has_pending_data = has_pending_data
 
     return {__index = copy}
 end

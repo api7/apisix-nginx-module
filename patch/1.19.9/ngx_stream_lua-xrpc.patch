@@ -81,7 +81,7 @@ index e65d572..25175a5 100644
  #endif /* _NGX_STREAM_LUA_INPUT_FILTERS_H_INCLUDED_ */
  
 diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
-index 7fcfb45..a21561b 100644
+index 7fcfb45..9981b4b 100644
 --- src/ngx_stream_lua_socket_tcp.c
 +++ src/ngx_stream_lua_socket_tcp.c
 @@ -234,6 +234,41 @@ enum {
@@ -158,7 +158,7 @@ index 7fcfb45..a21561b 100644
  static ngx_int_t
  ngx_stream_lua_socket_tcp_read(ngx_stream_lua_request_t *r,
      ngx_stream_lua_socket_tcp_upstream_t *u)
-@@ -6005,6 +6065,647 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
+@@ -6005,6 +6065,672 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
  }
  
  
@@ -278,6 +278,7 @@ index 7fcfb45..a21561b 100644
 +            p = ngx_strerror(u->socket_errno, errbuf, *errbuf_size);
 +            /* for compatibility with LuaSocket */
 +            ngx_strlow(errbuf, errbuf, p - errbuf);
++            *errbuf_size = p - errbuf;
 +
 +        } else {
 +            *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "error")
@@ -582,6 +583,30 @@ index 7fcfb45..a21561b 100644
 +    return ngx_stream_lua_ffi_socket_read_retval_handler(r, u, buf, len,
 +                                                         actual_len,
 +                                                         errbuf, errbuf_size);
++}
++
++
++int
++ngx_stream_lua_ffi_socket_tcp_has_pending_data(ngx_stream_lua_request_t *r,
++    ngx_stream_lua_socket_tcp_upstream_t *u,
++    u_char *errbuf, size_t *errbuf_size)
++{
++    /* skip many input checks as we require glance to be called
++     * after any read methods called successfully */
++
++    if (u == NULL || u->bufs_in == NULL) {
++        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "closed") - errbuf;
++        return NGX_ERROR;
++    }
++
++    /* no remain data */
++    if ((u->buffer.last == u->buffer.pos && u->buffer.last != u->buffer.end)
++        || u->eof /* EOF reached */)
++    {
++        return NGX_OK;
++    }
++
++    return NGX_AGAIN;
 +}
 +
 +
