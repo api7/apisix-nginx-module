@@ -61,6 +61,8 @@ false
     content_by_lua_block {
         local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
         assert(sk:read(132))
+        -- In this case, the has_pending_data has to return true as
+        -- there is no way to know if there is pending data without a read
         ngx.say(sk:has_pending_data())
     }
 --- stream_request eval
