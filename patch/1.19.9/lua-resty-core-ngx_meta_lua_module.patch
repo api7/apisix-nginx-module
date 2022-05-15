@@ -1,0 +1,273 @@
+diff --git lib/resty/core/shdict.lua lib/resty/core/shdict.lua
+index dedf12c..575cfb9 100644
+--- lib/resty/core/shdict.lua
++++ lib/resty/core/shdict.lua
+@@ -1,7 +1,7 @@
+ -- Copyright (C) Yichun Zhang (agentzh)
+ 
+ 
+-local ffi = require 'ffi'
++local ffi = require "ffi"
+ local base = require "resty.core.base"
+ 
+ 
+@@ -28,131 +28,53 @@ local type = type
+ local error = error
+ local getmetatable = getmetatable
+ local FFI_DECLINED = base.FFI_DECLINED
+-local subsystem = ngx.config.subsystem
+ 
+ 
+-local ngx_lua_ffi_shdict_get
+-local ngx_lua_ffi_shdict_incr
+-local ngx_lua_ffi_shdict_store
+-local ngx_lua_ffi_shdict_flush_all
+-local ngx_lua_ffi_shdict_get_ttl
+-local ngx_lua_ffi_shdict_set_expire
+-local ngx_lua_ffi_shdict_capacity
+ local ngx_lua_ffi_shdict_free_space
+-local ngx_lua_ffi_shdict_udata_to_zone
+ 
+ 
+-if subsystem == 'http' then
+-    ffi.cdef[[
+-int ngx_http_lua_ffi_shdict_get(void *zone, const unsigned char *key,
++ffi.cdef[[
++int ngx_meta_lua_ffi_shdict_get(void *zone, const unsigned char *key,
+     size_t key_len, int *value_type, unsigned char **str_value_buf,
+     size_t *str_value_len, double *num_value, int *user_flags,
+     int get_stale, int *is_stale, char **errmsg);
+ 
+-int ngx_http_lua_ffi_shdict_incr(void *zone, const unsigned char *key,
++int ngx_meta_lua_ffi_shdict_incr(void *zone, const unsigned char *key,
+     size_t key_len, double *value, char **err, int has_init,
+     double init, long init_ttl, int *forcible);
+ 
+-int ngx_http_lua_ffi_shdict_store(void *zone, int op,
++int ngx_meta_lua_ffi_shdict_store(void *zone, int op,
+     const unsigned char *key, size_t key_len, int value_type,
+     const unsigned char *str_value_buf, size_t str_value_len,
+     double num_value, long exptime, int user_flags, char **errmsg,
+     int *forcible);
+ 
+-int ngx_http_lua_ffi_shdict_flush_all(void *zone);
++int ngx_meta_lua_ffi_shdict_flush_all(void *zone);
+ 
+-long ngx_http_lua_ffi_shdict_get_ttl(void *zone,
++long ngx_meta_lua_ffi_shdict_get_ttl(void *zone,
+     const unsigned char *key, size_t key_len);
+ 
+-int ngx_http_lua_ffi_shdict_set_expire(void *zone,
++int ngx_meta_lua_ffi_shdict_set_expire(void *zone,
+     const unsigned char *key, size_t key_len, long exptime);
+ 
+-size_t ngx_http_lua_ffi_shdict_capacity(void *zone);
+-
+-void *ngx_http_lua_ffi_shdict_udata_to_zone(void *zone_udata);
+-    ]]
+-
+-    ngx_lua_ffi_shdict_get = C.ngx_http_lua_ffi_shdict_get
+-    ngx_lua_ffi_shdict_incr = C.ngx_http_lua_ffi_shdict_incr
+-    ngx_lua_ffi_shdict_store = C.ngx_http_lua_ffi_shdict_store
+-    ngx_lua_ffi_shdict_flush_all = C.ngx_http_lua_ffi_shdict_flush_all
+-    ngx_lua_ffi_shdict_get_ttl = C.ngx_http_lua_ffi_shdict_get_ttl
+-    ngx_lua_ffi_shdict_set_expire = C.ngx_http_lua_ffi_shdict_set_expire
+-    ngx_lua_ffi_shdict_capacity = C.ngx_http_lua_ffi_shdict_capacity
+-    ngx_lua_ffi_shdict_udata_to_zone =
+-        C.ngx_http_lua_ffi_shdict_udata_to_zone
+-
+-    if not pcall(function ()
+-        return C.ngx_http_lua_ffi_shdict_free_space
+-    end)
+-    then
+-        ffi.cdef[[
+-size_t ngx_http_lua_ffi_shdict_free_space(void *zone);
+-        ]]
+-    end
+-
+-    pcall(function ()
+-        ngx_lua_ffi_shdict_free_space = C.ngx_http_lua_ffi_shdict_free_space
+-    end)
++size_t ngx_meta_lua_ffi_shdict_capacity(void *zone);
+ 
+-elseif subsystem == 'stream' then
++void *ngx_meta_lua_ffi_shdict_udata_to_zone(void *zone_udata);
++]]
+ 
++if not pcall(function ()
++    return C.ngx_meta_lua_ffi_shdict_free_space
++end)
++then
+     ffi.cdef[[
+-int ngx_stream_lua_ffi_shdict_get(void *zone, const unsigned char *key,
+-    size_t key_len, int *value_type, unsigned char **str_value_buf,
+-    size_t *str_value_len, double *num_value, int *user_flags,
+-    int get_stale, int *is_stale, char **errmsg);
+-
+-int ngx_stream_lua_ffi_shdict_incr(void *zone, const unsigned char *key,
+-    size_t key_len, double *value, char **err, int has_init,
+-    double init, long init_ttl, int *forcible);
+-
+-int ngx_stream_lua_ffi_shdict_store(void *zone, int op,
+-    const unsigned char *key, size_t key_len, int value_type,
+-    const unsigned char *str_value_buf, size_t str_value_len,
+-    double num_value, long exptime, int user_flags, char **errmsg,
+-    int *forcible);
+-
+-int ngx_stream_lua_ffi_shdict_flush_all(void *zone);
+-
+-long ngx_stream_lua_ffi_shdict_get_ttl(void *zone,
+-     const unsigned char *key, size_t key_len);
+-
+-int ngx_stream_lua_ffi_shdict_set_expire(void *zone,
+-    const unsigned char *key, size_t key_len, long exptime);
+-
+-size_t ngx_stream_lua_ffi_shdict_capacity(void *zone);
+-
+-void *ngx_stream_lua_ffi_shdict_udata_to_zone(void *zone_udata);
++size_t ngx_meta_lua_ffi_shdict_free_space(void *zone);
+     ]]
+-
+-    ngx_lua_ffi_shdict_get = C.ngx_stream_lua_ffi_shdict_get
+-    ngx_lua_ffi_shdict_incr = C.ngx_stream_lua_ffi_shdict_incr
+-    ngx_lua_ffi_shdict_store = C.ngx_stream_lua_ffi_shdict_store
+-    ngx_lua_ffi_shdict_flush_all = C.ngx_stream_lua_ffi_shdict_flush_all
+-    ngx_lua_ffi_shdict_get_ttl = C.ngx_stream_lua_ffi_shdict_get_ttl
+-    ngx_lua_ffi_shdict_set_expire = C.ngx_stream_lua_ffi_shdict_set_expire
+-    ngx_lua_ffi_shdict_capacity = C.ngx_stream_lua_ffi_shdict_capacity
+-    ngx_lua_ffi_shdict_udata_to_zone =
+-        C.ngx_stream_lua_ffi_shdict_udata_to_zone
+-
+-    if not pcall(function ()
+-        return C.ngx_stream_lua_ffi_shdict_free_space
+-    end)
+-    then
+-        ffi.cdef[[
+-size_t ngx_stream_lua_ffi_shdict_free_space(void *zone);
+-        ]]
+-    end
+-
+-    -- ngx_stream_lua is only compatible with NGINX >= 1.13.6, meaning it
+-    -- cannot lack support for ngx_stream_lua_ffi_shdict_free_space.
+-    ngx_lua_ffi_shdict_free_space = C.ngx_stream_lua_ffi_shdict_free_space
+-
+-else
+-    error("unknown subsystem: " .. subsystem)
+ end
+ 
++pcall(function ()
++    ngx_lua_ffi_shdict_free_space = C.ngx_meta_lua_ffi_shdict_free_space
++end)
++
+ if not pcall(function () return C.free end) then
+     ffi.cdef[[
+ void free(void *ptr);
+@@ -179,7 +101,7 @@ local function check_zone(zone)
+         error("bad \"zone\" argument", 3)
+     end
+ 
+-    zone = ngx_lua_ffi_shdict_udata_to_zone(zone)
++    zone = C.ngx_meta_lua_ffi_shdict_udata_to_zone(zone)
+     if zone == nil then
+         error("bad \"zone\" argument", 3)
+     end
+@@ -245,11 +167,11 @@ local function shdict_store(zone, op, key, value, exptime, flags)
+         return nil, "bad value type"
+     end
+ 
+-    local rc = ngx_lua_ffi_shdict_store(zone, op, key, key_len,
+-                                        valtyp, str_val_buf,
+-                                        str_val_len, num_val,
+-                                        exptime * 1000, flags, errmsg,
+-                                        forcible)
++    local rc = C.ngx_meta_lua_ffi_shdict_store(zone, op, key, key_len,
++                                               valtyp, str_val_buf,
++                                               str_val_len, num_val,
++                                               exptime * 1000, flags, errmsg,
++                                               forcible)
+ 
+     -- print("rc == ", rc)
+ 
+@@ -317,10 +239,10 @@ local function shdict_get(zone, key)
+     local value_len = get_size_ptr()
+     value_len[0] = size
+ 
+-    local rc = ngx_lua_ffi_shdict_get(zone, key, key_len, value_type,
+-                                      str_value_buf, value_len,
+-                                      num_value, user_flags, 0,
+-                                      is_stale, errmsg)
++    local rc = C.ngx_meta_lua_ffi_shdict_get(zone, key, key_len, value_type,
++                                             str_value_buf, value_len,
++                                             num_value, user_flags, 0,
++                                             is_stale, errmsg)
+     if rc ~= 0 then
+         if errmsg[0] ~= nil then
+             return nil, ffi_str(errmsg[0])
+@@ -392,10 +314,10 @@ local function shdict_get_stale(zone, key)
+     local value_len = get_size_ptr()
+     value_len[0] = size
+ 
+-    local rc = ngx_lua_ffi_shdict_get(zone, key, key_len, value_type,
+-                                      str_value_buf, value_len,
+-                                      num_value, user_flags, 1,
+-                                      is_stale, errmsg)
++    local rc = C.ngx_meta_lua_ffi_shdict_get(zone, key, key_len, value_type,
++                                             str_value_buf, value_len,
++                                             num_value, user_flags, 1,
++                                             is_stale, errmsg)
+     if rc ~= 0 then
+         if errmsg[0] ~= nil then
+             return nil, ffi_str(errmsg[0])
+@@ -498,10 +420,10 @@ local function shdict_incr(zone, key, value, init, init_ttl)
+         init_ttl = 0
+     end
+ 
+-    local rc = ngx_lua_ffi_shdict_incr(zone, key, key_len, num_value,
+-                                       errmsg, init and 1 or 0,
+-                                       init or 0, init_ttl * 1000,
+-                                       forcible)
++    local rc = C.ngx_meta_lua_ffi_shdict_incr(zone, key, key_len, num_value,
++                                              errmsg, init and 1 or 0,
++                                              init or 0, init_ttl * 1000,
++                                              forcible)
+     if rc ~= 0 then  -- ~= NGX_OK
+         return nil, ffi_str(errmsg[0])
+     end
+@@ -517,7 +439,7 @@ end
+ local function shdict_flush_all(zone)
+     zone = check_zone(zone)
+ 
+-    ngx_lua_ffi_shdict_flush_all(zone)
++    C.ngx_meta_lua_ffi_shdict_flush_all(zone)
+ end
+ 
+ 
+@@ -541,7 +463,7 @@ local function shdict_ttl(zone, key)
+         return nil, "key too long"
+     end
+ 
+-    local rc = ngx_lua_ffi_shdict_get_ttl(zone, key, key_len)
++    local rc = C.ngx_meta_lua_ffi_shdict_get_ttl(zone, key, key_len)
+ 
+     if rc == FFI_DECLINED then
+         return nil, "not found"
+@@ -575,8 +497,8 @@ local function shdict_expire(zone, key, exptime)
+         return nil, "key too long"
+     end
+ 
+-    local rc = ngx_lua_ffi_shdict_set_expire(zone, key, key_len,
+-                                             exptime * 1000)
++    local rc = C.ngx_meta_lua_ffi_shdict_set_expire(zone, key, key_len,
++                                                    exptime * 1000)
+ 
+     if rc == FFI_DECLINED then
+         return nil, "not found"
+@@ -591,7 +513,7 @@ end
+ local function shdict_capacity(zone)
+     zone = check_zone(zone)
+ 
+-    return tonumber(ngx_lua_ffi_shdict_capacity(zone))
++    return tonumber(C.ngx_meta_lua_ffi_shdict_capacity(zone))
+ end
+ 
+ 
