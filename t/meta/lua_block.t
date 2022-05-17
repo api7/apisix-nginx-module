@@ -1,11 +1,9 @@
 # vim:set ft= ts=4 sw=4 et fdm=marker:
-use lib '.';
-use t::TestMeta;
 
-plan tests => repeat_each() * (blocks() * 2);
+use t::APISIX_NGINX 'no_plan';
 
 add_block_preprocessor(sub {
-    my $block = shift;
+    my ($block) = @_;
 
     my $http_init_by_lua_block = $block->http_init_by_lua_block || '';
     my $stream_init_by_lua_block = $block->stream_init_by_lua_block || '';
@@ -13,12 +11,10 @@ add_block_preprocessor(sub {
     my $stream_config = $block->stream_config || '';
 
     $http_config .= <<_EOC_;
-    lua_package_path '$t::TestMeta::lua_package_path';
     init_by_lua_block { $http_init_by_lua_block }
 _EOC_
 
     $stream_config .= <<_EOC_;
-    lua_package_path '$t::TestMeta::lua_package_path';
     init_by_lua_block { $stream_init_by_lua_block }
 _EOC_
 
@@ -37,8 +33,6 @@ __DATA__
 === TEST 1: lua{} block - sanity
 --- main_config
     lua {}
---- no_error_log
-[error]
 
 
 
