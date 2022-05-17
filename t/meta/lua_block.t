@@ -1,5 +1,3 @@
-# vim:set ft= ts=4 sw=4 et fdm=marker:
-
 use t::APISIX_NGINX 'no_plan';
 
 add_block_preprocessor(sub {
