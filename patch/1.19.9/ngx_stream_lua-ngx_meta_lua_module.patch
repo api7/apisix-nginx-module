@@ -1,3 +1,23 @@
+diff --git config config
+index 07240ea..536b66b 100644
+--- config
++++ config
+@@ -260,7 +260,6 @@ STREAM_LUA_SRCS=" \
+                 $ngx_addon_dir/src/ngx_stream_lua_ctx.c \
+                 $ngx_addon_dir/src/ngx_stream_lua_regex.c \
+                 $ngx_addon_dir/src/ngx_stream_lua_script.c \
+-                $ngx_addon_dir/src/ngx_stream_lua_shdict.c \
+                 $ngx_addon_dir/src/ngx_stream_lua_variable.c \
+                 $ngx_addon_dir/src/ngx_stream_lua_timer.c \
+                 $ngx_addon_dir/src/ngx_stream_lua_config.c \
+@@ -304,7 +303,6 @@ STREAM_LUA_DEPS=" \
+                 $ngx_addon_dir/src/ngx_stream_lua_phase.h \
+                 $ngx_addon_dir/src/ngx_stream_lua_ctx.h \
+                 $ngx_addon_dir/src/ngx_stream_lua_script.h \
+-                $ngx_addon_dir/src/ngx_stream_lua_shdict.h \
+                 $ngx_addon_dir/src/ngx_stream_lua_timer.h \
+                 $ngx_addon_dir/src/ngx_stream_lua_config.h \
+                 $ngx_addon_dir/src/api/ngx_stream_lua_api.h \
 diff --git src/api/ngx_stream_lua_api.h src/api/ngx_stream_lua_api.h
 index 92f933d..e722580 100644
 --- src/api/ngx_stream_lua_api.h

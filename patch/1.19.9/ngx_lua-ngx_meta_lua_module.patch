@@ -1,3 +1,23 @@
+diff --git config config
+index 4b32d383..06ec0da0 100644
+--- config
++++ config
+@@ -268,7 +268,6 @@ HTTP_LUA_SRCS=" \
+             $ngx_addon_dir/src/ngx_http_lua_clfactory.c \
+             $ngx_addon_dir/src/ngx_http_lua_pcrefix.c \
+             $ngx_addon_dir/src/ngx_http_lua_headerfilterby.c \
+-            $ngx_addon_dir/src/ngx_http_lua_shdict.c \
+             $ngx_addon_dir/src/ngx_http_lua_socket_tcp.c \
+             $ngx_addon_dir/src/ngx_http_lua_api.c \
+             $ngx_addon_dir/src/ngx_http_lua_logby.c \
+@@ -330,7 +329,6 @@ HTTP_LUA_DEPS=" \
+             $ngx_addon_dir/src/ngx_http_lua_clfactory.h \
+             $ngx_addon_dir/src/ngx_http_lua_pcrefix.h \
+             $ngx_addon_dir/src/ngx_http_lua_headerfilterby.h \
+-            $ngx_addon_dir/src/ngx_http_lua_shdict.h \
+             $ngx_addon_dir/src/ngx_http_lua_socket_tcp.h \
+             $ngx_addon_dir/src/api/ngx_http_lua_api.h \
+             $ngx_addon_dir/src/ngx_http_lua_logby.h \
 diff --git src/api/ngx_http_lua_api.h src/api/ngx_http_lua_api.h
 index 43f90bd0..7530add0 100644
 --- src/api/ngx_http_lua_api.h

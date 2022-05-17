@@ -14,3 +14,14 @@ The `*-ngx_pipe_environ_on_mac` patches support the environ argument of the ngx.
 The `*-enable_keepalive` patches originally come from:
 https://github.com/openresty/lua-nginx-module/pull/1600
 https://github.com/openresty/lua-resty-core/pull/276
+
+The `*-ngx_meta_lua_module` patches, `src/meta/*` and `t/meta/*` originally come from:
+https://github.com/openresty/meta-lua-nginx-module/pull/76, which is under BSD license.
+Copyright and License of this PR:
+This repository is licensed under the BSD license.
+
+Copyright (C) 2009-2017, by Xiaozhe Wang (chaoslawful) chaoslawful@gmail.com.
+
+Copyright (C) 2009-2019, by Yichun "agentzh" Zhang (章亦春) agentzh@gmail.com, OpenResty Inc.
+
+All rights reserved.
