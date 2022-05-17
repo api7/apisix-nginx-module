@@ -6,7 +6,6 @@ add_block_preprocessor(sub {
     if (!defined $block->config) {
         $block->set_value("config", "location /t { return 200; }");
     }
-_EOC_
 });
 
 no_long_string();
