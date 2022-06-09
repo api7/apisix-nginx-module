@@ -1,0 +1,15 @@
+diff --git src/api/ngx_stream_lua_api.h src/api/ngx_stream_lua_api.h
+index 92f933d..812e0c4 100644
+--- src/api/ngx_stream_lua_api.h
++++ src/api/ngx_stream_lua_api.h
+@@ -20,6 +20,10 @@
+ #include <ngx_core.h>
+ 
+ 
++#if (NGX_STREAM_APISIX)
++#include <ngx_stream.h>
++#include "../ngx_stream_lua_request.h"
++#endif
+ 
+ 
+ #include <lua.h>
