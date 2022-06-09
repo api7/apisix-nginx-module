@@ -1,0 +1,249 @@
+diff --git src/http/ngx_http_upstream.c src/http/ngx_http_upstream.c
+index 8c0b5244..b73206d1 100644
+--- src/http/ngx_http_upstream.c
++++ src/http/ngx_http_upstream.c
+@@ -8,6 +8,9 @@
+ #include <ngx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_http.h>
++#if (NGX_HTTP_APISIX)
++#include <ngx_http_apisix_module.h>
++#endif
+ 
+ #if (T_NGX_MULTI_UPSTREAM)
+ #include <ngx_http_multi_upstream_module.h>
+@@ -1777,6 +1780,10 @@ ngx_http_upstream_ssl_init_connection(ngx_http_request_t *r,
+ 
+     r->connection->log->action = "SSL handshaking to upstream";
+ 
++#if (NGX_HTTP_APISIX)
++    ngx_http_apisix_set_upstream_ssl(r, c);
++#endif
++
+     rc = ngx_ssl_handshake(c);
+ 
+     if (rc == NGX_AGAIN) {
+@@ -2819,10 +2826,21 @@ ngx_http_upstream_process_headers(ngx_http_request_t *r, ngx_http_upstream_t *u)
+     ngx_http_upstream_main_conf_t  *umcf;
+ 
+     umcf = ngx_http_get_module_main_conf(r, ngx_http_upstream_module);
+-
++#if (NGX_HTTP_APISIX)
++         ngx_uint_t ignore_headers = u->conf->ignore_headers;
++        if(ngx_http_apisix_is_proxy_ignore_headers_set(r)){
++            if(ngx_http_apisix_get_proxy_ignore_headers(r,&ignore_headers)==NGX_DECLINED){
++                ignore_headers = u->conf->ignore_headers;
++            }
++        }
++        if (u->headers_in.x_accel_redirect
++        && !(ignore_headers & NGX_HTTP_UPSTREAM_IGN_XA_REDIRECT))
++    {
++#else
+     if (u->headers_in.x_accel_redirect
+         && !(u->conf->ignore_headers & NGX_HTTP_UPSTREAM_IGN_XA_REDIRECT))
+     {
++#endif
+         ngx_http_upstream_finalize_request(r, u, NGX_DECLINED);
+ 
+         part = &u->headers_in.headers.part;
+@@ -2892,9 +2910,20 @@ ngx_http_upstream_process_headers(ngx_http_request_t *r, ngx_http_upstream_t *u)
+             h = part->elts;
+             i = 0;
+         }
+-
+-        if (ngx_hash_find(&u->conf->hide_headers_hash, h[i].hash,
+-                          h[i].lowcase_key, h[i].key.len))
++#if (NGX_HTTP_APISIX)
++        if (ngx_http_apisix_is_proxy_hide_headers_set(r))
++        {
++            ngx_uint_t in = 0;
++            if (ngx_http_apisix_in_proxy_hide_headers(r, &h[i], &in) == NGX_OK)
++            {
++                if (in)
++                    continue;
++            }
++        }
++        else
++#endif
++            if (ngx_hash_find(&u->conf->hide_headers_hash, h[i].hash,
++                              h[i].lowcase_key, h[i].key.len))
+         {
+             continue;
+         }
+@@ -2977,9 +3006,20 @@ ngx_http_upstream_process_trailers(ngx_http_request_t *r,
+             h = part->elts;
+             i = 0;
+         }
+-
+-        if (ngx_hash_find(&u->conf->hide_headers_hash, h[i].hash,
+-                          h[i].lowcase_key, h[i].key.len))
++#if (NGX_HTTP_APISIX)
++        if (ngx_http_apisix_is_proxy_hide_headers_set(r))
++        {
++            ngx_uint_t in = 0;
++            if (ngx_http_apisix_in_proxy_hide_headers(r, &h[i], &in) == NGX_OK)
++            {
++                if (in)
++                    continue;
++            }
++        }
++        else
++#endif
++            if (ngx_hash_find(&u->conf->hide_headers_hash, h[i].hash,
++                              h[i].lowcase_key, h[i].key.len))
+         {
+             continue;
+         }
+@@ -4708,9 +4748,21 @@ ngx_http_upstream_process_set_cookie(ngx_http_request_t *r, ngx_table_elt_t *h,
+     *ph = h;
+ 
+ #if (NGX_HTTP_CACHE)
++#if (NGX_HTTP_APISIX)
++    ngx_uint_t ignore_headers = u->conf->ignore_headers;
++    if(ngx_http_apisix_is_proxy_ignore_headers_set(r)){
++        if(ngx_http_apisix_get_proxy_ignore_headers(r,&ignore_headers)==NGX_DECLINED){
++            ignore_headers = u->conf->ignore_headers;
++        }
++    }
++    if (!(ignore_headers & NGX_HTTP_UPSTREAM_IGN_SET_COOKIE)) {
++        u->cacheable = 0;
++    }
++#else
+     if (!(u->conf->ignore_headers & NGX_HTTP_UPSTREAM_IGN_SET_COOKIE)) {
+         u->cacheable = 0;
+     }
++#endif   
+ #endif
+ 
+     return NGX_OK;
+@@ -4746,8 +4798,17 @@ ngx_http_upstream_process_cache_control(ngx_http_request_t *r,
+     {
+     u_char     *p, *start, *last;
+     ngx_int_t   n;
+-
++#if (NGX_HTTP_APISIX)
++    ngx_uint_t ignore_headers = u->conf->ignore_headers;
++    if(ngx_http_apisix_is_proxy_ignore_headers_set(r)){
++        if(ngx_http_apisix_get_proxy_ignore_headers(r,&ignore_headers)==NGX_DECLINED){
++        ignore_headers = u->conf->ignore_headers;
++        }
++    }
++    if (ignore_headers & NGX_HTTP_UPSTREAM_IGN_CACHE_CONTROL) {
++#else
+     if (u->conf->ignore_headers & NGX_HTTP_UPSTREAM_IGN_CACHE_CONTROL) {
++#endif
+         return NGX_OK;
+     }
+ 
+@@ -4867,8 +4928,17 @@ ngx_http_upstream_process_expires(ngx_http_request_t *r, ngx_table_elt_t *h,
+ #if (NGX_HTTP_CACHE)
+     {
+     time_t  expires;
+-
++#if (NGX_HTTP_APISIX)
++    ngx_uint_t ignore_headers = u->conf->ignore_headers;
++    if(ngx_http_apisix_is_proxy_ignore_headers_set(r)){
++        if(ngx_http_apisix_get_proxy_ignore_headers(r,&ignore_headers)==NGX_DECLINED){
++            ignore_headers = u->conf->ignore_headers;
++        }
++    }
++    if (ignore_headers & NGX_HTTP_UPSTREAM_IGN_EXPIRES) {
++#else
+     if (u->conf->ignore_headers & NGX_HTTP_UPSTREAM_IGN_EXPIRES) {
++#endif
+         return NGX_OK;
+     }
+ 
+@@ -4909,8 +4979,17 @@ ngx_http_upstream_process_accel_expires(ngx_http_request_t *r,
+     u_char     *p;
+     size_t      len;
+     ngx_int_t   n;
+-
++#if (NGX_HTTP_APISIX)
++    ngx_uint_t ignore_headers = u->conf->ignore_headers;
++    if(ngx_http_apisix_is_proxy_ignore_headers_set(r)){
++        if(ngx_http_apisix_get_proxy_ignore_headers(r,&ignore_headers)==NGX_DECLINED){
++            ignore_headers = u->conf->ignore_headers;
++        }
++    }
++    if (ignore_headers & NGX_HTTP_UPSTREAM_IGN_EXPIRES) {
++#else
+     if (u->conf->ignore_headers & NGX_HTTP_UPSTREAM_IGN_XA_EXPIRES) {
++#endif
+         return NGX_OK;
+     }
+ 
+@@ -4962,8 +5041,17 @@ ngx_http_upstream_process_limit_rate(ngx_http_request_t *r, ngx_table_elt_t *h,
+ 
+     u = r->upstream;
+     u->headers_in.x_accel_limit_rate = h;
+-
++#if (NGX_HTTP_APISIX)
++    ngx_uint_t ignore_headers = u->conf->ignore_headers;
++    if(ngx_http_apisix_is_proxy_ignore_headers_set(r)){
++        if(ngx_http_apisix_get_proxy_ignore_headers(r,&ignore_headers)==NGX_DECLINED){
++            ignore_headers = u->conf->ignore_headers;
++        }
++    }
++    if (ignore_headers & NGX_HTTP_UPSTREAM_IGN_XA_LIMIT_RATE) {
++#else
+     if (u->conf->ignore_headers & NGX_HTTP_UPSTREAM_IGN_XA_LIMIT_RATE) {
++#endif
+         return NGX_OK;
+     }
+ 
+@@ -4987,7 +5075,17 @@ ngx_http_upstream_process_buffering(ngx_http_request_t *r, ngx_table_elt_t *h,
+ 
+     u = r->upstream;
+ 
++#if (NGX_HTTP_APISIX)
++    ngx_uint_t ignore_headers = u->conf->ignore_headers;
++    if(ngx_http_apisix_is_proxy_ignore_headers_set(r)){
++        if(ngx_http_apisix_get_proxy_ignore_headers(r,&ignore_headers)==NGX_DECLINED){
++            ignore_headers = u->conf->ignore_headers;
++        }
++    }
++    if (ignore_headers & NGX_HTTP_UPSTREAM_IGN_XA_BUFFERING) {
++#else
+     if (u->conf->ignore_headers & NGX_HTTP_UPSTREAM_IGN_XA_BUFFERING) {
++#endif
+         return NGX_OK;
+     }
+ 
+@@ -5020,7 +5118,17 @@ static ngx_int_t
+ ngx_http_upstream_process_charset(ngx_http_request_t *r, ngx_table_elt_t *h,
+     ngx_uint_t offset)
+ {
++#if (NGX_HTTP_APISIX)
++    ngx_uint_t ignore_headers = r->upstream->conf->ignore_headers;
++    if(ngx_http_apisix_is_proxy_ignore_headers_set(r)){
++        if(ngx_http_apisix_get_proxy_ignore_headers(r,&ignore_headers)==NGX_DECLINED){
++            ignore_headers = r->upstream->conf->ignore_headers;
++        }
++    }
++    if (ignore_headers & NGX_HTTP_UPSTREAM_IGN_XA_CHARSET) {
++#else
+     if (r->upstream->conf->ignore_headers & NGX_HTTP_UPSTREAM_IGN_XA_CHARSET) {
++#endif
+         return NGX_OK;
+     }
+ 
+@@ -5074,8 +5182,17 @@ ngx_http_upstream_process_vary(ngx_http_request_t *r,
+     u->headers_in.vary = h;
+ 
+ #if (NGX_HTTP_CACHE)
+-
++#if (NGX_HTTP_APISIX)
++    ngx_uint_t ignore_headers = u->conf->ignore_headers;
++    if(ngx_http_apisix_is_proxy_ignore_headers_set(r)){
++        if(ngx_http_apisix_get_proxy_ignore_headers(r,&ignore_headers)==NGX_DECLINED){
++            ignore_headers = u->conf->ignore_headers;
++        }
++    }
++    if (ignore_headers & NGX_HTTP_UPSTREAM_IGN_VARY) {
++#else
+     if (u->conf->ignore_headers & NGX_HTTP_UPSTREAM_IGN_VARY) {
++#endif
+         return NGX_OK;
+     }
+ 
