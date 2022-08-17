@@ -13,3 +13,17 @@ Delay client_max_body_size check until the body is read.
 default: off
 
 Disable request mirror until we enable it in the Lua code.
+
+## Block
+
+### lua
+
+Apply ngx.shared.DICT that shared by http and stream subsystem.
+
+example:
+
+```nginx
+lua {
+    lua_shared_dict prometheus-metrics 15m;
+}
+```
