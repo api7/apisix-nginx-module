@@ -574,3 +574,69 @@ ngx_http_apisix_mark_request_header_set(ngx_http_request_t *r)
 
     ctx->request_header_set = 1;
 }
+
+
+ngx_int_t
+ngx_http_apisix_skip_header_filter_by_lua(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    ctx->header_filter_by_lua_skipped = 1;
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_http_apisix_is_header_filter_by_lua_skipped(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+    if (ctx != NULL) {
+        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                       "apisix header_filter_by_lua %p skipped: %d",
+                       ctx, ctx->header_filter_by_lua_skipped);
+
+        return ctx->header_filter_by_lua_skipped;
+    }
+
+    return 0;
+}
+
+
+ngx_int_t
+ngx_http_apisix_skip_body_filter_by_lua(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    ctx->body_filter_by_lua_skipped = 1;
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_http_apisix_is_body_filter_by_lua_skipped(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+    if (ctx != NULL) {
+        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                       "apisix body_filter_by_lua %p skipped: %d",
+                       ctx, ctx->body_filter_by_lua_skipped);
+
+        return ctx->body_filter_by_lua_skipped;
+    }
+
+    return 0;
+}
