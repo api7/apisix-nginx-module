@@ -1,0 +1,61 @@
+name: Test GM SSL
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: "ubuntu-latest"
+    env:
+      OPENRESTY_PREFIX: "/usr/local/openresty"
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+
+      - name: Get dependencies
+        run: sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl
+
+      - name: Before install
+        run: |
+          sudo cpanm --notest Test::Nginx > build.log 2>&1 || (cat build.log && exit 1)
+          git clone https://github.com/iresty/test-nginx.git test-nginx
+
+      - name: Install SSL lib
+        run: |
+          # TODO: use a fixed release once they have created one.
+          # See https://github.com/Tongsuo-Project/Tongsuo/issues/318
+          git clone https://github.com/api7/tongsuo --depth 1
+          pushd tongsuo
+          ./config shared enable-ntls -g --prefix=/usr/local/tongsuo
+          make -j2
+          sudo make install_sw
+          # build binary
+          ./config enable-ntls -static
+          make -j2
+          mv apps/openssl ..
+          popd
+
+      - name: Install
+        run: |
+          ls /usr/local/tongsuo/lib64
+          wget https://raw.githubusercontent.com/api7/apisix-build-tools/master/build-apisix-base.sh
+          chmod +x build-apisix-base.sh
+          export openssl_prefix=/usr/local/tongsuo
+
+          export cc_opt="-I${openssl_prefix}/include -Werror"
+          export ld_opt="-L${openssl_prefix}/lib64 -Wl,-rpath,${openssl_prefix}/lib64"
+          OR_PREFIX=$OPENRESTY_PREFIX CC="clang -fsanitize=address -fcolor-diagnostics -Qunused-arguments" \
+              ./build-apisix-base.sh latest
+
+      - name: Script
+        run: |
+          export PATH=$OPENRESTY_PREFIX/nginx/sbin:$PATH
+          nginx -V
+          PATH=$PWD:$PATH prove -I. -Itest-nginx/lib -r t/gm.t
