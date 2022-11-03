@@ -5,6 +5,10 @@
 #include "ngx_http_apisix_module.h"
 
 
+#define NGX_HTTP_APISIX_SSL_ENC     1
+#define NGX_HTTP_APISIX_SSL_SIGN    2
+
+
 static ngx_str_t remote_addr = ngx_string("remote_addr");
 static ngx_str_t remote_port = ngx_string("remote_port");
 static ngx_str_t realip_remote_addr = ngx_string("realip_remote_addr");
@@ -639,4 +643,138 @@ ngx_http_apisix_is_body_filter_by_lua_skipped(ngx_http_request_t *r)
     }
 
     return 0;
+}
+
+
+int
+ngx_http_apisix_set_gm_cert(ngx_http_request_t *r, void *cdata, char **err, ngx_flag_t type)
+{
+#ifndef TONGSUO_VERSION_NUMBER
+
+    *err = "only Tongsuo supported";
+    return NGX_ERROR;
+
+#else
+    int                i;
+    X509              *x509 = NULL;
+    ngx_ssl_conn_t    *ssl_conn;
+    STACK_OF(X509)    *chain = cdata;
+
+    if (r->connection == NULL || r->connection->ssl == NULL) {
+        *err = "bad request";
+        return NGX_ERROR;
+    }
+
+    ssl_conn = r->connection->ssl->connection;
+    if (ssl_conn == NULL) {
+        *err = "bad ssl conn";
+        return NGX_ERROR;
+    }
+
+    if (sk_X509_num(chain) < 1) {
+        *err = "invalid certificate chain";
+        goto failed;
+    }
+
+    x509 = sk_X509_value(chain, 0);
+    if (x509 == NULL) {
+        *err = "sk_X509_value() failed";
+        goto failed;
+    }
+
+    if (type == NGX_HTTP_APISIX_SSL_ENC) {
+        if (SSL_use_enc_certificate(ssl_conn, x509) == 0) {
+            *err = "SSL_use_enc_certificate() failed";
+            goto failed;
+        }
+    } else {
+        if (SSL_use_sign_certificate(ssl_conn, x509) == 0) {
+            *err = "SSL_use_sign_certificate() failed";
+            goto failed;
+        }
+    }
+
+    x509 = NULL;
+
+    /* read rest of the chain */
+
+    for (i = 1; i < sk_X509_num(chain); i++) {
+
+        x509 = sk_X509_value(chain, i);
+        if (x509 == NULL) {
+            *err = "sk_X509_value() failed";
+            goto failed;
+        }
+
+        if (SSL_add1_chain_cert(ssl_conn, x509) == 0) {
+            *err = "SSL_add1_chain_cert() failed";
+            goto failed;
+        }
+    }
+
+    *err = NULL;
+    return NGX_OK;
+
+failed:
+
+    ERR_clear_error();
+
+    return NGX_ERROR;
+
+#endif
+}
+
+
+int
+ngx_http_apisix_set_gm_priv_key(ngx_http_request_t *r,
+    void *cdata, char **err, ngx_flag_t type)
+{
+#ifndef TONGSUO_VERSION_NUMBER
+
+    *err = "only Tongsuo supported";
+    return NGX_ERROR;
+
+#else
+
+    EVP_PKEY          *pkey = NULL;
+    ngx_ssl_conn_t    *ssl_conn;
+
+    if (r->connection == NULL || r->connection->ssl == NULL) {
+        *err = "bad request";
+        return NGX_ERROR;
+    }
+
+    ssl_conn = r->connection->ssl->connection;
+    if (ssl_conn == NULL) {
+        *err = "bad ssl conn";
+        return NGX_ERROR;
+    }
+
+    pkey = cdata;
+    if (pkey == NULL) {
+        *err = "invalid private key failed";
+        goto failed;
+    }
+
+    if (type == NGX_HTTP_APISIX_SSL_ENC) {
+        if (SSL_use_enc_PrivateKey(ssl_conn, pkey) == 0) {
+            *err = "SSL_use_enc_PrivateKey() failed";
+            goto failed;
+        }
+    } else {
+        if (SSL_use_sign_PrivateKey(ssl_conn, pkey) == 0) {
+            *err = "SSL_use_sign_PrivateKey() failed";
+            goto failed;
+        }
+    }
+
+    return NGX_OK;
+
+failed:
+
+    ERR_clear_error();
+
+    return NGX_ERROR;
+
+#endif
 }
