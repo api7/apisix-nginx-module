@@ -9,12 +9,18 @@
 #define NGX_HTTP_APISIX_SSL_SIGN    2
 
 
+typedef struct {
+    ngx_flag_t      enable_ntls;
+} ngx_http_apisix_main_conf_t;
+
+
 static ngx_str_t remote_addr = ngx_string("remote_addr");
 static ngx_str_t remote_port = ngx_string("remote_port");
 static ngx_str_t realip_remote_addr = ngx_string("realip_remote_addr");
 static ngx_str_t realip_remote_port = ngx_string("realip_remote_port");
 
 
+static void *ngx_http_apisix_create_main_conf(ngx_conf_t *cf);
 static void *ngx_http_apisix_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_apisix_merge_loc_conf(ngx_conf_t *cf, void *parent,
     void *child);
@@ -36,7 +42,7 @@ static ngx_http_module_t ngx_http_apisix_module_ctx = {
     NULL,                                    /* preconfiguration */
     NULL,                                    /* postconfiguration */
 
-    NULL,                                    /* create main configuration */
+    ngx_http_apisix_create_main_conf,        /* create main configuration */
     NULL,                                    /* init main configuration */
 
     NULL,                                    /* create server configuration */
@@ -61,6 +67,26 @@ ngx_module_t ngx_http_apisix_module = {
     NULL,                                /* exit master */
     NGX_MODULE_V1_PADDING
 };
+
+
+static void *
+ngx_http_apisix_create_main_conf(ngx_conf_t *cf)
+{
+    ngx_http_apisix_main_conf_t  *acf;
+
+    acf = ngx_pcalloc(cf->pool, sizeof(ngx_http_apisix_main_conf_t));
+    if (acf == NULL) {
+        return NULL;
+    }
+
+    /*
+     * set by ngx_pcalloc():
+     *
+     *     acf->enable_ntls = 0;
+     */
+
+    return acf;
+}
 
 
 static void *
@@ -777,4 +803,25 @@ failed:
     return NGX_ERROR;
 
 #endif
+}
+
+
+int
+ngx_http_apisix_enable_ntls(ngx_http_request_t *r, int enabled)
+{
+    ngx_http_apisix_main_conf_t  *acf;
+
+    acf = ngx_http_get_module_main_conf(r, ngx_http_apisix_module);
+    acf->enable_ntls = enabled;
+    return NGX_OK;
+}
+
+
+ngx_flag_t
+ngx_http_apisix_is_ntls_enabled(ngx_http_conf_ctx_t *conf_ctx)
+{
+    ngx_http_apisix_main_conf_t  *acf;
+
+    acf = ngx_http_get_module_main_conf(conf_ctx, ngx_http_apisix_module);
+    return acf->enable_ntls;
 }

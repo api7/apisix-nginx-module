@@ -1,14 +1,25 @@
 diff --git src/http/ngx_http_request.c src/http/ngx_http_request.c
-index 013b715..a729693 100644
+index 013b715..96be553 100644
 --- src/http/ngx_http_request.c
 +++ src/http/ngx_http_request.c
-@@ -754,6 +754,11 @@ ngx_http_ssl_handshake(ngx_event_t *rev)
+@@ -8,6 +8,9 @@
+ #include <ngx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_http.h>
++#if (NGX_HTTP_APISIX)
++#include <ngx_http_apisix_module.h>
++#endif
+ 
+ 
+ static void ngx_http_wait_request_handler(ngx_event_t *ev);
+@@ -754,6 +757,12 @@ ngx_http_ssl_handshake(ngx_event_t *rev)
                  return;
              }
  
 +#if (TONGSUO_VERSION_NUMBER && NGX_HTTP_APISIX)
-+            // FIXME: add option later
-+            SSL_enable_ntls(c->ssl->connection);
++            if (ngx_http_apisix_is_ntls_enabled(hc->conf_ctx)) {
++                SSL_enable_ntls(c->ssl->connection);
++            }
 +#endif
 +
              ngx_reusable_connection(c, 0);
