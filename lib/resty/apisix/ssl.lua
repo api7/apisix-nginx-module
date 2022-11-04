@@ -14,6 +14,7 @@ ffi.cdef[[
     typedef intptr_t        ngx_flag_t;
     int ngx_http_apisix_set_gm_cert(void *r, void *cdata, char **err, ngx_flag_t type);
     int ngx_http_apisix_set_gm_priv_key(void *r, void *cdata, char **err, ngx_flag_t type);
+    int ngx_http_apisix_enable_ntls(void *r, int enabled);
 ]]
 
 
@@ -59,6 +60,26 @@ function _M.set_gm_priv_key(enc_pkey, sign_pkey)
     end
 
     return true
+end
+
+
+function _M.enable_ntls()
+    local r = get_request()
+    if not r then
+        error("no request found")
+    end
+
+    C.ngx_http_apisix_enable_ntls(r, 1)
+end
+
+
+function _M.disable_ntls()
+    local r = get_request()
+    if not r then
+        error("no request found")
+    end
+
+    C.ngx_http_apisix_enable_ntls(r, 0)
 end
 
 

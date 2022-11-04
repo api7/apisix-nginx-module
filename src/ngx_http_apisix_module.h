@@ -55,5 +55,7 @@ void ngx_http_apisix_mark_request_header_set(ngx_http_request_t *r);
 ngx_int_t ngx_http_apisix_is_header_filter_by_lua_skipped(ngx_http_request_t *r);
 ngx_int_t ngx_http_apisix_is_body_filter_by_lua_skipped(ngx_http_request_t *r);
 
+ngx_flag_t ngx_http_apisix_is_ntls_enabled(ngx_http_conf_ctx_t *conf_ctx);
+
 
 #endif /* _NGX_HTTP_APISIX_H_INCLUDED_ */
