@@ -44,7 +44,6 @@ jobs:
 
       - name: Install
         run: |
-          ls /usr/local/tongsuo/lib64
           wget https://raw.githubusercontent.com/api7/apisix-build-tools/master/build-apisix-base.sh
           chmod +x build-apisix-base.sh
           export openssl_prefix=/usr/local/tongsuo
