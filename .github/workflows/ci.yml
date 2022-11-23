@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: "ubuntu-18.04"
+    runs-on: "ubuntu-20.04"
     env:
       OPENRESTY_PREFIX: "/usr/local/openresty"
 
@@ -20,7 +20,9 @@ jobs:
         uses: egor-tensin/setup-clang@v1
 
       - name: Get dependencies
-        run: sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl
+        run: |
+          sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl luarocks
+          sudo luarocks install lua-resty-http > build.log 2>&1 || (cat build.log && exit 1)
 
       - name: Before install
         run: |
