@@ -83,14 +83,8 @@ _EOC_
     init_by_lua_block {
         function handshake()
             local req = "'ping\\r\\n'"
-            --[[
             local cmd = "/export/servers/tongsuo_jfe/bin/openssl s_client -connect 127.0.0.1:1986 " ..
                 "-enable_ntls -ntls -verifyCAfile t/certs/gm_ca.crt"
-            --]]
-            local cmd = "/export/servers/tongsuo_jfe/bin/openssl s_client -connect 127.0.0.1:1986 " ..
-                "-cipher ECDHE-SM2-WITH-SM4-SM3 -enable_ntls -ntls -verifyCAfile " ..
-                "t/certs/gm_ca.crt -sign_cert t/certs/client_sign.crt -sign_key t/certs/client_sign.key " ..
-                "-enc_cert t/certs/client_enc.crt -enc_key t/certs/client_enc.key"
             return io.popen("echo -n " .. req .. " | timeout 3s " .. cmd)
         end
     }
