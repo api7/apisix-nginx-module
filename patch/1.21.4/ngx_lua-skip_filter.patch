@@ -1,5 +1,5 @@
 diff --git src/ngx_http_lua_bodyfilterby.c src/ngx_http_lua_bodyfilterby.c
-index 9024889..88af761 100644
+index 78e3b5c2..bfdb01b3 100644
 --- src/ngx_http_lua_bodyfilterby.c
 +++ src/ngx_http_lua_bodyfilterby.c
 @@ -22,6 +22,9 @@
@@ -9,40 +9,40 @@ index 9024889..88af761 100644
 +#if (NGX_HTTP_APISIX)
 +#include "ngx_http_apisix_module.h"
 +#endif
- 
- 
+
+
  static void ngx_http_lua_body_filter_by_lua_env(lua_State *L,
-@@ -241,6 +244,12 @@ ngx_http_lua_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
+@@ -242,6 +245,12 @@ ngx_http_lua_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
      ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                     "lua body filter for user lua code, uri \"%V\"", &r->uri);
- 
-+#if (NGX_HTTP_APISIX)
-+    if (ngx_http_apisix_is_body_filter_by_lua_skipped(r)) {
-+        return ngx_http_next_body_filter(r, in);
-+    }
-+#endif
+
++    #if (NGX_HTTP_APISIX)
++        if (ngx_http_apisix_is_body_filter_by_lua_skipped(r)) {
++            return ngx_http_next_body_filter(r, in);
++        }
++    #endif
 +
      llcf = ngx_http_get_module_loc_conf(r, ngx_http_lua_module);
- 
+
      if (llcf->body_filter_handler == NULL || r->header_only) {
 diff --git src/ngx_http_lua_headerfilterby.c src/ngx_http_lua_headerfilterby.c
-index ed0c3a6..5f04992 100644
+index 71553558..71d9edf2 100644
 --- src/ngx_http_lua_headerfilterby.c
 +++ src/ngx_http_lua_headerfilterby.c
-@@ -19,6 +19,9 @@
- #include "ngx_http_lua_string.h"
+@@ -20,6 +20,9 @@
  #include "ngx_http_lua_misc.h"
  #include "ngx_http_lua_consts.h"
+ #include "ngx_http_lua_shdict.h"
 +#if (NGX_HTTP_APISIX)
 +#include "ngx_http_apisix_module.h"
 +#endif
- 
- 
+
+
  static ngx_http_output_header_filter_pt ngx_http_next_header_filter;
-@@ -80,6 +83,12 @@ ngx_http_lua_header_filter_by_chunk(lua_State *L, ngx_http_request_t *r)
+@@ -81,6 +84,12 @@ ngx_http_lua_header_filter_by_chunk(lua_State *L, ngx_http_request_t *r)
  #endif
      ngx_http_lua_ctx_t          *ctx;
- 
+
 +#if (NGX_HTTP_APISIX)
 +    if (ngx_http_apisix_is_header_filter_by_lua_skipped(r)) {
 +        return NGX_OK;
