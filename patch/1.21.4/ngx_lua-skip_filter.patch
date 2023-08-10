@@ -26,23 +26,23 @@ index 78e3b5c2..bfdb01b3 100644
 
      if (llcf->body_filter_handler == NULL || r->header_only) {
 diff --git src/ngx_http_lua_headerfilterby.c src/ngx_http_lua_headerfilterby.c
-index 71553558..71d9edf2 100644
+index 86c58754..1bc946cd 100644
 --- src/ngx_http_lua_headerfilterby.c
 +++ src/ngx_http_lua_headerfilterby.c
-@@ -20,6 +20,9 @@
+@@ -19,6 +19,9 @@
+ #include "ngx_http_lua_string.h"
  #include "ngx_http_lua_misc.h"
  #include "ngx_http_lua_consts.h"
- #include "ngx_http_lua_shdict.h"
 +#if (NGX_HTTP_APISIX)
 +#include "ngx_http_apisix_module.h"
 +#endif
-
-
+ 
+ 
  static ngx_http_output_header_filter_pt ngx_http_next_header_filter;
-@@ -81,6 +84,12 @@ ngx_http_lua_header_filter_by_chunk(lua_State *L, ngx_http_request_t *r)
+@@ -80,6 +83,12 @@ ngx_http_lua_header_filter_by_chunk(lua_State *L, ngx_http_request_t *r)
  #endif
      ngx_http_lua_ctx_t          *ctx;
-
+ 
 +#if (NGX_HTTP_APISIX)
 +    if (ngx_http_apisix_is_header_filter_by_lua_skipped(r)) {
 +        return NGX_OK;
