@@ -1,0 +1,70 @@
+diff --git src/ngx_http_lua_pipe.c src/ngx_http_lua_pipe.c
+index 8c0884bc..8369160f 100644
+--- src/ngx_http_lua_pipe.c
++++ src/ngx_http_lua_pipe.c
+@@ -599,8 +599,7 @@ ngx_http_lua_execvpe(const char *program, char * const argv[],
+ 
+ 
+ int
+-ngx_http_lua_ffi_pipe_spawn(ngx_http_request_t *r,
+-    ngx_http_lua_ffi_pipe_proc_t *proc,
++ngx_http_lua_ffi_pipe_spawn(ngx_http_lua_ffi_pipe_proc_t *proc,
+     const char *file, const char **argv, int merge_stderr, size_t buffer_size,
+     const char **environ, u_char *errbuf, size_t *errbuf_size)
+ {
+@@ -620,7 +619,6 @@ ngx_http_lua_ffi_pipe_spawn(ngx_http_request_t *r,
+     ngx_http_lua_pipe_node_t       *pipe_node;
+     struct sigaction                sa;
+     ngx_http_lua_pipe_signal_t     *sig;
+-    ngx_pool_cleanup_t             *cln;
+     sigset_t                        set;
+ 
+     pool_size = ngx_align(NGX_MIN_POOL_SIZE + buffer_size * 2,
+@@ -908,21 +906,6 @@ ngx_http_lua_ffi_pipe_spawn(ngx_http_request_t *r,
+         pp->stderr_fd = stderr_fd;
+     }
+ 
+-    if (pp->cleanup == NULL) {
+-        cln = ngx_pool_cleanup_add(r->pool, 0);
+-
+-        if (cln == NULL) {
+-            *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "no memory")
+-                           - errbuf;
+-            goto close_in_out_err_fd;
+-        }
+-
+-        cln->handler = (ngx_pool_cleanup_pt) ngx_http_lua_ffi_pipe_proc_destroy;
+-        cln->data = proc;
+-        pp->cleanup = &cln->handler;
+-        pp->r = r;
+-    }
+-
+     node = (ngx_rbtree_node_t *) (pp + 1);
+     node->key = pid;
+     pipe_node = (ngx_http_lua_pipe_node_t *) &node->color;
+@@ -1193,12 +1176,6 @@ ngx_http_lua_ffi_pipe_proc_destroy(ngx_http_lua_ffi_pipe_proc_t *proc)
+         }
+     }
+ 
+-    if (pipe->cleanup != NULL) {
+-        *pipe->cleanup = NULL;
+-        ngx_http_lua_cleanup_free(pipe->r, pipe->cleanup);
+-        pipe->cleanup = NULL;
+-    }
+-
+     ngx_http_lua_pipe_proc_finalize(proc);
+     ngx_destroy_pool(pipe->pool);
+     proc->pipe = NULL;
+diff --git src/ngx_http_lua_pipe.h src/ngx_http_lua_pipe.h
+index f1c92835..ecb86c88 100644
+--- src/ngx_http_lua_pipe.h
++++ src/ngx_http_lua_pipe.h
+@@ -57,8 +57,6 @@ struct ngx_http_lua_pipe_s {
+     ngx_http_lua_pipe_ctx_t            *stdout_ctx;
+     ngx_http_lua_pipe_ctx_t            *stderr_ctx;
+     ngx_http_lua_pipe_retval_handler    retval_handler;
+-    ngx_http_cleanup_pt                *cleanup;
+-    ngx_http_request_t                 *r;
+     size_t                              buffer_size;
+     unsigned                            closed:1;
+     unsigned                            dead:1;
