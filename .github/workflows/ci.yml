@@ -11,6 +11,7 @@ jobs:
     runs-on: "ubuntu-20.04"
     env:
       OPENRESTY_PREFIX: "/usr/local/openresty"
+      OPENRESTY_VERSION: "1.21.4.2"
 
     steps:
       - name: Check out code
@@ -33,8 +34,6 @@ jobs:
         run: |
           wget https://raw.githubusercontent.com/api7/apisix-build-tools/master/build-apisix-base.sh
           chmod +x build-apisix-base.sh
-          sed -i 's/or_ver="1.21.4.1"/or_ver="1.21.4.2"/g' build-apisix-base.sh
-          sed -i.back '116,121d' build-apisix-base.sh
           OR_PREFIX=$OPENRESTY_PREFIX CC="clang -fsanitize=address -fcolor-diagnostics -Qunused-arguments" \
               cc_opt="-Werror" ./build-apisix-base.sh latest
 
