@@ -1,85 +1,80 @@
 diff --git config config
-index e984f96..05bd086 100644
+index 4b32d383..06ec0da0 100644
 --- config
 +++ config
-@@ -260,7 +260,6 @@ STREAM_LUA_SRCS=" \
-                 $ngx_addon_dir/src/ngx_stream_lua_ctx.c \
-                 $ngx_addon_dir/src/ngx_stream_lua_regex.c \
-                 $ngx_addon_dir/src/ngx_stream_lua_script.c \
--                $ngx_addon_dir/src/ngx_stream_lua_shdict.c \
-                 $ngx_addon_dir/src/ngx_stream_lua_variable.c \
-                 $ngx_addon_dir/src/ngx_stream_lua_timer.c \
-                 $ngx_addon_dir/src/ngx_stream_lua_config.c \
-@@ -305,7 +304,6 @@ STREAM_LUA_DEPS=" \
-                 $ngx_addon_dir/src/ngx_stream_lua_phase.h \
-                 $ngx_addon_dir/src/ngx_stream_lua_ctx.h \
-                 $ngx_addon_dir/src/ngx_stream_lua_script.h \
--                $ngx_addon_dir/src/ngx_stream_lua_shdict.h \
-                 $ngx_addon_dir/src/ngx_stream_lua_timer.h \
-                 $ngx_addon_dir/src/ngx_stream_lua_config.h \
-                 $ngx_addon_dir/src/api/ngx_stream_lua_api.h \
-diff --git src/api/ngx_stream_lua_api.h src/api/ngx_stream_lua_api.h
-index 58c8012..da29db6 100644
---- src/api/ngx_stream_lua_api.h
-+++ src/api/ngx_stream_lua_api.h
-@@ -57,15 +57,6 @@ lua_State *ngx_stream_lua_get_global_state(ngx_conf_t *cf);
- ngx_int_t ngx_stream_lua_add_package_preload(ngx_conf_t *cf,
-     const char *package, lua_CFunction func);
+@@ -268,7 +268,6 @@ HTTP_LUA_SRCS=" \
+             $ngx_addon_dir/src/ngx_http_lua_clfactory.c \
+             $ngx_addon_dir/src/ngx_http_lua_pcrefix.c \
+             $ngx_addon_dir/src/ngx_http_lua_headerfilterby.c \
+-            $ngx_addon_dir/src/ngx_http_lua_shdict.c \
+             $ngx_addon_dir/src/ngx_http_lua_socket_tcp.c \
+             $ngx_addon_dir/src/ngx_http_lua_api.c \
+             $ngx_addon_dir/src/ngx_http_lua_logby.c \
+@@ -330,7 +329,6 @@ HTTP_LUA_DEPS=" \
+             $ngx_addon_dir/src/ngx_http_lua_clfactory.h \
+             $ngx_addon_dir/src/ngx_http_lua_pcrefix.h \
+             $ngx_addon_dir/src/ngx_http_lua_headerfilterby.h \
+-            $ngx_addon_dir/src/ngx_http_lua_shdict.h \
+             $ngx_addon_dir/src/ngx_http_lua_socket_tcp.h \
+             $ngx_addon_dir/src/api/ngx_http_lua_api.h \
+             $ngx_addon_dir/src/ngx_http_lua_logby.h \
+diff --git src/api/ngx_http_lua_api.h src/api/ngx_http_lua_api.h
+index 43f90bd0..7530add0 100644
+--- src/api/ngx_http_lua_api.h
++++ src/api/ngx_http_lua_api.h
+@@ -48,14 +48,6 @@ ngx_http_request_t *ngx_http_lua_get_request(lua_State *L);
+ ngx_int_t ngx_http_lua_add_package_preload(ngx_conf_t *cf, const char *package,
+     lua_CFunction func);
  
--ngx_int_t ngx_stream_lua_shared_dict_get(ngx_shm_zone_t *shm_zone,
--    u_char *key_data, size_t key_len, ngx_stream_lua_value_t *value);
+-ngx_int_t ngx_http_lua_shared_dict_get(ngx_shm_zone_t *shm_zone,
+-    u_char *key_data, size_t key_len, ngx_http_lua_value_t *value);
 -
--ngx_shm_zone_t *ngx_stream_lua_find_zone(u_char *name_data,
--    size_t name_len);
+-ngx_shm_zone_t *ngx_http_lua_find_zone(u_char *name_data, size_t name_len);
 -
--ngx_shm_zone_t *ngx_stream_lua_shared_memory_add(ngx_conf_t *cf,
--    ngx_str_t *name, size_t size, void *tag);
+-ngx_shm_zone_t *ngx_http_lua_shared_memory_add(ngx_conf_t *cf, ngx_str_t *name,
+-    size_t size, void *tag);
 -
  
- #endif /* _NGX_STREAM_LUA_API_H_INCLUDED_ */
+ #endif /* _NGX_HTTP_LUA_API_H_INCLUDED_ */
  
-diff --git src/ngx_stream_lua_api.c src/ngx_stream_lua_api.c
-index cf01b36..fcc685c 100644
---- src/ngx_stream_lua_api.c
-+++ src/ngx_stream_lua_api.c
-@@ -20,7 +20,6 @@
+diff --git src/ngx_http_lua_api.c src/ngx_http_lua_api.c
+index b69d627d..691b3212 100644
+--- src/ngx_http_lua_api.c
++++ src/ngx_http_lua_api.c
+@@ -12,7 +12,6 @@
  
- #include "ngx_stream_lua_common.h"
- #include "api/ngx_stream_lua_api.h"
--#include "ngx_stream_lua_shdict.h"
- #include "ngx_stream_lua_util.h"
+ #include "ngx_http_lua_common.h"
+ #include "api/ngx_http_lua_api.h"
+-#include "ngx_http_lua_shdict.h"
+ #include "ngx_http_lua_util.h"
  
  
-@@ -35,12 +34,6 @@ ngx_stream_lua_get_global_state(ngx_conf_t *cf)
+@@ -34,10 +33,6 @@ ngx_http_lua_get_request(lua_State *L)
  }
  
  
--
--
--static ngx_int_t ngx_stream_lua_shared_memory_init(ngx_shm_zone_t *shm_zone,
+-static ngx_int_t ngx_http_lua_shared_memory_init(ngx_shm_zone_t *shm_zone,
 -    void *data);
 -
 -
  ngx_int_t
- ngx_stream_lua_add_package_preload(ngx_conf_t *cf, const char *package,
+ ngx_http_lua_add_package_preload(ngx_conf_t *cf, const char *package,
      lua_CFunction func)
-@@ -86,136 +79,4 @@ ngx_stream_lua_add_package_preload(ngx_conf_t *cf, const char *package,
-     return NGX_OK;
+@@ -83,134 +78,4 @@ ngx_http_lua_add_package_preload(ngx_conf_t *cf, const char *package,
  }
  
--
+ 
 -ngx_shm_zone_t *
--ngx_stream_lua_shared_memory_add(ngx_conf_t *cf, ngx_str_t *name,
--    size_t size, void *tag)
+-ngx_http_lua_shared_memory_add(ngx_conf_t *cf, ngx_str_t *name, size_t size,
+-    void *tag)
 -{
--    ngx_stream_lua_main_conf_t           *lmcf;
--    ngx_stream_lua_shm_zone_ctx_t        *ctx;
--
+-    ngx_http_lua_main_conf_t     *lmcf;
 -    ngx_shm_zone_t              **zp;
 -    ngx_shm_zone_t               *zone;
+-    ngx_http_lua_shm_zone_ctx_t  *ctx;
 -    ngx_int_t                     n;
 -
--    lmcf = ngx_stream_conf_get_module_main_conf(cf, ngx_stream_lua_module);
+-    lmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_lua_module);
 -    if (lmcf == NULL) {
 -        return NULL;
 -    }
@@ -104,11 +99,11 @@ index cf01b36..fcc685c 100644
 -    }
 -
 -    if (zone->data) {
--        ctx = (ngx_stream_lua_shm_zone_ctx_t *) zone->data;
+-        ctx = (ngx_http_lua_shm_zone_ctx_t *) zone->data;
 -        return &ctx->zone;
 -    }
 -
--    n = sizeof(ngx_stream_lua_shm_zone_ctx_t);
+-    n = sizeof(ngx_http_lua_shm_zone_ctx_t);
 -
 -    ctx = ngx_pcalloc(cf->pool, n);
 -    if (ctx == NULL) {
@@ -129,7 +124,7 @@ index cf01b36..fcc685c 100644
 -    *zp = zone;
 -
 -    /* set zone init */
--    zone->init = ngx_stream_lua_shared_memory_init;
+-    zone->init = ngx_http_lua_shared_memory_init;
 -    zone->data = ctx;
 -
 -    lmcf->requires_shm = 1;
@@ -139,19 +134,19 @@ index cf01b36..fcc685c 100644
 -
 -
 -static ngx_int_t
--ngx_stream_lua_shared_memory_init(ngx_shm_zone_t *shm_zone, void *data)
+-ngx_http_lua_shared_memory_init(ngx_shm_zone_t *shm_zone, void *data)
 -{
--    ngx_stream_lua_shm_zone_ctx_t       *octx = data;
--    ngx_stream_lua_main_conf_t          *lmcf;
--    ngx_stream_lua_shm_zone_ctx_t       *ctx;
--
+-    ngx_http_lua_shm_zone_ctx_t *octx = data;
 -    ngx_shm_zone_t              *ozone;
 -    void                        *odata;
+-
 -    ngx_int_t                    rc;
 -    volatile ngx_cycle_t        *saved_cycle;
+-    ngx_http_lua_main_conf_t    *lmcf;
+-    ngx_http_lua_shm_zone_ctx_t *ctx;
 -    ngx_shm_zone_t              *zone;
 -
--    ctx = (ngx_stream_lua_shm_zone_ctx_t *) shm_zone->data;
+-    ctx = (ngx_http_lua_shm_zone_ctx_t *) shm_zone->data;
 -    zone = &ctx->zone;
 -
 -    odata = NULL;
@@ -161,7 +156,7 @@ index cf01b36..fcc685c 100644
 -    }
 -
 -    zone->shm = shm_zone->shm;
--#if defined(nginx_version) && nginx_version >= 1009000
+-#if (nginx_version >= 1009000)
 -    zone->noreuse = shm_zone->noreuse;
 -#endif
 -
@@ -200,95 +195,109 @@ index cf01b36..fcc685c 100644
 -}
 -
  /* vi:set ft=c ts=4 sw=4 et fdm=marker: */
-diff --git src/ngx_stream_lua_common.h src/ngx_stream_lua_common.h
-index 8d8cf48..5d3821e 100644
---- src/ngx_stream_lua_common.h
-+++ src/ngx_stream_lua_common.h
-@@ -31,6 +31,8 @@
+diff --git src/ngx_http_lua_common.h src/ngx_http_lua_common.h
+index 0751a112..1e2e4fe1 100644
+--- src/ngx_http_lua_common.h
++++ src/ngx_http_lua_common.h
+@@ -23,6 +23,8 @@
  #include <lualib.h>
  #include <lauxlib.h>
  
 +#include "ngx_meta_lua_api.h"
 +
  
- #include "ngx_stream_lua_request.h"
- 
-@@ -53,6 +55,11 @@
+ #if defined(NDK) && NDK
+ #include <ndk.h>
+@@ -67,6 +69,10 @@ typedef struct {
+ #   error at least nginx 1.6.0 is required but found an older version
  #endif
- 
  
 +#if !defined(ngx_meta_lua_version) || ngx_meta_lua_version < 00001
 +#   error ngx_meta_lua_module 0.0.1 or above is required
 +#endif
 +
-+
- 
- 
  #if LUA_VERSION_NUM != 501
-@@ -159,8 +166,6 @@ typedef struct ngx_stream_lua_balancer_peer_data_s
- typedef struct ngx_stream_lua_sema_mm_s  ngx_stream_lua_sema_mm_t;
+ #   error unsupported Lua language version
+ #endif
+@@ -169,9 +175,6 @@ typedef struct ngx_http_lua_posted_thread_s  ngx_http_lua_posted_thread_t;
+ typedef struct ngx_http_lua_balancer_peer_data_s
+     ngx_http_lua_balancer_peer_data_t;
  
+-typedef ngx_int_t (*ngx_http_lua_main_conf_handler_pt)(ngx_log_t *log,
+-    ngx_http_lua_main_conf_t *lmcf, lua_State *L);
+-
+ typedef ngx_int_t (*ngx_http_lua_srv_conf_handler_pt)(ngx_http_request_t *r,
+     ngx_http_lua_srv_conf_t *lscf, lua_State *L);
  
--typedef ngx_int_t (*ngx_stream_lua_main_conf_handler_pt)(ngx_log_t *log,
--    ngx_stream_lua_main_conf_t *lmcf, lua_State *L);
- typedef ngx_int_t (*ngx_stream_lua_srv_conf_handler_pt)(
-     ngx_stream_lua_request_t *r, ngx_stream_lua_srv_conf_t *lscf, lua_State *L);
+@@ -221,22 +224,18 @@ struct ngx_http_lua_main_conf_s {
+ #   endif
+ #endif
  
-@@ -208,10 +213,10 @@ struct ngx_stream_lua_main_conf_s {
+-    ngx_array_t         *shm_zones;  /* of ngx_shm_zone_t* */
+-
+-    ngx_array_t         *shdict_zones; /* shm zones of "shdict" */
+-
+     ngx_array_t         *preload_hooks; /* of ngx_http_lua_preload_hook_t */
  
-     ngx_flag_t           postponed_to_preread_phase_end;
+     ngx_flag_t           postponed_to_rewrite_phase_end;
+     ngx_flag_t           postponed_to_access_phase_end;
  
--    ngx_stream_lua_main_conf_handler_pt          init_handler;
-+    ngx_meta_lua_main_conf_handler_pt          init_handler;
-     ngx_str_t                                    init_src;
+-    ngx_http_lua_main_conf_handler_pt    init_handler;
++    ngx_meta_lua_main_conf_handler_pt    init_handler;
+     ngx_str_t                            init_src;
  
--    ngx_stream_lua_main_conf_handler_pt          init_worker_handler;
-+    ngx_meta_lua_main_conf_handler_pt          init_worker_handler;
-     ngx_str_t                                    init_worker_src;
+-    ngx_http_lua_main_conf_handler_pt    init_worker_handler;
++    ngx_meta_lua_main_conf_handler_pt    init_worker_handler;
+     ngx_str_t                            init_worker_src;
  
-     ngx_stream_lua_balancer_peer_data_t          *balancer_peer_data;
-@@ -221,8 +226,6 @@ struct ngx_stream_lua_main_conf_s {
-                      * data pointer in the main conf.
+-    ngx_http_lua_main_conf_handler_pt    exit_worker_handler;
++    ngx_meta_lua_main_conf_handler_pt    exit_worker_handler;
+     ngx_str_t                            exit_worker_src;
+ 
+     ngx_http_lua_balancer_peer_data_t      *balancer_peer_data;
+@@ -267,8 +266,6 @@ struct ngx_http_lua_main_conf_s {
+                      * main conf.
                       */
  
 -    ngx_uint_t                      shm_zones_inited;
 -
-     ngx_stream_lua_sema_mm_t               *sema_mm;
+     ngx_http_lua_sema_mm_t         *sema_mm;
  
      ngx_uint_t           malloc_trim_cycle;  /* a cycle is defined as the number
-@@ -235,7 +238,6 @@ struct ngx_stream_lua_main_conf_s {
-     unsigned             requires_preread:1;
- 
+@@ -294,7 +291,6 @@ struct ngx_http_lua_main_conf_s {
+     unsigned             requires_rewrite:1;
+     unsigned             requires_access:1;
      unsigned             requires_log:1;
 -    unsigned             requires_shm:1;
      unsigned             requires_capture_log:1;
  };
  
-diff --git src/ngx_stream_lua_directive.c src/ngx_stream_lua_directive.c
-index 5580106..04fed32 100644
---- src/ngx_stream_lua_directive.c
-+++ src/ngx_stream_lua_directive.c
-@@ -27,7 +27,6 @@
- #include "ngx_stream_lua_logby.h"
- #include "ngx_stream_lua_initby.h"
- #include "ngx_stream_lua_initworkerby.h"
--#include "ngx_stream_lua_shdict.h"
- #include "ngx_stream_lua_lex.h"
- #include "ngx_stream_lua_log.h"
- #include "ngx_stream_lua_log_ringbuf.h"
-@@ -69,90 +68,6 @@ enum {
+diff --git src/ngx_http_lua_directive.c src/ngx_http_lua_directive.c
+index 1ec641e0..6d4329a1 100644
+--- src/ngx_http_lua_directive.c
++++ src/ngx_http_lua_directive.c
+@@ -24,7 +24,6 @@
+ #include "ngx_http_lua_initby.h"
+ #include "ngx_http_lua_initworkerby.h"
+ #include "ngx_http_lua_exitworkerby.h"
+-#include "ngx_http_lua_shdict.h"
+ #include "ngx_http_lua_ssl_certby.h"
+ #include "ngx_http_lua_lex.h"
+ #include "api/ngx_http_lua_api.h"
+@@ -71,91 +70,6 @@ enum {
  };
  
  
 -char *
--ngx_stream_lua_shared_dict(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+-ngx_http_lua_shared_dict(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 -{
--    ngx_stream_lua_main_conf_t         *lmcf = conf;
--    ngx_str_t                          *value, name;
--    ngx_shm_zone_t                     *zone;
--    ngx_shm_zone_t                    **zp;
--    ngx_stream_lua_shdict_ctx_t        *ctx;
--    ssize_t                             size;
+-    ngx_http_lua_main_conf_t   *lmcf = conf;
+-
+-    ngx_str_t                  *value, name;
+-    ngx_shm_zone_t             *zone;
+-    ngx_shm_zone_t            **zp;
+-    ngx_http_lua_shdict_ctx_t  *ctx;
+-    ssize_t                     size;
 -
 -    if (lmcf->shdict_zones == NULL) {
 -        lmcf->shdict_zones = ngx_palloc(cf->pool, sizeof(ngx_array_t));
@@ -324,7 +333,7 @@ index 5580106..04fed32 100644
 -        return NGX_CONF_ERROR;
 -    }
 -
--    ctx = ngx_pcalloc(cf->pool, sizeof(ngx_stream_lua_shdict_ctx_t));
+-    ctx = ngx_pcalloc(cf->pool, sizeof(ngx_http_lua_shdict_ctx_t));
 -    if (ctx == NULL) {
 -        return NGX_CONF_ERROR;
 -    }
@@ -333,8 +342,8 @@ index 5580106..04fed32 100644
 -    ctx->main_conf = lmcf;
 -    ctx->log = &cf->cycle->new_log;
 -
--    zone = ngx_stream_lua_shared_memory_add(cf, &name, (size_t) size,
--                                            &ngx_stream_lua_module);
+-    zone = ngx_http_lua_shared_memory_add(cf, &name, (size_t) size,
+-                                          &ngx_http_lua_module);
 -    if (zone == NULL) {
 -        return NGX_CONF_ERROR;
 -    }
@@ -348,7 +357,7 @@ index 5580106..04fed32 100644
 -        return NGX_CONF_ERROR;
 -    }
 -
--    zone->init = ngx_stream_lua_shdict_init_zone;
+-    zone->init = ngx_http_lua_shdict_init_zone;
 -    zone->data = ctx;
 -
 -    zp = ngx_array_push(lmcf->shdict_zones);
@@ -365,65 +374,148 @@ index 5580106..04fed32 100644
 -
 -
  char *
- ngx_stream_lua_code_cache(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+ ngx_http_lua_code_cache(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
  {
-@@ -190,6 +105,15 @@ ngx_stream_lua_load_resty_core(ngx_conf_t *cf, ngx_command_t *cmd,
+@@ -191,6 +105,15 @@ ngx_http_lua_load_resty_core(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
  }
  
  
 +char *
-+ngx_stream_lua_shdict_directive(ngx_conf_t *cf, ngx_command_t *cmd,
++ngx_http_lua_shdict_directive(ngx_conf_t *cf, ngx_command_t *cmd,
 +    void *conf)
 +{
 +    return ngx_meta_lua_shdict_directive_helper(cf,
-+                                                &ngx_stream_lua_module);
++                                                &ngx_http_lua_module);
 +}
 +
 +
  char *
- ngx_stream_lua_package_cpath(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+ ngx_http_lua_package_cpath(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
  {
-@@ -646,7 +570,7 @@ ngx_stream_lua_init_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
+@@ -1121,7 +1044,7 @@ ngx_http_lua_init_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
          return NGX_CONF_ERROR;
      }
  
--    lmcf->init_handler = (ngx_stream_lua_main_conf_handler_pt) cmd->post;
+-    lmcf->init_handler = (ngx_http_lua_main_conf_handler_pt) cmd->post;
 +    lmcf->init_handler = (ngx_meta_lua_main_conf_handler_pt) cmd->post;
  
-     if (cmd->post == ngx_stream_lua_init_by_file) {
-         name = ngx_stream_lua_rebase_path(cf->pool, value[1].data,
-@@ -707,7 +631,7 @@ ngx_stream_lua_init_worker_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
+     if (cmd->post == ngx_http_lua_init_by_file) {
+         name = ngx_http_lua_rebase_path(cf->pool, value[1].data,
+@@ -1181,7 +1104,7 @@ ngx_http_lua_init_worker_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
  
      value = cf->args->elts;
  
--    lmcf->init_worker_handler = (ngx_stream_lua_main_conf_handler_pt) cmd->post;
+-    lmcf->init_worker_handler = (ngx_http_lua_main_conf_handler_pt) cmd->post;
 +    lmcf->init_worker_handler = (ngx_meta_lua_main_conf_handler_pt) cmd->post;
  
-     if (cmd->post == ngx_stream_lua_init_worker_by_file) {
-         name = ngx_stream_lua_rebase_path(cf->pool, value[1].data,
-diff --git src/ngx_stream_lua_directive.h src/ngx_stream_lua_directive.h
-index 6b36bb1..fa469b6 100644
---- src/ngx_stream_lua_directive.h
-+++ src/ngx_stream_lua_directive.h
-@@ -20,7 +20,7 @@
- #include "ngx_stream_lua_common.h"
+     if (cmd->post == ngx_http_lua_init_worker_by_file) {
+         name = ngx_http_lua_rebase_path(cf->pool, value[1].data,
+@@ -1239,7 +1162,7 @@ ngx_http_lua_exit_worker_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
+ 
+     value = cf->args->elts;
+ 
+-    lmcf->exit_worker_handler = (ngx_http_lua_main_conf_handler_pt) cmd->post;
++    lmcf->exit_worker_handler = (ngx_meta_lua_main_conf_handler_pt) cmd->post;
+ 
+     if (cmd->post == ngx_http_lua_exit_worker_by_file) {
+         name = ngx_http_lua_rebase_path(cf->pool, value[1].data,
+diff --git src/ngx_http_lua_directive.h src/ngx_http_lua_directive.h
+index adfba127..83d082ee 100644
+--- src/ngx_http_lua_directive.h
++++ src/ngx_http_lua_directive.h
+@@ -12,7 +12,7 @@
+ #include "ngx_http_lua_common.h"
  
  
--char *ngx_stream_lua_shared_dict(ngx_conf_t *cf, ngx_command_t *cmd,
-+char *ngx_stream_lua_shdict_directive(ngx_conf_t *cf, ngx_command_t *cmd,
+-char *ngx_http_lua_shared_dict(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
++char *ngx_http_lua_shdict_directive(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+ char *ngx_http_lua_package_cpath(ngx_conf_t *cf, ngx_command_t *cmd,
      void *conf);
- char *ngx_stream_lua_package_cpath(ngx_conf_t *cf, ngx_command_t *cmd,
-     void *conf);
-diff --git src/ngx_stream_lua_initby.c src/ngx_stream_lua_initby.c
-index c6bbf0d..98e3c6f 100644
---- src/ngx_stream_lua_initby.c
-+++ src/ngx_stream_lua_initby.c
-@@ -22,13 +22,13 @@
+ char *ngx_http_lua_package_path(ngx_conf_t *cf, ngx_command_t *cmd,
+diff --git src/ngx_http_lua_exitworkerby.c src/ngx_http_lua_exitworkerby.c
+index cd59dc4b..9765c218 100644
+--- src/ngx_http_lua_exitworkerby.c
++++ src/ngx_http_lua_exitworkerby.c
+@@ -67,7 +67,8 @@ ngx_http_lua_exit_worker(ngx_cycle_t *cycle)
+ 
+     ngx_http_lua_set_req(lmcf->lua, r);
+ 
+-    (void) lmcf->exit_worker_handler(cycle->log, lmcf, lmcf->lua);
++    (void) lmcf->exit_worker_handler(cycle->log, lmcf->exit_worker_src,
++                                     lmcf->lua);
+ 
+     ngx_destroy_pool(c->pool);
+     return;
+@@ -84,12 +85,12 @@ failed:
+ 
+ ngx_int_t
+ ngx_http_lua_exit_worker_by_inline(ngx_log_t *log,
+-    ngx_http_lua_main_conf_t *lmcf, lua_State *L)
++    ngx_str_t init_src, lua_State *L)
+ {
+     int         status;
+ 
+-    status = luaL_loadbuffer(L, (char *) lmcf->exit_worker_src.data,
+-                             lmcf->exit_worker_src.len, "=exit_worker_by_lua")
++    status = luaL_loadbuffer(L, (char *) init_src.data, init_src.len,
++                             "=exit_worker_by_lua")
+              || ngx_http_lua_do_call(log, L);
+ 
+     return ngx_http_lua_report(log, L, status, "exit_worker_by_lua");
+@@ -97,12 +98,12 @@ ngx_http_lua_exit_worker_by_inline(ngx_log_t *log,
  
  
  ngx_int_t
--ngx_stream_lua_init_by_inline(ngx_log_t *log, ngx_stream_lua_main_conf_t *lmcf,
-+ngx_stream_lua_init_by_inline(ngx_log_t *log, ngx_str_t init_src,
+-ngx_http_lua_exit_worker_by_file(ngx_log_t *log, ngx_http_lua_main_conf_t *lmcf,
++ngx_http_lua_exit_worker_by_file(ngx_log_t *log, ngx_str_t init_src,
+     lua_State *L)
+ {
+     int         status;
+ 
+-    status = luaL_loadfile(L, (char *) lmcf->exit_worker_src.data)
++    status = luaL_loadfile(L, (char *) init_src.data)
+              || ngx_http_lua_do_call(log, L);
+ 
+     return ngx_http_lua_report(log, L, status, "exit_worker_by_lua_file");
+diff --git src/ngx_http_lua_exitworkerby.h src/ngx_http_lua_exitworkerby.h
+index 3a4274c0..ad8f63b6 100644
+--- src/ngx_http_lua_exitworkerby.h
++++ src/ngx_http_lua_exitworkerby.h
+@@ -12,10 +12,10 @@
+ 
+ 
+ ngx_int_t ngx_http_lua_exit_worker_by_inline(ngx_log_t *log,
+-    ngx_http_lua_main_conf_t *lmcf, lua_State *L);
++    ngx_str_t init_src, lua_State *L);
+ 
+ ngx_int_t ngx_http_lua_exit_worker_by_file(ngx_log_t *log,
+-    ngx_http_lua_main_conf_t *lmcf, lua_State *L);
++    ngx_str_t init_src, lua_State *L);
+ 
+ void ngx_http_lua_exit_worker(ngx_cycle_t *cycle);
+ 
+diff --git src/ngx_http_lua_headerfilterby.c src/ngx_http_lua_headerfilterby.c
+index 4741c722..ed0c3a6c 100644
+--- src/ngx_http_lua_headerfilterby.c
++++ src/ngx_http_lua_headerfilterby.c
+@@ -19,7 +19,6 @@
+ #include "ngx_http_lua_string.h"
+ #include "ngx_http_lua_misc.h"
+ #include "ngx_http_lua_consts.h"
+-#include "ngx_http_lua_shdict.h"
+ 
+ 
+ static ngx_http_output_header_filter_pt ngx_http_next_header_filter;
+diff --git src/ngx_http_lua_initby.c src/ngx_http_lua_initby.c
+index e8941da6..4e8d898f 100644
+--- src/ngx_http_lua_initby.c
++++ src/ngx_http_lua_initby.c
+@@ -14,13 +14,13 @@
+ 
+ 
+ ngx_int_t
+-ngx_http_lua_init_by_inline(ngx_log_t *log, ngx_http_lua_main_conf_t *lmcf,
++ngx_http_lua_init_by_inline(ngx_log_t *log, ngx_str_t init_src,
      lua_State *L)
  {
      int         status;
@@ -432,48 +524,48 @@ index c6bbf0d..98e3c6f 100644
 -                             lmcf->init_src.len, "=init_by_lua")
 +    status = luaL_loadbuffer(L, (char *) init_src.data, init_src.len,
 +                             "=init_by_lua")
-              || ngx_stream_lua_do_call(log, L);
+              || ngx_http_lua_do_call(log, L);
  
-     return ngx_stream_lua_report(log, L, status, "init_by_lua");
-@@ -36,12 +36,12 @@ ngx_stream_lua_init_by_inline(ngx_log_t *log, ngx_stream_lua_main_conf_t *lmcf,
+     return ngx_http_lua_report(log, L, status, "init_by_lua");
+@@ -28,12 +28,12 @@ ngx_http_lua_init_by_inline(ngx_log_t *log, ngx_http_lua_main_conf_t *lmcf,
  
  
  ngx_int_t
--ngx_stream_lua_init_by_file(ngx_log_t *log, ngx_stream_lua_main_conf_t *lmcf,
-+ngx_stream_lua_init_by_file(ngx_log_t *log, ngx_str_t init_src,
+-ngx_http_lua_init_by_file(ngx_log_t *log, ngx_http_lua_main_conf_t *lmcf,
++ngx_http_lua_init_by_file(ngx_log_t *log, ngx_str_t init_src,
      lua_State *L)
  {
      int         status;
  
 -    status = luaL_loadfile(L, (char *) lmcf->init_src.data)
 +    status = luaL_loadfile(L, (char *) init_src.data)
-              || ngx_stream_lua_do_call(log, L);
+              || ngx_http_lua_do_call(log, L);
  
-     return ngx_stream_lua_report(log, L, status, "init_by_lua_file");
-diff --git src/ngx_stream_lua_initby.h src/ngx_stream_lua_initby.h
-index f2e2c40..060ee41 100644
---- src/ngx_stream_lua_initby.h
-+++ src/ngx_stream_lua_initby.h
-@@ -20,10 +20,10 @@
+     return ngx_http_lua_report(log, L, status, "init_by_lua_file");
+diff --git src/ngx_http_lua_initby.h src/ngx_http_lua_initby.h
+index 67ac0b6c..cbd439aa 100644
+--- src/ngx_http_lua_initby.h
++++ src/ngx_http_lua_initby.h
+@@ -12,10 +12,10 @@
  
  
- ngx_int_t ngx_stream_lua_init_by_inline(ngx_log_t *log,
--    ngx_stream_lua_main_conf_t *lmcf, lua_State *L);
+ ngx_int_t ngx_http_lua_init_by_inline(ngx_log_t *log,
+-    ngx_http_lua_main_conf_t *lmcf, lua_State *L);
 +    ngx_str_t init_src, lua_State *L);
  
- ngx_int_t ngx_stream_lua_init_by_file(ngx_log_t *log,
--    ngx_stream_lua_main_conf_t *lmcf, lua_State *L);
+ ngx_int_t ngx_http_lua_init_by_file(ngx_log_t *log,
+-    ngx_http_lua_main_conf_t *lmcf, lua_State *L);
 +    ngx_str_t init_src, lua_State *L);
  
  
- #endif /* _NGX_STREAM_LUA_INITBY_H_INCLUDED_ */
-diff --git src/ngx_stream_lua_initworkerby.c src/ngx_stream_lua_initworkerby.c
-index 786ba34..b50e2fe 100644
---- src/ngx_stream_lua_initworkerby.c
-+++ src/ngx_stream_lua_initworkerby.c
-@@ -305,7 +305,8 @@ ngx_stream_lua_init_worker(ngx_cycle_t *cycle)
+ #endif /* _NGX_HTTP_LUA_INITBY_H_INCLUDED_ */
+diff --git src/ngx_http_lua_initworkerby.c src/ngx_http_lua_initworkerby.c
+index 94de796a..bba63c5b 100644
+--- src/ngx_http_lua_initworkerby.c
++++ src/ngx_http_lua_initworkerby.c
+@@ -293,7 +293,8 @@ ngx_http_lua_init_worker(ngx_cycle_t *cycle)
  
-     ngx_stream_lua_set_req(lmcf->lua, r);
+     ngx_http_lua_set_req(lmcf->lua, r);
  
 -    (void) lmcf->init_worker_handler(cycle->log, lmcf, lmcf->lua);
 +    (void) lmcf->init_worker_handler(cycle->log, lmcf->init_worker_src,
@@ -481,11 +573,11 @@ index 786ba34..b50e2fe 100644
  
      ngx_destroy_pool(c->pool);
      return NGX_OK;
-@@ -326,12 +327,12 @@ failed:
+@@ -314,12 +315,12 @@ failed:
  
  ngx_int_t
- ngx_stream_lua_init_worker_by_inline(ngx_log_t *log,
--    ngx_stream_lua_main_conf_t *lmcf, lua_State *L)
+ ngx_http_lua_init_worker_by_inline(ngx_log_t *log,
+-    ngx_http_lua_main_conf_t *lmcf, lua_State *L)
 +    ngx_str_t init_worker_src, lua_State *L)
  {
      int         status;
@@ -494,72 +586,86 @@ index 786ba34..b50e2fe 100644
 -                             lmcf->init_worker_src.len, "=init_worker_by_lua")
 +    status = luaL_loadbuffer(L, (char *) init_worker_src.data,
 +                             init_worker_src.len, "=init_worker_by_lua")
-              || ngx_stream_lua_do_call(log, L);
+              || ngx_http_lua_do_call(log, L);
  
-     return ngx_stream_lua_report(log, L, status, "init_worker_by_lua");
-@@ -340,11 +341,11 @@ ngx_stream_lua_init_worker_by_inline(ngx_log_t *log,
+     return ngx_http_lua_report(log, L, status, "init_worker_by_lua");
+@@ -327,12 +328,12 @@ ngx_http_lua_init_worker_by_inline(ngx_log_t *log,
+ 
  
  ngx_int_t
- ngx_stream_lua_init_worker_by_file(ngx_log_t *log,
--    ngx_stream_lua_main_conf_t *lmcf, lua_State *L)
+-ngx_http_lua_init_worker_by_file(ngx_log_t *log, ngx_http_lua_main_conf_t *lmcf,
+-    lua_State *L)
++ngx_http_lua_init_worker_by_file(ngx_log_t *log,
 +    ngx_str_t init_worker_src, lua_State *L)
  {
      int         status;
  
 -    status = luaL_loadfile(L, (char *) lmcf->init_worker_src.data)
 +    status = luaL_loadfile(L, (char *) init_worker_src.data)
-              || ngx_stream_lua_do_call(log, L);
+              || ngx_http_lua_do_call(log, L);
  
-     return ngx_stream_lua_report(log, L, status, "init_worker_by_lua_file");
-diff --git src/ngx_stream_lua_initworkerby.h src/ngx_stream_lua_initworkerby.h
-index 43f6de3..53a443a 100644
---- src/ngx_stream_lua_initworkerby.h
-+++ src/ngx_stream_lua_initworkerby.h
-@@ -20,10 +20,10 @@
+     return ngx_http_lua_report(log, L, status, "init_worker_by_lua_file");
+diff --git src/ngx_http_lua_initworkerby.h src/ngx_http_lua_initworkerby.h
+index 40b2db0e..d4c399cf 100644
+--- src/ngx_http_lua_initworkerby.h
++++ src/ngx_http_lua_initworkerby.h
+@@ -12,10 +12,10 @@
  
  
- ngx_int_t ngx_stream_lua_init_worker_by_inline(ngx_log_t *log,
--    ngx_stream_lua_main_conf_t *lmcf, lua_State *L);
+ ngx_int_t ngx_http_lua_init_worker_by_inline(ngx_log_t *log,
+-    ngx_http_lua_main_conf_t *lmcf, lua_State *L);
 +    ngx_str_t init_worker_src, lua_State *L);
  
- ngx_int_t ngx_stream_lua_init_worker_by_file(ngx_log_t *log,
--    ngx_stream_lua_main_conf_t *lmcf, lua_State *L);
+ ngx_int_t ngx_http_lua_init_worker_by_file(ngx_log_t *log,
+-    ngx_http_lua_main_conf_t *lmcf, lua_State *L);
 +    ngx_str_t init_worker_src, lua_State *L);
  
- ngx_int_t ngx_stream_lua_init_worker(ngx_cycle_t *cycle);
+ ngx_int_t ngx_http_lua_init_worker(ngx_cycle_t *cycle);
  
-diff --git src/ngx_stream_lua_module.c src/ngx_stream_lua_module.c
-index 7f4c7c0..9eeb4e3 100644
---- src/ngx_stream_lua_module.c
-+++ src/ngx_stream_lua_module.c
-@@ -19,6 +19,7 @@
+diff --git src/ngx_http_lua_logby.c src/ngx_http_lua_logby.c
+index b47058be..a31d424b 100644
+--- src/ngx_http_lua_logby.c
++++ src/ngx_http_lua_logby.c
+@@ -21,7 +21,6 @@
+ #include "ngx_http_lua_string.h"
+ #include "ngx_http_lua_misc.h"
+ #include "ngx_http_lua_consts.h"
+-#include "ngx_http_lua_shdict.h"
+ #if (NGX_HTTP_LUA_HAVE_MALLOC_TRIM)
+ #include <malloc.h>
+ #endif
+diff --git src/ngx_http_lua_module.c src/ngx_http_lua_module.c
+index 7358a956..857deb45 100644
+--- src/ngx_http_lua_module.c
++++ src/ngx_http_lua_module.c
+@@ -11,6 +11,7 @@
  #include "ddebug.h"
  
  
 +#include "ngx_meta_lua_api.h"
- #include "ngx_stream_lua_directive.h"
- #include "ngx_stream_lua_contentby.h"
- #include "ngx_stream_lua_util.h"
-@@ -113,7 +114,7 @@ static ngx_command_t ngx_stream_lua_cmds[] = {
+ #include "ngx_http_lua_directive.h"
+ #include "ngx_http_lua_capturefilter.h"
+ #include "ngx_http_lua_contentby.h"
+@@ -108,7 +109,7 @@ static ngx_command_t ngx_http_lua_cmds[] = {
  
      { ngx_string("lua_shared_dict"),
-       NGX_STREAM_MAIN_CONF|NGX_CONF_TAKE2,
--      ngx_stream_lua_shared_dict,
-+      ngx_stream_lua_shdict_directive,
+       NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE2,
+-      ngx_http_lua_shared_dict,
++      ngx_http_lua_shdict_directive,
        0,
        0,
        NULL },
-@@ -497,7 +498,6 @@ static ngx_int_t
- ngx_stream_lua_init(ngx_conf_t *cf)
- {
-     ngx_int_t                           rc;
--    volatile ngx_cycle_t               *saved_cycle;
-     ngx_array_t                        *arr;
-     ngx_pool_cleanup_t                 *cln;
+@@ -671,7 +672,6 @@ ngx_http_lua_init(ngx_conf_t *cf)
+     ngx_int_t                   rc;
+     ngx_array_t                *arr;
+     ngx_http_handler_pt        *h;
+-    volatile ngx_cycle_t       *saved_cycle;
+     ngx_http_core_main_conf_t  *cmcf;
+     ngx_http_lua_main_conf_t   *lmcf;
+     ngx_pool_cleanup_t         *cln;
+@@ -850,18 +850,11 @@ ngx_http_lua_init(ngx_conf_t *cf)
  
-@@ -609,18 +609,11 @@ ngx_stream_lua_init(ngx_conf_t *cf)
- 
-         ngx_stream_lua_assert(lmcf->lua != NULL);
+         ngx_http_lua_assert(lmcf->lua != NULL);
  
 -        if (!lmcf->requires_shm && lmcf->init_handler) {
 -            saved_cycle = ngx_cycle;
@@ -581,7 +687,7 @@ index 7f4c7c0..9eeb4e3 100644
          }
  
          dd("Lua VM initialized!");
-@@ -680,11 +673,8 @@ ngx_stream_lua_create_main_conf(ngx_conf_t *cf)
+@@ -921,11 +914,8 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
       *      lmcf->watcher = NULL;
       *      lmcf->regex_cache_entries = 0;
       *      lmcf->jit_stack = NULL;
@@ -593,7 +699,7 @@ index 7f4c7c0..9eeb4e3 100644
       *      lmcf->preload_hooks = NULL;
       *      lmcf->requires_header_filter = 0;
       *      lmcf->requires_body_filter = 0;
-@@ -692,7 +682,6 @@ ngx_stream_lua_create_main_conf(ngx_conf_t *cf)
+@@ -933,7 +923,6 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
       *      lmcf->requires_rewrite = 0;
       *      lmcf->requires_access = 0;
       *      lmcf->requires_log = 0;
@@ -601,20 +707,24 @@ index 7f4c7c0..9eeb4e3 100644
       */
  
      lmcf->pool = cf->pool;
-diff --git src/ngx_stream_lua_shdict.c src/ngx_stream_lua_shdict.c
+diff --git src/ngx_http_lua_setby.c src/ngx_http_lua_setby.c
+index f00468c9..c6ef36f4 100644
+--- src/ngx_http_lua_setby.c
++++ src/ngx_http_lua_setby.c
+@@ -19,7 +19,6 @@
+ #include "ngx_http_lua_string.h"
+ #include "ngx_http_lua_misc.h"
+ #include "ngx_http_lua_consts.h"
+-#include "ngx_http_lua_shdict.h"
+ #include "ngx_http_lua_util.h"
+ 
+ 
+diff --git src/ngx_http_lua_shdict.c src/ngx_http_lua_shdict.c
 deleted file mode 100644
-index 7be30e3..0000000
---- src/ngx_stream_lua_shdict.c
+index 07effa88..00000000
+--- src/ngx_http_lua_shdict.c
 +++ /dev/null
-@@ -1,2068 +0,0 @@
--
--/*
-- * !!! DO NOT EDIT DIRECTLY !!!
-- * This file was automatically generated from the following template:
-- *
-- * src/subsys/ngx_subsys_lua_shdict.c.tt2
-- */
--
+@@ -1,2095 +0,0 @@
 -
 -/*
 - * Copyright (C) Yichun Zhang (agentzh)
@@ -627,38 +737,38 @@ index 7be30e3..0000000
 -#include "ddebug.h"
 -
 -
--#include "ngx_stream_lua_shdict.h"
--#include "ngx_stream_lua_util.h"
--#include "ngx_stream_lua_api.h"
+-#include "ngx_http_lua_shdict.h"
+-#include "ngx_http_lua_util.h"
+-#include "ngx_http_lua_api.h"
 -
 -
--static int ngx_stream_lua_shdict_expire(ngx_stream_lua_shdict_ctx_t *ctx,
+-static int ngx_http_lua_shdict_expire(ngx_http_lua_shdict_ctx_t *ctx,
 -    ngx_uint_t n);
--static ngx_int_t ngx_stream_lua_shdict_lookup(ngx_shm_zone_t *shm_zone,
+-static ngx_int_t ngx_http_lua_shdict_lookup(ngx_shm_zone_t *shm_zone,
 -    ngx_uint_t hash, u_char *kdata, size_t klen,
--    ngx_stream_lua_shdict_node_t **sdp);
--static int ngx_stream_lua_shdict_flush_expired(lua_State *L);
--static int ngx_stream_lua_shdict_get_keys(lua_State *L);
--static int ngx_stream_lua_shdict_lpush(lua_State *L);
--static int ngx_stream_lua_shdict_rpush(lua_State *L);
--static int ngx_stream_lua_shdict_push_helper(lua_State *L, int flags);
--static int ngx_stream_lua_shdict_lpop(lua_State *L);
--static int ngx_stream_lua_shdict_rpop(lua_State *L);
--static int ngx_stream_lua_shdict_pop_helper(lua_State *L, int flags);
--static int ngx_stream_lua_shdict_llen(lua_State *L);
+-    ngx_http_lua_shdict_node_t **sdp);
+-static int ngx_http_lua_shdict_flush_expired(lua_State *L);
+-static int ngx_http_lua_shdict_get_keys(lua_State *L);
+-static int ngx_http_lua_shdict_lpush(lua_State *L);
+-static int ngx_http_lua_shdict_rpush(lua_State *L);
+-static int ngx_http_lua_shdict_push_helper(lua_State *L, int flags);
+-static int ngx_http_lua_shdict_lpop(lua_State *L);
+-static int ngx_http_lua_shdict_rpop(lua_State *L);
+-static int ngx_http_lua_shdict_pop_helper(lua_State *L, int flags);
+-static int ngx_http_lua_shdict_llen(lua_State *L);
 -
 -
--static ngx_inline ngx_shm_zone_t *ngx_stream_lua_shdict_get_zone(lua_State *L,
+-static ngx_inline ngx_shm_zone_t *ngx_http_lua_shdict_get_zone(lua_State *L,
 -    int index);
 -
 -
--#define NGX_STREAM_LUA_SHDICT_ADD         0x0001
--#define NGX_STREAM_LUA_SHDICT_REPLACE     0x0002
--#define NGX_STREAM_LUA_SHDICT_SAFE_STORE  0x0004
+-#define NGX_HTTP_LUA_SHDICT_ADD         0x0001
+-#define NGX_HTTP_LUA_SHDICT_REPLACE     0x0002
+-#define NGX_HTTP_LUA_SHDICT_SAFE_STORE  0x0004
 -
 -
--#define NGX_STREAM_LUA_SHDICT_LEFT        0x0001
--#define NGX_STREAM_LUA_SHDICT_RIGHT       0x0002
+-#define NGX_HTTP_LUA_SHDICT_LEFT        0x0001
+-#define NGX_HTTP_LUA_SHDICT_RIGHT       0x0002
 -
 -
 -enum {
@@ -676,8 +786,7 @@ index 7be30e3..0000000
 -
 -
 -static ngx_inline ngx_queue_t *
--ngx_stream_lua_shdict_get_list_head(ngx_stream_lua_shdict_node_t *sd,
--    size_t len)
+-ngx_http_lua_shdict_get_list_head(ngx_http_lua_shdict_node_t *sd, size_t len)
 -{
 -    return (ngx_queue_t *) ngx_align_ptr(((u_char *) &sd->data + len),
 -                                         NGX_ALIGNMENT);
@@ -685,12 +794,12 @@ index 7be30e3..0000000
 -
 -
 -ngx_int_t
--ngx_stream_lua_shdict_init_zone(ngx_shm_zone_t *shm_zone, void *data)
+-ngx_http_lua_shdict_init_zone(ngx_shm_zone_t *shm_zone, void *data)
 -{
--    ngx_stream_lua_shdict_ctx_t        *octx = data;
--    ngx_stream_lua_shdict_ctx_t        *ctx;
+-    ngx_http_lua_shdict_ctx_t  *octx = data;
 -
--    size_t          len;
+-    size_t                      len;
+-    ngx_http_lua_shdict_ctx_t  *ctx;
 -
 -    dd("init zone");
 -
@@ -711,8 +820,7 @@ index 7be30e3..0000000
 -        return NGX_OK;
 -    }
 -
--    ctx->sh = ngx_slab_alloc(ctx->shpool,
--                             sizeof(ngx_stream_lua_shdict_shctx_t));
+-    ctx->sh = ngx_slab_alloc(ctx->shpool, sizeof(ngx_http_lua_shdict_shctx_t));
 -    if (ctx->sh == NULL) {
 -        return NGX_ERROR;
 -    }
@@ -720,7 +828,7 @@ index 7be30e3..0000000
 -    ctx->shpool->data = ctx->sh;
 -
 -    ngx_rbtree_init(&ctx->sh->rbtree, &ctx->sh->sentinel,
--                    ngx_stream_lua_shdict_rbtree_insert_value);
+-                    ngx_http_lua_shdict_rbtree_insert_value);
 -
 -    ngx_queue_init(&ctx->sh->lru_queue);
 -
@@ -741,12 +849,11 @@ index 7be30e3..0000000
 -
 -
 -void
--ngx_stream_lua_shdict_rbtree_insert_value(ngx_rbtree_node_t *temp,
+-ngx_http_lua_shdict_rbtree_insert_value(ngx_rbtree_node_t *temp,
 -    ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel)
 -{
 -    ngx_rbtree_node_t           **p;
--
--    ngx_stream_lua_shdict_node_t         *sdn, *sdnt;
+-    ngx_http_lua_shdict_node_t   *sdn, *sdnt;
 -
 -    for ( ;; ) {
 -
@@ -760,8 +867,8 @@ index 7be30e3..0000000
 -
 -        } else { /* node->key == temp->key */
 -
--            sdn = (ngx_stream_lua_shdict_node_t *) &node->color;
--            sdnt = (ngx_stream_lua_shdict_node_t *) &temp->color;
+-            sdn = (ngx_http_lua_shdict_node_t *) &node->color;
+-            sdnt = (ngx_http_lua_shdict_node_t *) &temp->color;
 -
 -            p = ngx_memn2cmp(sdn->data, sdnt->data, sdn->key_len,
 -                             sdnt->key_len) < 0 ? &temp->left : &temp->right;
@@ -783,17 +890,16 @@ index 7be30e3..0000000
 -
 -
 -static ngx_int_t
--ngx_stream_lua_shdict_lookup(ngx_shm_zone_t *shm_zone, ngx_uint_t hash,
--    u_char *kdata, size_t klen, ngx_stream_lua_shdict_node_t **sdp)
+-ngx_http_lua_shdict_lookup(ngx_shm_zone_t *shm_zone, ngx_uint_t hash,
+-    u_char *kdata, size_t klen, ngx_http_lua_shdict_node_t **sdp)
 -{
 -    ngx_int_t                    rc;
 -    ngx_time_t                  *tp;
 -    uint64_t                     now;
 -    int64_t                      ms;
 -    ngx_rbtree_node_t           *node, *sentinel;
--
--    ngx_stream_lua_shdict_ctx_t         *ctx;
--    ngx_stream_lua_shdict_node_t        *sd;
+-    ngx_http_lua_shdict_ctx_t   *ctx;
+-    ngx_http_lua_shdict_node_t  *sd;
 -
 -    ctx = shm_zone->data;
 -
@@ -814,7 +920,7 @@ index 7be30e3..0000000
 -
 -        /* hash == node->key */
 -
--        sd = (ngx_stream_lua_shdict_node_t *) &node->color;
+-        sd = (ngx_http_lua_shdict_node_t *) &node->color;
 -
 -        rc = ngx_memn2cmp(kdata, sd->data, klen, (size_t) sd->key_len);
 -
@@ -853,17 +959,16 @@ index 7be30e3..0000000
 -
 -
 -static int
--ngx_stream_lua_shdict_expire(ngx_stream_lua_shdict_ctx_t *ctx, ngx_uint_t n)
+-ngx_http_lua_shdict_expire(ngx_http_lua_shdict_ctx_t *ctx, ngx_uint_t n)
 -{
 -    ngx_time_t                      *tp;
 -    uint64_t                         now;
 -    ngx_queue_t                     *q, *list_queue, *lq;
 -    int64_t                          ms;
 -    ngx_rbtree_node_t               *node;
+-    ngx_http_lua_shdict_node_t      *sd;
 -    int                              freed = 0;
--
--    ngx_stream_lua_shdict_node_t            *sd;
--    ngx_stream_lua_shdict_list_node_t       *lnode;
+-    ngx_http_lua_shdict_list_node_t *lnode;
 -
 -    tp = ngx_timeofday();
 -
@@ -883,7 +988,7 @@ index 7be30e3..0000000
 -
 -        q = ngx_queue_last(&ctx->sh->lru_queue);
 -
--        sd = ngx_queue_data(q, ngx_stream_lua_shdict_node_t, queue);
+-        sd = ngx_queue_data(q, ngx_http_lua_shdict_node_t, queue);
 -
 -        if (n++ != 0) {
 -
@@ -898,14 +1003,13 @@ index 7be30e3..0000000
 -        }
 -
 -        if (sd->value_type == SHDICT_TLIST) {
--            list_queue = ngx_stream_lua_shdict_get_list_head(sd,
--                                                             sd->key_len);
+-            list_queue = ngx_http_lua_shdict_get_list_head(sd, sd->key_len);
 -
 -            for (lq = ngx_queue_head(list_queue);
 -                 lq != ngx_queue_sentinel(list_queue);
 -                 lq = ngx_queue_next(lq))
 -            {
--                lnode = ngx_queue_data(lq, ngx_stream_lua_shdict_list_node_t,
+-                lnode = ngx_queue_data(lq, ngx_http_lua_shdict_list_node_t,
 -                                       queue);
 -
 -                ngx_slab_free_locked(ctx->shpool, lnode);
@@ -929,10 +1033,9 @@ index 7be30e3..0000000
 -
 -
 -void
--ngx_stream_lua_inject_shdict_api(ngx_stream_lua_main_conf_t *lmcf, lua_State *L)
+-ngx_http_lua_inject_shdict_api(ngx_http_lua_main_conf_t *lmcf, lua_State *L)
 -{
--    ngx_stream_lua_shdict_ctx_t         *ctx;
--
+-    ngx_http_lua_shdict_ctx_t   *ctx;
 -    ngx_uint_t                   i;
 -    ngx_shm_zone_t             **zone;
 -    ngx_shm_zone_t             **zone_udata;
@@ -943,25 +1046,25 @@ index 7be30e3..0000000
 -
 -        lua_createtable(L, 0 /* narr */, 22 /* nrec */); /* shared mt */
 -
--        lua_pushcfunction(L, ngx_stream_lua_shdict_lpush);
+-        lua_pushcfunction(L, ngx_http_lua_shdict_lpush);
 -        lua_setfield(L, -2, "lpush");
 -
--        lua_pushcfunction(L, ngx_stream_lua_shdict_rpush);
+-        lua_pushcfunction(L, ngx_http_lua_shdict_rpush);
 -        lua_setfield(L, -2, "rpush");
 -
--        lua_pushcfunction(L, ngx_stream_lua_shdict_lpop);
+-        lua_pushcfunction(L, ngx_http_lua_shdict_lpop);
 -        lua_setfield(L, -2, "lpop");
 -
--        lua_pushcfunction(L, ngx_stream_lua_shdict_rpop);
+-        lua_pushcfunction(L, ngx_http_lua_shdict_rpop);
 -        lua_setfield(L, -2, "rpop");
 -
--        lua_pushcfunction(L, ngx_stream_lua_shdict_llen);
+-        lua_pushcfunction(L, ngx_http_lua_shdict_llen);
 -        lua_setfield(L, -2, "llen");
 -
--        lua_pushcfunction(L, ngx_stream_lua_shdict_flush_expired);
+-        lua_pushcfunction(L, ngx_http_lua_shdict_flush_expired);
 -        lua_setfield(L, -2, "flush_expired");
 -
--        lua_pushcfunction(L, ngx_stream_lua_shdict_get_keys);
+-        lua_pushcfunction(L, ngx_http_lua_shdict_get_keys);
 -        lua_setfield(L, -2, "get_keys");
 -
 -        lua_pushvalue(L, -1); /* shared mt mt */
@@ -997,7 +1100,7 @@ index 7be30e3..0000000
 -
 -
 -static ngx_inline ngx_shm_zone_t *
--ngx_stream_lua_shdict_get_zone(lua_State *L, int index)
+-ngx_http_lua_shdict_get_zone(lua_State *L, int index)
 -{
 -    ngx_shm_zone_t      *zone;
 -    ngx_shm_zone_t     **zone_udata;
@@ -1016,9 +1119,11 @@ index 7be30e3..0000000
 -
 -
 -static int
--ngx_stream_lua_shdict_flush_expired(lua_State *L)
+-ngx_http_lua_shdict_flush_expired(lua_State *L)
 -{
 -    ngx_queue_t                     *q, *prev, *list_queue, *lq;
+-    ngx_http_lua_shdict_node_t      *sd;
+-    ngx_http_lua_shdict_ctx_t       *ctx;
 -    ngx_shm_zone_t                  *zone;
 -    ngx_time_t                      *tp;
 -    int                              freed = 0;
@@ -1026,10 +1131,7 @@ index 7be30e3..0000000
 -    ngx_rbtree_node_t               *node;
 -    uint64_t                         now;
 -    int                              n;
--
--    ngx_stream_lua_shdict_node_t            *sd;
--    ngx_stream_lua_shdict_ctx_t             *ctx;
--    ngx_stream_lua_shdict_list_node_t       *lnode;
+-    ngx_http_lua_shdict_list_node_t *lnode;
 -
 -    n = lua_gettop(L);
 -
@@ -1039,7 +1141,7 @@ index 7be30e3..0000000
 -
 -    luaL_checktype(L, 1, LUA_TTABLE);
 -
--    zone = ngx_stream_lua_shdict_get_zone(L, 1);
+-    zone = ngx_http_lua_shdict_get_zone(L, 1);
 -    if (zone == NULL) {
 -        return luaL_error(L, "bad user data for the ngx_shm_zone_t pointer");
 -    }
@@ -1067,20 +1169,18 @@ index 7be30e3..0000000
 -    while (q != ngx_queue_sentinel(&ctx->sh->lru_queue)) {
 -        prev = ngx_queue_prev(q);
 -
--        sd = ngx_queue_data(q, ngx_stream_lua_shdict_node_t, queue);
+-        sd = ngx_queue_data(q, ngx_http_lua_shdict_node_t, queue);
 -
 -        if (sd->expires != 0 && sd->expires <= now) {
 -
 -            if (sd->value_type == SHDICT_TLIST) {
--                list_queue = ngx_stream_lua_shdict_get_list_head(sd,
--                                                                 sd->key_len);
+-                list_queue = ngx_http_lua_shdict_get_list_head(sd, sd->key_len);
 -
 -                for (lq = ngx_queue_head(list_queue);
 -                     lq != ngx_queue_sentinel(list_queue);
 -                     lq = ngx_queue_next(lq))
 -                {
--                    lnode = ngx_queue_data(lq,
--                                           ngx_stream_lua_shdict_list_node_t,
+-                    lnode = ngx_queue_data(lq, ngx_http_lua_shdict_list_node_t,
 -                                           queue);
 -
 -                    ngx_slab_free_locked(ctx->shpool, lnode);
@@ -1116,18 +1216,17 @@ index 7be30e3..0000000
 - */
 -
 -static int
--ngx_stream_lua_shdict_get_keys(lua_State *L)
+-ngx_http_lua_shdict_get_keys(lua_State *L)
 -{
 -    ngx_queue_t                 *q, *prev;
+-    ngx_http_lua_shdict_node_t  *sd;
+-    ngx_http_lua_shdict_ctx_t   *ctx;
 -    ngx_shm_zone_t              *zone;
 -    ngx_time_t                  *tp;
 -    int                          total = 0;
 -    int                          attempts = 1024;
 -    uint64_t                     now;
 -    int                          n;
--
--    ngx_stream_lua_shdict_node_t        *sd;
--    ngx_stream_lua_shdict_ctx_t         *ctx;
 -
 -    n = lua_gettop(L);
 -
@@ -1138,7 +1237,7 @@ index 7be30e3..0000000
 -
 -    luaL_checktype(L, 1, LUA_TTABLE);
 -
--    zone = ngx_stream_lua_shdict_get_zone(L, 1);
+-    zone = ngx_http_lua_shdict_get_zone(L, 1);
 -    if (zone == NULL) {
 -        return luaL_error(L, "bad user data for the ngx_shm_zone_t pointer");
 -    }
@@ -1168,7 +1267,7 @@ index 7be30e3..0000000
 -    while (q != ngx_queue_sentinel(&ctx->sh->lru_queue)) {
 -        prev = ngx_queue_prev(q);
 -
--        sd = ngx_queue_data(q, ngx_stream_lua_shdict_node_t, queue);
+-        sd = ngx_queue_data(q, ngx_http_lua_shdict_node_t, queue);
 -
 -        if (sd->expires == 0 || sd->expires > now) {
 -            total++;
@@ -1190,7 +1289,7 @@ index 7be30e3..0000000
 -    while (q != ngx_queue_sentinel(&ctx->sh->lru_queue)) {
 -        prev = ngx_queue_prev(q);
 -
--        sd = ngx_queue_data(q, ngx_stream_lua_shdict_node_t, queue);
+-        sd = ngx_queue_data(q, ngx_http_lua_shdict_node_t, queue);
 -
 -        if (sd->expires == 0 || sd->expires > now) {
 -            lua_pushlstring(L, (char *) sd->data, sd->key_len);
@@ -1210,39 +1309,139 @@ index 7be30e3..0000000
 -}
 -
 -
--
--
--static int
--ngx_stream_lua_shdict_lpush(lua_State *L)
+-ngx_int_t
+-ngx_http_lua_shared_dict_get(ngx_shm_zone_t *zone, u_char *key_data,
+-    size_t key_len, ngx_http_lua_value_t *value)
 -{
--    return ngx_stream_lua_shdict_push_helper(L, NGX_STREAM_LUA_SHDICT_LEFT);
+-    u_char                      *data;
+-    size_t                       len;
+-    uint32_t                     hash;
+-    ngx_int_t                    rc;
+-    ngx_http_lua_shdict_ctx_t   *ctx;
+-    ngx_http_lua_shdict_node_t  *sd;
+-
+-    if (zone == NULL) {
+-        return NGX_ERROR;
+-    }
+-
+-    hash = ngx_crc32_short(key_data, key_len);
+-
+-    ctx = zone->data;
+-
+-    ngx_shmtx_lock(&ctx->shpool->mutex);
+-
+-    rc = ngx_http_lua_shdict_lookup(zone, hash, key_data, key_len, &sd);
+-
+-    dd("shdict lookup returned %d", (int) rc);
+-
+-    if (rc == NGX_DECLINED || rc == NGX_DONE) {
+-        ngx_shmtx_unlock(&ctx->shpool->mutex);
+-
+-        return rc;
+-    }
+-
+-    /* rc == NGX_OK */
+-
+-    value->type = sd->value_type;
+-
+-    dd("type: %d", (int) value->type);
+-
+-    data = sd->data + sd->key_len;
+-    len = (size_t) sd->value_len;
+-
+-    switch (value->type) {
+-
+-    case SHDICT_TSTRING:
+-
+-        if (value->value.s.data == NULL || value->value.s.len == 0) {
+-            ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, 0, "no string buffer "
+-                          "initialized");
+-            ngx_shmtx_unlock(&ctx->shpool->mutex);
+-            return NGX_ERROR;
+-        }
+-
+-        if (len > value->value.s.len) {
+-            len = value->value.s.len;
+-
+-        } else {
+-            value->value.s.len = len;
+-        }
+-
+-        ngx_memcpy(value->value.s.data, data, len);
+-        break;
+-
+-    case SHDICT_TNUMBER:
+-
+-        if (len != sizeof(double)) {
+-            ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, 0, "bad lua number "
+-                          "value size found for key %*s: %lu", key_len,
+-                          key_data, (unsigned long) len);
+-
+-            ngx_shmtx_unlock(&ctx->shpool->mutex);
+-            return NGX_ERROR;
+-        }
+-
+-        ngx_memcpy(&value->value.b, data, len);
+-        break;
+-
+-    case SHDICT_TBOOLEAN:
+-
+-        if (len != sizeof(u_char)) {
+-            ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, 0, "bad lua boolean "
+-                          "value size found for key %*s: %lu", key_len,
+-                          key_data, (unsigned long) len);
+-
+-            ngx_shmtx_unlock(&ctx->shpool->mutex);
+-            return NGX_ERROR;
+-        }
+-
+-        value->value.b = *data;
+-        break;
+-
+-    default:
+-        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, 0, "bad lua value type "
+-                      "found for key %*s: %d", key_len, key_data,
+-                      (int) value->type);
+-
+-        ngx_shmtx_unlock(&ctx->shpool->mutex);
+-        return NGX_ERROR;
+-    }
+-
+-    ngx_shmtx_unlock(&ctx->shpool->mutex);
+-    return NGX_OK;
 -}
 -
 -
 -static int
--ngx_stream_lua_shdict_rpush(lua_State *L)
+-ngx_http_lua_shdict_lpush(lua_State *L)
 -{
--    return ngx_stream_lua_shdict_push_helper(L, NGX_STREAM_LUA_SHDICT_RIGHT);
+-    return ngx_http_lua_shdict_push_helper(L, NGX_HTTP_LUA_SHDICT_LEFT);
 -}
 -
 -
 -static int
--ngx_stream_lua_shdict_push_helper(lua_State *L, int flags)
+-ngx_http_lua_shdict_rpush(lua_State *L)
+-{
+-    return ngx_http_lua_shdict_push_helper(L, NGX_HTTP_LUA_SHDICT_RIGHT);
+-}
+-
+-
+-static int
+-ngx_http_lua_shdict_push_helper(lua_State *L, int flags)
 -{
 -    int                              n;
 -    ngx_str_t                        key;
 -    uint32_t                         hash;
 -    ngx_int_t                        rc;
+-    ngx_http_lua_shdict_ctx_t       *ctx;
+-    ngx_http_lua_shdict_node_t      *sd;
 -    ngx_str_t                        value;
 -    int                              value_type;
 -    double                           num;
 -    ngx_rbtree_node_t               *node;
 -    ngx_shm_zone_t                  *zone;
 -    ngx_queue_t                     *queue, *q;
--
--    ngx_stream_lua_shdict_ctx_t             *ctx;
--    ngx_stream_lua_shdict_node_t            *sd;
--    ngx_stream_lua_shdict_list_node_t       *lnode;
+-    ngx_http_lua_shdict_list_node_t *lnode;
 -
 -    n = lua_gettop(L);
 -
@@ -1255,7 +1454,7 @@ index 7be30e3..0000000
 -        return luaL_error(L, "bad \"zone\" argument");
 -    }
 -
--    zone = ngx_stream_lua_shdict_get_zone(L, 1);
+-    zone = ngx_http_lua_shdict_get_zone(L, 1);
 -    if (zone == NULL) {
 -        return luaL_error(L, "bad \"zone\" argument");
 -    }
@@ -1307,10 +1506,10 @@ index 7be30e3..0000000
 -    ngx_shmtx_lock(&ctx->shpool->mutex);
 -
 -#if 1
--    ngx_stream_lua_shdict_expire(ctx, 1);
+-    ngx_http_lua_shdict_expire(ctx, 1);
 -#endif
 -
--    rc = ngx_stream_lua_shdict_lookup(zone, hash, key.data, key.len, &sd);
+-    rc = ngx_http_lua_shdict_lookup(zone, hash, key.data, key.len, &sd);
 -
 -    dd("shdict lookup returned %d", (int) rc);
 -
@@ -1321,7 +1520,7 @@ index 7be30e3..0000000
 -        if (sd->value_type != SHDICT_TLIST) {
 -            /* TODO: reuse when length matched */
 -
--            ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-            ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                           "lua shared dict push: found old entry and value "
 -                           "type not matched, remove it first");
 -
@@ -1338,7 +1537,7 @@ index 7be30e3..0000000
 -            goto init_list;
 -        }
 -
--        ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                       "lua shared dict push: found old entry and value "
 -                       "type matched, reusing it");
 -
@@ -1346,14 +1545,14 @@ index 7be30e3..0000000
 -        sd->value_len = 0;
 -        /* free list nodes */
 -
--        queue = ngx_stream_lua_shdict_get_list_head(sd, key.len);
+-        queue = ngx_http_lua_shdict_get_list_head(sd, key.len);
 -
 -        for (q = ngx_queue_head(queue);
 -             q != ngx_queue_sentinel(queue);
 -             q = ngx_queue_next(q))
 -        {
 -            /* TODO: reuse matched size list node */
--            lnode = ngx_queue_data(q, ngx_stream_lua_shdict_list_node_t, queue);
+-            lnode = ngx_queue_data(q, ngx_http_lua_shdict_list_node_t, queue);
 -            ngx_slab_free_locked(ctx->shpool, lnode);
 -        }
 -
@@ -1378,7 +1577,7 @@ index 7be30e3..0000000
 -            return 2;
 -        }
 -
--        queue = ngx_stream_lua_shdict_get_list_head(sd, key.len);
+-        queue = ngx_http_lua_shdict_get_list_head(sd, key.len);
 -
 -        ngx_queue_remove(&sd->queue);
 -        ngx_queue_insert_head(&ctx->sh->lru_queue, &sd->queue);
@@ -1391,12 +1590,12 @@ index 7be30e3..0000000
 -
 -init_list:
 -
--    ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                   "lua shared dict list: creating a new entry");
 -
 -    /* NOTICE: we assume the begin point aligned in slab, be careful */
 -    n = offsetof(ngx_rbtree_node_t, color)
--        + offsetof(ngx_stream_lua_shdict_node_t, data)
+-        + offsetof(ngx_http_lua_shdict_node_t, data)
 -        + key.len
 -        + sizeof(ngx_queue_t);
 -
@@ -1416,9 +1615,9 @@ index 7be30e3..0000000
 -        return 2;
 -    }
 -
--    sd = (ngx_stream_lua_shdict_node_t *) &node->color;
+-    sd = (ngx_http_lua_shdict_node_t *) &node->color;
 -
--    queue = ngx_stream_lua_shdict_get_list_head(sd, key.len);
+-    queue = ngx_http_lua_shdict_get_list_head(sd, key.len);
 -
 -    node->key = hash;
 -    sd->key_len = (u_short) key.len;
@@ -1441,10 +1640,10 @@ index 7be30e3..0000000
 -
 -push_node:
 -
--    ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                   "lua shared dict list: creating a new list node");
 -
--    n = offsetof(ngx_stream_lua_shdict_list_node_t, data)
+-    n = offsetof(ngx_http_lua_shdict_list_node_t, data)
 -        + value.len;
 -
 -    dd("list node length: %d", n);
@@ -1455,7 +1654,7 @@ index 7be30e3..0000000
 -
 -        if (sd->value_len == 0) {
 -
--            ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-            ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                           "lua shared dict list: no memory for create"
 -                           " list node and list empty, remove it");
 -
@@ -1490,7 +1689,7 @@ index 7be30e3..0000000
 -
 -    ngx_memcpy(lnode->data, value.data, value.len);
 -
--    if (flags == NGX_STREAM_LUA_SHDICT_LEFT) {
+-    if (flags == NGX_HTTP_LUA_SHDICT_LEFT) {
 -        ngx_queue_insert_head(queue, &lnode->queue);
 -
 -    } else {
@@ -1505,37 +1704,36 @@ index 7be30e3..0000000
 -
 -
 -static int
--ngx_stream_lua_shdict_lpop(lua_State *L)
+-ngx_http_lua_shdict_lpop(lua_State *L)
 -{
--    return ngx_stream_lua_shdict_pop_helper(L, NGX_STREAM_LUA_SHDICT_LEFT);
+-    return ngx_http_lua_shdict_pop_helper(L, NGX_HTTP_LUA_SHDICT_LEFT);
 -}
 -
 -
 -static int
--ngx_stream_lua_shdict_rpop(lua_State *L)
+-ngx_http_lua_shdict_rpop(lua_State *L)
 -{
--    return ngx_stream_lua_shdict_pop_helper(L, NGX_STREAM_LUA_SHDICT_RIGHT);
+-    return ngx_http_lua_shdict_pop_helper(L, NGX_HTTP_LUA_SHDICT_RIGHT);
 -}
 -
 -
 -static int
--ngx_stream_lua_shdict_pop_helper(lua_State *L, int flags)
+-ngx_http_lua_shdict_pop_helper(lua_State *L, int flags)
 -{
 -    int                              n;
 -    ngx_str_t                        name;
 -    ngx_str_t                        key;
 -    uint32_t                         hash;
 -    ngx_int_t                        rc;
+-    ngx_http_lua_shdict_ctx_t       *ctx;
+-    ngx_http_lua_shdict_node_t      *sd;
 -    ngx_str_t                        value;
 -    int                              value_type;
 -    double                           num;
 -    ngx_rbtree_node_t               *node;
 -    ngx_shm_zone_t                  *zone;
 -    ngx_queue_t                     *queue;
--
--    ngx_stream_lua_shdict_ctx_t             *ctx;
--    ngx_stream_lua_shdict_node_t            *sd;
--    ngx_stream_lua_shdict_list_node_t       *lnode;
+-    ngx_http_lua_shdict_list_node_t *lnode;
 -
 -    n = lua_gettop(L);
 -
@@ -1548,7 +1746,7 @@ index 7be30e3..0000000
 -        return luaL_error(L, "bad \"zone\" argument");
 -    }
 -
--    zone = ngx_stream_lua_shdict_get_zone(L, 1);
+-    zone = ngx_http_lua_shdict_get_zone(L, 1);
 -    if (zone == NULL) {
 -        return luaL_error(L, "bad \"zone\" argument");
 -    }
@@ -1581,10 +1779,10 @@ index 7be30e3..0000000
 -    ngx_shmtx_lock(&ctx->shpool->mutex);
 -
 -#if 1
--    ngx_stream_lua_shdict_expire(ctx, 1);
+-    ngx_http_lua_shdict_expire(ctx, 1);
 -#endif
 -
--    rc = ngx_stream_lua_shdict_lookup(zone, hash, key.data, key.len, &sd);
+-    rc = ngx_http_lua_shdict_lookup(zone, hash, key.data, key.len, &sd);
 -
 -    dd("shdict lookup returned %d", (int) rc);
 -
@@ -1612,16 +1810,16 @@ index 7be30e3..0000000
 -                          (unsigned long) sd->value_len);
 -    }
 -
--    queue = ngx_stream_lua_shdict_get_list_head(sd, key.len);
+-    queue = ngx_http_lua_shdict_get_list_head(sd, key.len);
 -
--    if (flags == NGX_STREAM_LUA_SHDICT_LEFT) {
+-    if (flags == NGX_HTTP_LUA_SHDICT_LEFT) {
 -        queue = ngx_queue_head(queue);
 -
 -    } else {
 -        queue = ngx_queue_last(queue);
 -    }
 -
--    lnode = ngx_queue_data(queue, ngx_stream_lua_shdict_list_node_t, queue);
+-    lnode = ngx_queue_data(queue, ngx_http_lua_shdict_list_node_t, queue);
 -
 -    value_type = lnode->value_type;
 -
@@ -1669,7 +1867,7 @@ index 7be30e3..0000000
 -
 -    if (sd->value_len == 1) {
 -
--        ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                       "lua shared dict list: empty node after pop, "
 -                       "remove it");
 -
@@ -1696,16 +1894,15 @@ index 7be30e3..0000000
 -
 -
 -static int
--ngx_stream_lua_shdict_llen(lua_State *L)
+-ngx_http_lua_shdict_llen(lua_State *L)
 -{
 -    int                          n;
 -    ngx_str_t                    key;
 -    uint32_t                     hash;
 -    ngx_int_t                    rc;
+-    ngx_http_lua_shdict_ctx_t   *ctx;
+-    ngx_http_lua_shdict_node_t  *sd;
 -    ngx_shm_zone_t              *zone;
--
--    ngx_stream_lua_shdict_ctx_t         *ctx;
--    ngx_stream_lua_shdict_node_t        *sd;
 -
 -    n = lua_gettop(L);
 -
@@ -1718,7 +1915,7 @@ index 7be30e3..0000000
 -        return luaL_error(L, "bad \"zone\" argument");
 -    }
 -
--    zone = ngx_stream_lua_shdict_get_zone(L, 1);
+-    zone = ngx_http_lua_shdict_get_zone(L, 1);
 -    if (zone == NULL) {
 -        return luaL_error(L, "bad \"zone\" argument");
 -    }
@@ -1750,10 +1947,10 @@ index 7be30e3..0000000
 -    ngx_shmtx_lock(&ctx->shpool->mutex);
 -
 -#if 1
--    ngx_stream_lua_shdict_expire(ctx, 1);
+-    ngx_http_lua_shdict_expire(ctx, 1);
 -#endif
 -
--    rc = ngx_stream_lua_shdict_lookup(zone, hash, key.data, key.len, &sd);
+-    rc = ngx_http_lua_shdict_lookup(zone, hash, key.data, key.len, &sd);
 -
 -    dd("shdict lookup returned %d", (int) rc);
 -
@@ -1784,14 +1981,13 @@ index 7be30e3..0000000
 -
 -
 -ngx_shm_zone_t *
--ngx_stream_lua_find_zone(u_char *name_data, size_t name_len)
+-ngx_http_lua_find_zone(u_char *name_data, size_t name_len)
 -{
 -    ngx_str_t                       *name;
 -    ngx_uint_t                       i;
 -    ngx_shm_zone_t                  *zone;
+-    ngx_http_lua_shm_zone_ctx_t     *ctx;
 -    volatile ngx_list_part_t        *part;
--
--    ngx_stream_lua_shm_zone_ctx_t           *ctx;
 -
 -    part = &ngx_cycle->shared_memory.part;
 -    zone = part->elts;
@@ -1816,7 +2012,7 @@ index 7be30e3..0000000
 -        if (name->len == name_len
 -            && ngx_strncmp(name->data, name_data, name_len) == 0)
 -        {
--            ctx = (ngx_stream_lua_shm_zone_ctx_t *) zone[i].data;
+-            ctx = (ngx_http_lua_shm_zone_ctx_t *) zone[i].data;
 -            return &ctx->zone;
 -        }
 -    }
@@ -1826,7 +2022,7 @@ index 7be30e3..0000000
 -
 -
 -ngx_shm_zone_t *
--ngx_stream_lua_ffi_shdict_udata_to_zone(void *zone_udata)
+-ngx_http_lua_ffi_shdict_udata_to_zone(void *zone_udata)
 -{
 -    if (zone_udata == NULL) {
 -        return NULL;
@@ -1837,7 +2033,7 @@ index 7be30e3..0000000
 -
 -
 -int
--ngx_stream_lua_ffi_shdict_store(ngx_shm_zone_t *zone, int op, u_char *key,
+-ngx_http_lua_ffi_shdict_store(ngx_shm_zone_t *zone, int op, u_char *key,
 -    size_t key_len, int value_type, u_char *str_value_buf,
 -    size_t str_value_len, double num_value, long exptime, int user_flags,
 -    char **errmsg, int *forcible)
@@ -1849,9 +2045,8 @@ index 7be30e3..0000000
 -    ngx_time_t                  *tp;
 -    ngx_queue_t                 *queue, *q;
 -    ngx_rbtree_node_t           *node;
--
--    ngx_stream_lua_shdict_ctx_t         *ctx;
--    ngx_stream_lua_shdict_node_t        *sd;
+-    ngx_http_lua_shdict_ctx_t   *ctx;
+-    ngx_http_lua_shdict_node_t  *sd;
 -
 -    dd("exptime: %ld", exptime);
 -
@@ -1880,7 +2075,7 @@ index 7be30e3..0000000
 -        break;
 -
 -    case LUA_TNIL:
--        if (op & (NGX_STREAM_LUA_SHDICT_ADD|NGX_STREAM_LUA_SHDICT_REPLACE)) {
+-        if (op & (NGX_HTTP_LUA_SHDICT_ADD|NGX_HTTP_LUA_SHDICT_REPLACE)) {
 -            *errmsg = "attempt to add or replace nil values";
 -            return NGX_ERROR;
 -        }
@@ -1897,14 +2092,14 @@ index 7be30e3..0000000
 -    ngx_shmtx_lock(&ctx->shpool->mutex);
 -
 -#if 1
--    ngx_stream_lua_shdict_expire(ctx, 1);
+-    ngx_http_lua_shdict_expire(ctx, 1);
 -#endif
 -
--    rc = ngx_stream_lua_shdict_lookup(zone, hash, key, key_len, &sd);
+-    rc = ngx_http_lua_shdict_lookup(zone, hash, key, key_len, &sd);
 -
 -    dd("lookup returns %d", (int) rc);
 -
--    if (op & NGX_STREAM_LUA_SHDICT_REPLACE) {
+-    if (op & NGX_HTTP_LUA_SHDICT_REPLACE) {
 -
 -        if (rc == NGX_DECLINED || rc == NGX_DONE) {
 -            ngx_shmtx_unlock(&ctx->shpool->mutex);
@@ -1917,7 +2112,7 @@ index 7be30e3..0000000
 -        goto replace;
 -    }
 -
--    if (op & NGX_STREAM_LUA_SHDICT_ADD) {
+-    if (op & NGX_HTTP_LUA_SHDICT_ADD) {
 -
 -        if (rc == NGX_OK) {
 -            ngx_shmtx_unlock(&ctx->shpool->mutex);
@@ -1951,14 +2146,12 @@ index 7be30e3..0000000
 -            && sd->value_type != SHDICT_TLIST)
 -        {
 -
--            ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-            ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                           "lua shared dict set: found old entry and value "
 -                           "size matched, reusing it");
 -
 -            ngx_queue_remove(&sd->queue);
 -            ngx_queue_insert_head(&ctx->sh->lru_queue, &sd->queue);
--
--            sd->key_len = (u_short) key_len;
 -
 -            if (exptime > 0) {
 -                tp = ngx_timeofday();
@@ -1971,35 +2164,32 @@ index 7be30e3..0000000
 -
 -            sd->user_flags = user_flags;
 -
--            sd->value_len = (uint32_t) str_value_len;
--
 -            dd("setting value type to %d", value_type);
 -
 -            sd->value_type = (uint8_t) value_type;
 -
--            p = ngx_copy(sd->data, key, key_len);
--            ngx_memcpy(p, str_value_buf, str_value_len);
+-            ngx_memcpy(sd->data + key_len, str_value_buf, str_value_len);
 -
 -            ngx_shmtx_unlock(&ctx->shpool->mutex);
 -
 -            return NGX_OK;
 -        }
 -
--        ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                       "lua shared dict set: found old entry but value size "
 -                       "NOT matched, removing it first");
 -
 -remove:
 -
 -        if (sd->value_type == SHDICT_TLIST) {
--            queue = ngx_stream_lua_shdict_get_list_head(sd, key_len);
+-            queue = ngx_http_lua_shdict_get_list_head(sd, key_len);
 -
 -            for (q = ngx_queue_head(queue);
 -                 q != ngx_queue_sentinel(queue);
 -                 q = ngx_queue_next(q))
 -            {
 -                p = (u_char *) ngx_queue_data(q,
--                                              ngx_stream_lua_shdict_list_node_t,
+-                                              ngx_http_lua_shdict_list_node_t,
 -                                              queue);
 -
 -                ngx_slab_free_locked(ctx->shpool, p);
@@ -2026,11 +2216,11 @@ index 7be30e3..0000000
 -        return NGX_OK;
 -    }
 -
--    ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                   "lua shared dict set: creating a new entry");
 -
 -    n = offsetof(ngx_rbtree_node_t, color)
--        + offsetof(ngx_stream_lua_shdict_node_t, data)
+-        + offsetof(ngx_http_lua_shdict_node_t, data)
 -        + key_len
 -        + str_value_len;
 -
@@ -2038,20 +2228,20 @@ index 7be30e3..0000000
 -
 -    if (node == NULL) {
 -
--        if (op & NGX_STREAM_LUA_SHDICT_SAFE_STORE) {
+-        if (op & NGX_HTTP_LUA_SHDICT_SAFE_STORE) {
 -            ngx_shmtx_unlock(&ctx->shpool->mutex);
 -
 -            *errmsg = "no memory";
 -            return NGX_ERROR;
 -        }
 -
--        ngx_log_debug2(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                       "lua shared dict set: overriding non-expired items "
 -                       "due to memory shortage for entry \"%*s\"", key_len,
 -                       key);
 -
 -        for (i = 0; i < 30; i++) {
--            if (ngx_stream_lua_shdict_expire(ctx, 0) == 0) {
+-            if (ngx_http_lua_shdict_expire(ctx, 0) == 0) {
 -                break;
 -            }
 -
@@ -2071,7 +2261,7 @@ index 7be30e3..0000000
 -
 -allocated:
 -
--    sd = (ngx_stream_lua_shdict_node_t *) &node->color;
+-    sd = (ngx_http_lua_shdict_node_t *) &node->color;
 -
 -    node->key = hash;
 -    sd->key_len = (u_short) key_len;
@@ -2102,7 +2292,7 @@ index 7be30e3..0000000
 -
 -
 -int
--ngx_stream_lua_ffi_shdict_get(ngx_shm_zone_t *zone, u_char *key,
+-ngx_http_lua_ffi_shdict_get(ngx_shm_zone_t *zone, u_char *key,
 -    size_t key_len, int *value_type, u_char **str_value_buf,
 -    size_t *str_value_len, double *num_value, int *user_flags,
 -    int get_stale, int *is_stale, char **err)
@@ -2110,10 +2300,9 @@ index 7be30e3..0000000
 -    ngx_str_t                    name;
 -    uint32_t                     hash;
 -    ngx_int_t                    rc;
+-    ngx_http_lua_shdict_ctx_t   *ctx;
+-    ngx_http_lua_shdict_node_t  *sd;
 -    ngx_str_t                    value;
--
--    ngx_stream_lua_shdict_ctx_t         *ctx;
--    ngx_stream_lua_shdict_node_t        *sd;
 -
 -    *err = NULL;
 -
@@ -2123,7 +2312,7 @@ index 7be30e3..0000000
 -    hash = ngx_crc32_short(key, key_len);
 -
 -#if (NGX_DEBUG)
--    ngx_log_debug3(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-    ngx_log_debug3(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                   "fetching key \"%*s\" in shared dict \"%V\"", key_len,
 -                   key, &name);
 -#endif /* NGX_DEBUG */
@@ -2132,11 +2321,11 @@ index 7be30e3..0000000
 -
 -#if 1
 -    if (!get_stale) {
--        ngx_stream_lua_shdict_expire(ctx, 1);
+-        ngx_http_lua_shdict_expire(ctx, 1);
 -    }
 -#endif
 -
--    rc = ngx_stream_lua_shdict_lookup(zone, hash, key, key_len, &sd);
+-    rc = ngx_http_lua_shdict_lookup(zone, hash, key, key_len, &sd);
 -
 -    dd("shdict lookup returns %d", (int) rc);
 -
@@ -2242,7 +2431,7 @@ index 7be30e3..0000000
 -
 -
 -int
--ngx_stream_lua_ffi_shdict_incr(ngx_shm_zone_t *zone, u_char *key,
+-ngx_http_lua_ffi_shdict_incr(ngx_shm_zone_t *zone, u_char *key,
 -    size_t key_len, double *value, char **err, int has_init, double init,
 -    long init_ttl, int *forcible)
 -{
@@ -2250,13 +2439,12 @@ index 7be30e3..0000000
 -    uint32_t                     hash;
 -    ngx_int_t                    rc;
 -    ngx_time_t                  *tp = NULL;
+-    ngx_http_lua_shdict_ctx_t   *ctx;
+-    ngx_http_lua_shdict_node_t  *sd;
 -    double                       num;
 -    ngx_rbtree_node_t           *node;
 -    u_char                      *p;
 -    ngx_queue_t                 *queue, *q;
--
--    ngx_stream_lua_shdict_ctx_t         *ctx;
--    ngx_stream_lua_shdict_node_t        *sd;
 -
 -    if (init_ttl > 0) {
 -        tp = ngx_timeofday();
@@ -2273,9 +2461,9 @@ index 7be30e3..0000000
 -
 -    ngx_shmtx_lock(&ctx->shpool->mutex);
 -#if 1
--    ngx_stream_lua_shdict_expire(ctx, 1);
+-    ngx_http_lua_shdict_expire(ctx, 1);
 -#endif
--    rc = ngx_stream_lua_shdict_lookup(zone, hash, key, key_len, &sd);
+-    rc = ngx_http_lua_shdict_lookup(zone, hash, key, key_len, &sd);
 -
 -    dd("shdict lookup returned %d", (int) rc);
 -
@@ -2296,7 +2484,7 @@ index 7be30e3..0000000
 -            if ((size_t) sd->value_len == sizeof(double)
 -                && sd->value_type != SHDICT_TLIST)
 -            {
--                ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-                ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                               "lua shared dict incr: found old entry and "
 -                               "value size matched, reusing it");
 -
@@ -2342,18 +2530,18 @@ index 7be30e3..0000000
 -
 -remove:
 -
--    ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                   "lua shared dict incr: found old entry but value size "
 -                   "NOT matched, removing it first");
 -
 -    if (sd->value_type == SHDICT_TLIST) {
--        queue = ngx_stream_lua_shdict_get_list_head(sd, key_len);
+-        queue = ngx_http_lua_shdict_get_list_head(sd, key_len);
 -
 -        for (q = ngx_queue_head(queue);
 -             q != ngx_queue_sentinel(queue);
 -             q = ngx_queue_next(q))
 -        {
--            p = (u_char *) ngx_queue_data(q, ngx_stream_lua_shdict_list_node_t,
+-            p = (u_char *) ngx_queue_data(q, ngx_http_lua_shdict_list_node_t,
 -                                          queue);
 -
 -            ngx_slab_free_locked(ctx->shpool, p);
@@ -2371,11 +2559,11 @@ index 7be30e3..0000000
 -
 -insert:
 -
--    ngx_log_debug0(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                   "lua shared dict incr: creating a new entry");
 -
 -    n = offsetof(ngx_rbtree_node_t, color)
--        + offsetof(ngx_stream_lua_shdict_node_t, data)
+-        + offsetof(ngx_http_lua_shdict_node_t, data)
 -        + key_len
 -        + sizeof(double);
 -
@@ -2383,13 +2571,13 @@ index 7be30e3..0000000
 -
 -    if (node == NULL) {
 -
--        ngx_log_debug2(NGX_LOG_DEBUG_STREAM, ctx->log, 0,
+-        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ctx->log, 0,
 -                       "lua shared dict incr: overriding non-expired items "
 -                       "due to memory shortage for entry \"%*s\"", key_len,
 -                       key);
 -
 -        for (i = 0; i < 30; i++) {
--            if (ngx_stream_lua_shdict_expire(ctx, 0) == 0) {
+-            if (ngx_http_lua_shdict_expire(ctx, 0) == 0) {
 -                break;
 -            }
 -
@@ -2409,7 +2597,7 @@ index 7be30e3..0000000
 -
 -allocated:
 -
--    sd = (ngx_stream_lua_shdict_node_t *) &node->color;
+-    sd = (ngx_http_lua_shdict_node_t *) &node->color;
 -
 -    node->key = hash;
 -
@@ -2448,12 +2636,11 @@ index 7be30e3..0000000
 -
 -
 -int
--ngx_stream_lua_ffi_shdict_flush_all(ngx_shm_zone_t *zone)
+-ngx_http_lua_ffi_shdict_flush_all(ngx_shm_zone_t *zone)
 -{
 -    ngx_queue_t                 *q;
--
--    ngx_stream_lua_shdict_node_t        *sd;
--    ngx_stream_lua_shdict_ctx_t         *ctx;
+-    ngx_http_lua_shdict_node_t  *sd;
+-    ngx_http_lua_shdict_ctx_t   *ctx;
 -
 -    ctx = zone->data;
 -
@@ -2463,11 +2650,11 @@ index 7be30e3..0000000
 -         q != ngx_queue_sentinel(&ctx->sh->lru_queue);
 -         q = ngx_queue_next(q))
 -    {
--        sd = ngx_queue_data(q, ngx_stream_lua_shdict_node_t, queue);
+-        sd = ngx_queue_data(q, ngx_http_lua_shdict_node_t, queue);
 -        sd->expires = 1;
 -    }
 -
--    ngx_stream_lua_shdict_expire(ctx, 0);
+-    ngx_http_lua_shdict_expire(ctx, 0);
 -
 -    ngx_shmtx_unlock(&ctx->shpool->mutex);
 -
@@ -2476,14 +2663,13 @@ index 7be30e3..0000000
 -
 -
 -static ngx_int_t
--ngx_stream_lua_shdict_peek(ngx_shm_zone_t *shm_zone, ngx_uint_t hash,
--    u_char *kdata, size_t klen, ngx_stream_lua_shdict_node_t **sdp)
+-ngx_http_lua_shdict_peek(ngx_shm_zone_t *shm_zone, ngx_uint_t hash,
+-    u_char *kdata, size_t klen, ngx_http_lua_shdict_node_t **sdp)
 -{
 -    ngx_int_t                    rc;
 -    ngx_rbtree_node_t           *node, *sentinel;
--
--    ngx_stream_lua_shdict_ctx_t         *ctx;
--    ngx_stream_lua_shdict_node_t        *sd;
+-    ngx_http_lua_shdict_ctx_t   *ctx;
+-    ngx_http_lua_shdict_node_t  *sd;
 -
 -    ctx = shm_zone->data;
 -
@@ -2504,7 +2690,7 @@ index 7be30e3..0000000
 -
 -        /* hash == node->key */
 -
--        sd = (ngx_stream_lua_shdict_node_t *) &node->color;
+-        sd = (ngx_http_lua_shdict_node_t *) &node->color;
 -
 -        rc = ngx_memn2cmp(kdata, sd->data, klen, (size_t) sd->key_len);
 -
@@ -2524,7 +2710,7 @@ index 7be30e3..0000000
 -
 -
 -long
--ngx_stream_lua_ffi_shdict_get_ttl(ngx_shm_zone_t *zone, u_char *key,
+-ngx_http_lua_ffi_shdict_get_ttl(ngx_shm_zone_t *zone, u_char *key,
 -    size_t key_len)
 -{
 -    uint32_t                     hash;
@@ -2532,16 +2718,15 @@ index 7be30e3..0000000
 -    uint64_t                     expires;
 -    ngx_int_t                    rc;
 -    ngx_time_t                  *tp;
--
--    ngx_stream_lua_shdict_ctx_t         *ctx;
--    ngx_stream_lua_shdict_node_t        *sd;
+-    ngx_http_lua_shdict_ctx_t   *ctx;
+-    ngx_http_lua_shdict_node_t  *sd;
 -
 -    ctx = zone->data;
 -    hash = ngx_crc32_short(key, key_len);
 -
 -    ngx_shmtx_lock(&ctx->shpool->mutex);
 -
--    rc = ngx_stream_lua_shdict_peek(zone, hash, key, key_len, &sd);
+-    rc = ngx_http_lua_shdict_peek(zone, hash, key, key_len, &sd);
 -
 -    if (rc == NGX_DECLINED) {
 -        ngx_shmtx_unlock(&ctx->shpool->mutex);
@@ -2567,15 +2752,14 @@ index 7be30e3..0000000
 -
 -
 -int
--ngx_stream_lua_ffi_shdict_set_expire(ngx_shm_zone_t *zone, u_char *key,
+-ngx_http_lua_ffi_shdict_set_expire(ngx_shm_zone_t *zone, u_char *key,
 -    size_t key_len, long exptime)
 -{
 -    uint32_t                     hash;
 -    ngx_int_t                    rc;
 -    ngx_time_t                  *tp = NULL;
--
--    ngx_stream_lua_shdict_ctx_t         *ctx;
--    ngx_stream_lua_shdict_node_t        *sd;
+-    ngx_http_lua_shdict_ctx_t   *ctx;
+-    ngx_http_lua_shdict_node_t  *sd;
 -
 -    if (exptime > 0) {
 -        tp = ngx_timeofday();
@@ -2586,7 +2770,7 @@ index 7be30e3..0000000
 -
 -    ngx_shmtx_lock(&ctx->shpool->mutex);
 -
--    rc = ngx_stream_lua_shdict_peek(zone, hash, key, key_len, &sd);
+-    rc = ngx_http_lua_shdict_peek(zone, hash, key, key_len, &sd);
 -
 -    if (rc == NGX_DECLINED) {
 -        ngx_shmtx_unlock(&ctx->shpool->mutex);
@@ -2611,19 +2795,18 @@ index 7be30e3..0000000
 -
 -
 -size_t
--ngx_stream_lua_ffi_shdict_capacity(ngx_shm_zone_t *zone)
+-ngx_http_lua_ffi_shdict_capacity(ngx_shm_zone_t *zone)
 -{
 -    return zone->shm.size;
 -}
 -
 -
--#if defined(nginx_version) && nginx_version >= 1011007
+-#if (nginx_version >= 1011007)
 -size_t
--ngx_stream_lua_ffi_shdict_free_space(ngx_shm_zone_t *zone)
+-ngx_http_lua_ffi_shdict_free_space(ngx_shm_zone_t *zone)
 -{
--    size_t         bytes;
--
--    ngx_stream_lua_shdict_ctx_t         *ctx;
+-    size_t                       bytes;
+-    ngx_http_lua_shdict_ctx_t   *ctx;
 -
 -    ctx = zone->data;
 -
@@ -2636,70 +2819,24 @@ index 7be30e3..0000000
 -#endif
 -
 -
--#if (NGX_DARWIN)
--int
--ngx_stream_lua_ffi_shdict_get_macos(ngx_stream_lua_shdict_get_params_t *p)
--{
--    return ngx_stream_lua_ffi_shdict_get(p->zone,
--                                         (u_char *) p->key, p->key_len,
--                                         p->value_type, p->str_value_buf,
--                                         p->str_value_len, p->num_value,
--                                         p->user_flags, p->get_stale,
--                                         p->is_stale, p->errmsg);
--}
--
--
--int
--ngx_stream_lua_ffi_shdict_store_macos(ngx_stream_lua_shdict_store_params_t *p)
--{
--    return ngx_stream_lua_ffi_shdict_store(p->zone, p->op,
--                                           (u_char *) p->key, p->key_len,
--                                           p->value_type,
--                                           (u_char *) p->str_value_buf,
--                                           p->str_value_len, p->num_value,
--                                           p->exptime, p->user_flags,
--                                           p->errmsg, p->forcible);
--}
--
--
--int
--ngx_stream_lua_ffi_shdict_incr_macos(ngx_stream_lua_shdict_incr_params_t *p)
--{
--    return ngx_stream_lua_ffi_shdict_incr(p->zone,
--                                          (u_char *) p->key, p->key_len,
--                                          p->num_value, p->errmsg,
--                                          p->has_init, p->init, p->init_ttl,
--                                          p->forcible);
--}
--#endif
--
--
 -/* vi:set ft=c ts=4 sw=4 et fdm=marker: */
-diff --git src/ngx_stream_lua_shdict.h src/ngx_stream_lua_shdict.h
+diff --git src/ngx_http_lua_shdict.h src/ngx_http_lua_shdict.h
 deleted file mode 100644
-index 3554764..0000000
---- src/ngx_stream_lua_shdict.h
+index 90a0099f..00000000
+--- src/ngx_http_lua_shdict.h
 +++ /dev/null
-@@ -1,121 +0,0 @@
--
--/*
-- * !!! DO NOT EDIT DIRECTLY !!!
-- * This file was automatically generated from the following template:
-- *
-- * src/subsys/ngx_subsys_lua_shdict.h.tt2
-- */
--
+@@ -1,67 +0,0 @@
 -
 -/*
 - * Copyright (C) Yichun Zhang (agentzh)
 - */
 -
 -
--#ifndef _NGX_STREAM_LUA_SHDICT_H_INCLUDED_
--#define _NGX_STREAM_LUA_SHDICT_H_INCLUDED_
+-#ifndef _NGX_HTTP_LUA_SHDICT_H_INCLUDED_
+-#define _NGX_HTTP_LUA_SHDICT_H_INCLUDED_
 -
 -
--#include "ngx_stream_lua_common.h"
+-#include "ngx_http_lua_common.h"
 -
 -
 -typedef struct {
@@ -2711,7 +2848,7 @@ index 3554764..0000000
 -    ngx_queue_t                  queue;
 -    uint32_t                     user_flags;
 -    u_char                       data[1];
--} ngx_stream_lua_shdict_node_t;
+-} ngx_http_lua_shdict_node_t;
 -
 -
 -typedef struct {
@@ -2719,150 +2856,104 @@ index 3554764..0000000
 -    uint32_t                     value_len;
 -    uint8_t                      value_type;
 -    u_char                       data[1];
--} ngx_stream_lua_shdict_list_node_t;
+-} ngx_http_lua_shdict_list_node_t;
 -
 -
 -typedef struct {
 -    ngx_rbtree_t                  rbtree;
 -    ngx_rbtree_node_t             sentinel;
 -    ngx_queue_t                   lru_queue;
--} ngx_stream_lua_shdict_shctx_t;
+-} ngx_http_lua_shdict_shctx_t;
 -
 -
 -typedef struct {
--    ngx_stream_lua_shdict_shctx_t       *sh;
--    ngx_slab_pool_t                     *shpool;
--    ngx_str_t                            name;
--    ngx_stream_lua_main_conf_t          *main_conf;
--    ngx_log_t                           *log;
--} ngx_stream_lua_shdict_ctx_t;
+-    ngx_http_lua_shdict_shctx_t  *sh;
+-    ngx_slab_pool_t              *shpool;
+-    ngx_str_t                     name;
+-    ngx_http_lua_main_conf_t     *main_conf;
+-    ngx_log_t                    *log;
+-} ngx_http_lua_shdict_ctx_t;
 -
 -
 -typedef struct {
--    ngx_log_t                           *log;
--    ngx_stream_lua_main_conf_t          *lmcf;
--    ngx_cycle_t                         *cycle;
--    ngx_shm_zone_t                       zone;
--} ngx_stream_lua_shm_zone_ctx_t;
+-    ngx_log_t                   *log;
+-    ngx_http_lua_main_conf_t    *lmcf;
+-    ngx_cycle_t                 *cycle;
+-    ngx_shm_zone_t               zone;
+-} ngx_http_lua_shm_zone_ctx_t;
 -
 -
--#if (NGX_DARWIN)
--typedef struct {
--    void                  *zone;
--    const unsigned char   *key;
--    size_t                 key_len;
--    int                   *value_type;
--    unsigned char        **str_value_buf;
--    size_t                *str_value_len;
--    double                *num_value;
--    int                   *user_flags;
--    int                    get_stale;
--    int                   *is_stale;
--    char                 **errmsg;
--} ngx_stream_lua_shdict_get_params_t;
--
--
--typedef struct {
--    void                  *zone;
--    int                    op;
--    const unsigned char   *key;
--    size_t                 key_len;
--    int                    value_type;
--    const unsigned char   *str_value_buf;
--    size_t                 str_value_len;
--    double                 num_value;
--    long                   exptime;
--    int                    user_flags;
--    char                 **errmsg;
--    int                   *forcible;
--} ngx_stream_lua_shdict_store_params_t;
--
--
--typedef struct {
--    void                  *zone;
--    const unsigned char   *key;
--    size_t                 key_len;
--    double                *num_value;
--    char                 **errmsg;
--    int                    has_init;
--    double                 init;
--    long                   init_ttl;
--    int                   *forcible;
--} ngx_stream_lua_shdict_incr_params_t;
--#endif
--
--
--ngx_int_t ngx_stream_lua_shdict_init_zone(ngx_shm_zone_t *shm_zone, void *data);
--void ngx_stream_lua_shdict_rbtree_insert_value(ngx_rbtree_node_t *temp,
+-ngx_int_t ngx_http_lua_shdict_init_zone(ngx_shm_zone_t *shm_zone, void *data);
+-void ngx_http_lua_shdict_rbtree_insert_value(ngx_rbtree_node_t *temp,
 -    ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel);
--void ngx_stream_lua_inject_shdict_api(ngx_stream_lua_main_conf_t *lmcf,
+-void ngx_http_lua_inject_shdict_api(ngx_http_lua_main_conf_t *lmcf,
 -    lua_State *L);
 -
 -
--#endif /* _NGX_STREAM_LUA_SHDICT_H_INCLUDED_ */
+-#endif /* _NGX_HTTP_LUA_SHDICT_H_INCLUDED_ */
 -
 -/* vi:set ft=c ts=4 sw=4 et fdm=marker: */
-diff --git src/ngx_stream_lua_util.c src/ngx_stream_lua_util.c
-index 58061b4..ab52d5a 100644
---- src/ngx_stream_lua_util.c
-+++ src/ngx_stream_lua_util.c
-@@ -20,6 +20,7 @@
+diff --git src/ngx_http_lua_util.c src/ngx_http_lua_util.c
+index 5fe9b506..33d6a657 100644
+--- src/ngx_http_lua_util.c
++++ src/ngx_http_lua_util.c
+@@ -12,6 +12,7 @@
  
  
  #include "nginx.h"
 +#include "ngx_meta_lua_api.h"
- #include "ngx_stream_lua_directive.h"
- #include "ngx_stream_lua_util.h"
- #include "ngx_stream_lua_exception.h"
-@@ -31,7 +32,6 @@
- #include "ngx_stream_lua_string.h"
- #include "ngx_stream_lua_misc.h"
- #include "ngx_stream_lua_consts.h"
--#include "ngx_stream_lua_shdict.h"
- #include "ngx_stream_lua_coroutine.h"
- #include "ngx_stream_lua_socket_tcp.h"
- #include "ngx_stream_lua_socket_udp.h"
-@@ -102,7 +102,7 @@ static ngx_int_t ngx_stream_lua_handle_exit(lua_State *L,
- static int ngx_stream_lua_thread_traceback(lua_State *L, lua_State *co,
-     ngx_stream_lua_co_ctx_t *coctx);
- static void ngx_stream_lua_inject_ngx_api(lua_State *L,
--    ngx_stream_lua_main_conf_t *lmcf, ngx_log_t *log);
-+    ngx_cycle_t *cycle, ngx_stream_lua_main_conf_t *lmcf, ngx_log_t *log);
- static ngx_int_t ngx_stream_lua_output_filter(ngx_stream_lua_request_t *r,
-     ngx_chain_t *in);
- static void ngx_stream_lua_finalize_threads(ngx_stream_lua_request_t *r,
-@@ -501,13 +501,13 @@ ngx_stream_lua_init_globals(lua_State *L, ngx_cycle_t *cycle,
-                    "lua initializing lua globals");
+ #include "ngx_http_lua_directive.h"
+ #include "ngx_http_lua_util.h"
+ #include "ngx_http_lua_exception.h"
+@@ -28,7 +29,6 @@
+ #include "ngx_http_lua_string.h"
+ #include "ngx_http_lua_misc.h"
+ #include "ngx_http_lua_consts.h"
+-#include "ngx_http_lua_shdict.h"
+ #include "ngx_http_lua_coroutine.h"
+ #include "ngx_http_lua_socket_tcp.h"
+ #include "ngx_http_lua_socket_udp.h"
+@@ -114,7 +114,7 @@ static ngx_int_t ngx_http_lua_handle_rewrite_jump(lua_State *L,
+ static int ngx_http_lua_thread_traceback(lua_State *L, lua_State *co,
+     ngx_http_lua_co_ctx_t *coctx);
+ static void ngx_http_lua_inject_ngx_api(lua_State *L,
+-    ngx_http_lua_main_conf_t *lmcf, ngx_log_t *log);
++    ngx_cycle_t *cycle, ngx_http_lua_main_conf_t *lmcf, ngx_log_t *log);
+ static void ngx_http_lua_inject_arg_api(lua_State *L);
+ static int ngx_http_lua_param_get(lua_State *L);
+ static int ngx_http_lua_param_set(lua_State *L);
+@@ -808,13 +808,13 @@ ngx_http_lua_init_globals(lua_State *L, ngx_cycle_t *cycle,
+     ngx_http_lua_inject_ndk_api(L);
+ #endif /* defined(NDK) && NDK */
  
- 
--    ngx_stream_lua_inject_ngx_api(L, lmcf, log);
-+    ngx_stream_lua_inject_ngx_api(L, cycle, lmcf, log);
+-    ngx_http_lua_inject_ngx_api(L, lmcf, log);
++    ngx_http_lua_inject_ngx_api(L, cycle, lmcf, log);
  }
  
  
  static void
--ngx_stream_lua_inject_ngx_api(lua_State *L, ngx_stream_lua_main_conf_t *lmcf,
+-ngx_http_lua_inject_ngx_api(lua_State *L, ngx_http_lua_main_conf_t *lmcf,
 -    ngx_log_t *log)
-+ngx_stream_lua_inject_ngx_api(lua_State *L, ngx_cycle_t *cycle,
-+    ngx_stream_lua_main_conf_t *lmcf, ngx_log_t *log)
++ngx_http_lua_inject_ngx_api(lua_State *L, ngx_cycle_t *cycle,
++    ngx_http_lua_main_conf_t *lmcf, ngx_log_t *log)
  {
      lua_createtable(L, 0 /* narr */, 113 /* nrec */);    /* ngx.* */
  
-@@ -529,7 +529,7 @@ ngx_stream_lua_inject_ngx_api(lua_State *L, ngx_stream_lua_main_conf_t *lmcf,
-     ngx_stream_lua_inject_req_api(log, L);
- 
- 
--    ngx_stream_lua_inject_shdict_api(lmcf, L);
-+    ngx_meta_lua_inject_shdict_api(L, cycle, &ngx_stream_lua_module);
-     ngx_stream_lua_inject_socket_tcp_api(log, L);
-     ngx_stream_lua_inject_socket_udp_api(log, L);
-     ngx_stream_lua_inject_uthread_api(log, L);
-diff --git src/ngx_stream_lua_util.h src/ngx_stream_lua_util.h
-index 61d0727..5610d5e 100644
---- src/ngx_stream_lua_util.h
-+++ src/ngx_stream_lua_util.h
-@@ -353,7 +353,9 @@ ngx_stream_lua_create_ctx(ngx_stream_session_t *r)
-         ngx_stream_lua_assert(L != NULL);
+@@ -836,7 +836,7 @@ ngx_http_lua_inject_ngx_api(lua_State *L, ngx_http_lua_main_conf_t *lmcf,
+     ngx_http_lua_inject_req_api(log, L);
+     ngx_http_lua_inject_resp_header_api(L);
+     ngx_http_lua_create_headers_metatable(log, L);
+-    ngx_http_lua_inject_shdict_api(lmcf, L);
++    ngx_meta_lua_inject_shdict_api(L, cycle, &ngx_http_lua_module);
+     ngx_http_lua_inject_socket_tcp_api(log, L);
+     ngx_http_lua_inject_socket_udp_api(log, L);
+     ngx_http_lua_inject_uthread_api(log, L);
+diff --git src/ngx_http_lua_util.h src/ngx_http_lua_util.h
+index 1768e5e2..9c5d26de 100644
+--- src/ngx_http_lua_util.h
++++ src/ngx_http_lua_util.h
+@@ -327,7 +327,9 @@ ngx_http_lua_create_ctx(ngx_http_request_t *r)
+         ngx_http_lua_assert(L != NULL);
  
          if (lmcf->init_handler) {
 -            if (lmcf->init_handler(r->connection->log, lmcf, L) != NGX_OK) {

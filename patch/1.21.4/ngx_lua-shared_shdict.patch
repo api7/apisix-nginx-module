@@ -1,8 +1,8 @@
 diff --git config config
-index 4b32d383..06ec0da0 100644
+index 0e572c8b..a688cf61 100644
 --- config
 +++ config
-@@ -268,7 +268,6 @@ HTTP_LUA_SRCS=" \
+@@ -269,7 +269,6 @@ HTTP_LUA_SRCS=" \
              $ngx_addon_dir/src/ngx_http_lua_clfactory.c \
              $ngx_addon_dir/src/ngx_http_lua_pcrefix.c \
              $ngx_addon_dir/src/ngx_http_lua_headerfilterby.c \
@@ -10,7 +10,7 @@ index 4b32d383..06ec0da0 100644
              $ngx_addon_dir/src/ngx_http_lua_socket_tcp.c \
              $ngx_addon_dir/src/ngx_http_lua_api.c \
              $ngx_addon_dir/src/ngx_http_lua_logby.c \
-@@ -330,7 +329,6 @@ HTTP_LUA_DEPS=" \
+@@ -334,7 +333,6 @@ HTTP_LUA_DEPS=" \
              $ngx_addon_dir/src/ngx_http_lua_clfactory.h \
              $ngx_addon_dir/src/ngx_http_lua_pcrefix.h \
              $ngx_addon_dir/src/ngx_http_lua_headerfilterby.h \
@@ -19,10 +19,10 @@ index 4b32d383..06ec0da0 100644
              $ngx_addon_dir/src/api/ngx_http_lua_api.h \
              $ngx_addon_dir/src/ngx_http_lua_logby.h \
 diff --git src/api/ngx_http_lua_api.h src/api/ngx_http_lua_api.h
-index 43f90bd0..7530add0 100644
+index 640e0c39..11245d2f 100644
 --- src/api/ngx_http_lua_api.h
 +++ src/api/ngx_http_lua_api.h
-@@ -48,14 +48,6 @@ ngx_http_request_t *ngx_http_lua_get_request(lua_State *L);
+@@ -51,14 +51,6 @@ ngx_http_request_t *ngx_http_lua_get_request(lua_State *L);
  ngx_int_t ngx_http_lua_add_package_preload(ngx_conf_t *cf, const char *package,
      lua_CFunction func);
  
@@ -34,11 +34,11 @@ index 43f90bd0..7530add0 100644
 -ngx_shm_zone_t *ngx_http_lua_shared_memory_add(ngx_conf_t *cf, ngx_str_t *name,
 -    size_t size, void *tag);
 -
+ ngx_http_lua_co_ctx_t *ngx_http_lua_get_cur_co_ctx(ngx_http_request_t *r);
  
- #endif /* _NGX_HTTP_LUA_API_H_INCLUDED_ */
- 
+ void ngx_http_lua_set_cur_co_ctx(ngx_http_request_t *r,
 diff --git src/ngx_http_lua_api.c src/ngx_http_lua_api.c
-index b69d627d..691b3212 100644
+index 0d3ec9c9..e01cddbb 100644
 --- src/ngx_http_lua_api.c
 +++ src/ngx_http_lua_api.c
 @@ -12,7 +12,6 @@
@@ -60,7 +60,7 @@ index b69d627d..691b3212 100644
  ngx_int_t
  ngx_http_lua_add_package_preload(ngx_conf_t *cf, const char *package,
      lua_CFunction func)
-@@ -83,134 +78,4 @@ ngx_http_lua_add_package_preload(ngx_conf_t *cf, const char *package,
+@@ -83,137 +78,6 @@ ngx_http_lua_add_package_preload(ngx_conf_t *cf, const char *package,
  }
  
  
@@ -194,21 +194,23 @@ index b69d627d..691b3212 100644
 -    return NGX_OK;
 -}
 -
- /* vi:set ft=c ts=4 sw=4 et fdm=marker: */
+-
+ ngx_http_lua_co_ctx_t *
+ ngx_http_lua_get_cur_co_ctx(ngx_http_request_t *r)
+ {
 diff --git src/ngx_http_lua_common.h src/ngx_http_lua_common.h
-index 0751a112..1e2e4fe1 100644
+index 84350454..84f9ce3f 100644
 --- src/ngx_http_lua_common.h
 +++ src/ngx_http_lua_common.h
-@@ -23,6 +23,8 @@
+@@ -23,6 +23,7 @@
  #include <lualib.h>
  #include <lauxlib.h>
  
 +#include "ngx_meta_lua_api.h"
-+
  
  #if defined(NDK) && NDK
  #include <ndk.h>
-@@ -67,6 +69,10 @@ typedef struct {
+@@ -68,6 +69,10 @@ typedef struct {
  #   error at least nginx 1.6.0 is required but found an older version
  #endif
  
@@ -219,7 +221,7 @@ index 0751a112..1e2e4fe1 100644
  #if LUA_VERSION_NUM != 501
  #   error unsupported Lua language version
  #endif
-@@ -169,9 +175,6 @@ typedef struct ngx_http_lua_posted_thread_s  ngx_http_lua_posted_thread_t;
+@@ -172,9 +177,6 @@ typedef struct ngx_http_lua_posted_thread_s  ngx_http_lua_posted_thread_t;
  typedef struct ngx_http_lua_balancer_peer_data_s
      ngx_http_lua_balancer_peer_data_t;
  
@@ -229,7 +231,7 @@ index 0751a112..1e2e4fe1 100644
  typedef ngx_int_t (*ngx_http_lua_srv_conf_handler_pt)(ngx_http_request_t *r,
      ngx_http_lua_srv_conf_t *lscf, lua_State *L);
  
-@@ -221,22 +224,18 @@ struct ngx_http_lua_main_conf_s {
+@@ -226,24 +228,20 @@ struct ngx_http_lua_main_conf_s {
  #   endif
  #endif
  
@@ -245,38 +247,39 @@ index 0751a112..1e2e4fe1 100644
 -    ngx_http_lua_main_conf_handler_pt    init_handler;
 +    ngx_meta_lua_main_conf_handler_pt    init_handler;
      ngx_str_t                            init_src;
+     u_char                              *init_chunkname;
  
 -    ngx_http_lua_main_conf_handler_pt    init_worker_handler;
 +    ngx_meta_lua_main_conf_handler_pt    init_worker_handler;
      ngx_str_t                            init_worker_src;
+     u_char                              *init_worker_chunkname;
  
 -    ngx_http_lua_main_conf_handler_pt    exit_worker_handler;
 +    ngx_meta_lua_main_conf_handler_pt    exit_worker_handler;
      ngx_str_t                            exit_worker_src;
+     u_char                              *exit_worker_chunkname;
  
-     ngx_http_lua_balancer_peer_data_t      *balancer_peer_data;
-@@ -267,8 +266,6 @@ struct ngx_http_lua_main_conf_s {
+@@ -275,7 +273,6 @@ struct ngx_http_lua_main_conf_s {
                       * main conf.
                       */
  
 -    ngx_uint_t                      shm_zones_inited;
--
+ 
      ngx_http_lua_sema_mm_t         *sema_mm;
  
-     ngx_uint_t           malloc_trim_cycle;  /* a cycle is defined as the number
-@@ -294,7 +291,6 @@ struct ngx_http_lua_main_conf_s {
+@@ -306,7 +303,6 @@ struct ngx_http_lua_main_conf_s {
      unsigned             requires_rewrite:1;
      unsigned             requires_access:1;
      unsigned             requires_log:1;
 -    unsigned             requires_shm:1;
      unsigned             requires_capture_log:1;
+     unsigned             requires_server_rewrite:1;
  };
- 
 diff --git src/ngx_http_lua_directive.c src/ngx_http_lua_directive.c
-index 1ec641e0..6d4329a1 100644
+index f42aae9d..1fb66b2e 100644
 --- src/ngx_http_lua_directive.c
 +++ src/ngx_http_lua_directive.c
-@@ -24,7 +24,6 @@
+@@ -25,7 +25,6 @@
  #include "ngx_http_lua_initby.h"
  #include "ngx_http_lua_initworkerby.h"
  #include "ngx_http_lua_exitworkerby.h"
@@ -284,7 +287,7 @@ index 1ec641e0..6d4329a1 100644
  #include "ngx_http_lua_ssl_certby.h"
  #include "ngx_http_lua_lex.h"
  #include "api/ngx_http_lua_api.h"
-@@ -71,91 +70,6 @@ enum {
+@@ -76,91 +75,6 @@ enum {
  };
  
  
@@ -376,7 +379,7 @@ index 1ec641e0..6d4329a1 100644
  char *
  ngx_http_lua_code_cache(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
  {
-@@ -191,6 +105,15 @@ ngx_http_lua_load_resty_core(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+@@ -185,6 +99,15 @@ ngx_http_lua_code_cache(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
  }
  
  
@@ -390,9 +393,9 @@ index 1ec641e0..6d4329a1 100644
 +
 +
  char *
- ngx_http_lua_package_cpath(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+ ngx_http_lua_load_resty_core(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
  {
-@@ -1121,7 +1044,7 @@ ngx_http_lua_init_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
+@@ -1262,7 +1185,7 @@ ngx_http_lua_init_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
          return NGX_CONF_ERROR;
      }
  
@@ -401,7 +404,7 @@ index 1ec641e0..6d4329a1 100644
  
      if (cmd->post == ngx_http_lua_init_by_file) {
          name = ngx_http_lua_rebase_path(cf->pool, value[1].data,
-@@ -1181,7 +1104,7 @@ ngx_http_lua_init_worker_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
+@@ -1333,7 +1256,7 @@ ngx_http_lua_init_worker_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
  
      value = cf->args->elts;
  
@@ -410,7 +413,7 @@ index 1ec641e0..6d4329a1 100644
  
      if (cmd->post == ngx_http_lua_init_worker_by_file) {
          name = ngx_http_lua_rebase_path(cf->pool, value[1].data,
-@@ -1239,7 +1162,7 @@ ngx_http_lua_exit_worker_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
+@@ -1401,7 +1324,7 @@ ngx_http_lua_exit_worker_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
  
      value = cf->args->elts;
  
@@ -420,7 +423,7 @@ index 1ec641e0..6d4329a1 100644
      if (cmd->post == ngx_http_lua_exit_worker_by_file) {
          name = ngx_http_lua_rebase_path(cf->pool, value[1].data,
 diff --git src/ngx_http_lua_directive.h src/ngx_http_lua_directive.h
-index adfba127..83d082ee 100644
+index 4bec5e30..d91315c4 100644
 --- src/ngx_http_lua_directive.h
 +++ src/ngx_http_lua_directive.h
 @@ -12,7 +12,7 @@
@@ -433,10 +436,10 @@ index adfba127..83d082ee 100644
      void *conf);
  char *ngx_http_lua_package_path(ngx_conf_t *cf, ngx_command_t *cmd,
 diff --git src/ngx_http_lua_exitworkerby.c src/ngx_http_lua_exitworkerby.c
-index cd59dc4b..9765c218 100644
+index e8f65110..5f9079bc 100644
 --- src/ngx_http_lua_exitworkerby.c
 +++ src/ngx_http_lua_exitworkerby.c
-@@ -67,7 +67,8 @@ ngx_http_lua_exit_worker(ngx_cycle_t *cycle)
+@@ -75,7 +75,8 @@ ngx_http_lua_exit_worker(ngx_cycle_t *cycle)
  
      ngx_http_lua_set_req(lmcf->lua, r);
  
@@ -446,7 +449,7 @@ index cd59dc4b..9765c218 100644
  
      ngx_destroy_pool(c->pool);
      return;
-@@ -84,12 +85,12 @@ failed:
+@@ -92,20 +93,12 @@ failed:
  
  ngx_int_t
  ngx_http_lua_exit_worker_by_inline(ngx_log_t *log,
@@ -454,15 +457,23 @@ index cd59dc4b..9765c218 100644
 +    ngx_str_t init_src, lua_State *L)
  {
      int         status;
+-    const char *chunkname;
  
+-    if (lmcf->exit_worker_chunkname == NULL) {
+-        chunkname = "=exit_worker_by_lua";
+-
+-    } else {
+-        chunkname = (const char *) lmcf->exit_worker_chunkname;
+-    }
+-
 -    status = luaL_loadbuffer(L, (char *) lmcf->exit_worker_src.data,
--                             lmcf->exit_worker_src.len, "=exit_worker_by_lua")
+-                             lmcf->exit_worker_src.len, chunkname)
 +    status = luaL_loadbuffer(L, (char *) init_src.data, init_src.len,
 +                             "=exit_worker_by_lua")
               || ngx_http_lua_do_call(log, L);
  
      return ngx_http_lua_report(log, L, status, "exit_worker_by_lua");
-@@ -97,12 +98,12 @@ ngx_http_lua_exit_worker_by_inline(ngx_log_t *log,
+@@ -113,12 +106,12 @@ ngx_http_lua_exit_worker_by_inline(ngx_log_t *log,
  
  
  ngx_int_t
@@ -495,7 +506,7 @@ index 3a4274c0..ad8f63b6 100644
  void ngx_http_lua_exit_worker(ngx_cycle_t *cycle);
  
 diff --git src/ngx_http_lua_headerfilterby.c src/ngx_http_lua_headerfilterby.c
-index 4741c722..ed0c3a6c 100644
+index 71553558..86c58754 100644
 --- src/ngx_http_lua_headerfilterby.c
 +++ src/ngx_http_lua_headerfilterby.c
 @@ -19,7 +19,6 @@
@@ -507,10 +518,10 @@ index 4741c722..ed0c3a6c 100644
  
  static ngx_http_output_header_filter_pt ngx_http_next_header_filter;
 diff --git src/ngx_http_lua_initby.c src/ngx_http_lua_initby.c
-index e8941da6..4e8d898f 100644
+index 1f956e7e..4e8d898f 100644
 --- src/ngx_http_lua_initby.c
 +++ src/ngx_http_lua_initby.c
-@@ -14,13 +14,13 @@
+@@ -14,22 +14,13 @@
  
  
  ngx_int_t
@@ -519,15 +530,24 @@ index e8941da6..4e8d898f 100644
      lua_State *L)
  {
      int         status;
+-    const char *chunkname;
  
+-
+-    if (lmcf->init_chunkname == NULL) {
+-        chunkname = "=init_by_lua";
+-
+-    } else {
+-        chunkname = (const char *) lmcf->init_chunkname;
+-    }
+-
 -    status = luaL_loadbuffer(L, (char *) lmcf->init_src.data,
--                             lmcf->init_src.len, "=init_by_lua")
+-                             lmcf->init_src.len, chunkname)
 +    status = luaL_loadbuffer(L, (char *) init_src.data, init_src.len,
 +                             "=init_by_lua")
               || ngx_http_lua_do_call(log, L);
  
      return ngx_http_lua_report(log, L, status, "init_by_lua");
-@@ -28,12 +28,12 @@ ngx_http_lua_init_by_inline(ngx_log_t *log, ngx_http_lua_main_conf_t *lmcf,
+@@ -37,12 +28,12 @@ ngx_http_lua_init_by_inline(ngx_log_t *log, ngx_http_lua_main_conf_t *lmcf,
  
  
  ngx_int_t
@@ -560,20 +580,20 @@ index 67ac0b6c..cbd439aa 100644
  
  #endif /* _NGX_HTTP_LUA_INITBY_H_INCLUDED_ */
 diff --git src/ngx_http_lua_initworkerby.c src/ngx_http_lua_initworkerby.c
-index 94de796a..bba63c5b 100644
+index 449e604a..41ce55b8 100644
 --- src/ngx_http_lua_initworkerby.c
 +++ src/ngx_http_lua_initworkerby.c
-@@ -293,7 +293,8 @@ ngx_http_lua_init_worker(ngx_cycle_t *cycle)
+@@ -295,7 +295,8 @@ ngx_http_lua_init_worker(ngx_cycle_t *cycle)
  
      ngx_http_lua_set_req(lmcf->lua, r);
  
 -    (void) lmcf->init_worker_handler(cycle->log, lmcf, lmcf->lua);
 +    (void) lmcf->init_worker_handler(cycle->log, lmcf->init_worker_src,
-+                                     lmcf->lua);
++                                    lmcf->lua);
  
      ngx_destroy_pool(c->pool);
      return NGX_OK;
-@@ -314,12 +315,12 @@ failed:
+@@ -316,20 +317,12 @@ failed:
  
  ngx_int_t
  ngx_http_lua_init_worker_by_inline(ngx_log_t *log,
@@ -581,22 +601,29 @@ index 94de796a..bba63c5b 100644
 +    ngx_str_t init_worker_src, lua_State *L)
  {
      int         status;
+-    const char *chunkname;
  
+-    if (lmcf->init_worker_chunkname == NULL) {
+-        chunkname = "=init_worker_by_lua";
+-
+-    } else {
+-        chunkname = (const char *) lmcf->init_worker_chunkname;
+-    }
+-
 -    status = luaL_loadbuffer(L, (char *) lmcf->init_worker_src.data,
--                             lmcf->init_worker_src.len, "=init_worker_by_lua")
+-                             lmcf->init_worker_src.len, chunkname)
 +    status = luaL_loadbuffer(L, (char *) init_worker_src.data,
 +                             init_worker_src.len, "=init_worker_by_lua")
               || ngx_http_lua_do_call(log, L);
  
      return ngx_http_lua_report(log, L, status, "init_worker_by_lua");
-@@ -327,12 +328,12 @@ ngx_http_lua_init_worker_by_inline(ngx_log_t *log,
+@@ -337,12 +330,12 @@ ngx_http_lua_init_worker_by_inline(ngx_log_t *log,
  
  
  ngx_int_t
 -ngx_http_lua_init_worker_by_file(ngx_log_t *log, ngx_http_lua_main_conf_t *lmcf,
--    lua_State *L)
-+ngx_http_lua_init_worker_by_file(ngx_log_t *log,
-+    ngx_str_t init_worker_src, lua_State *L)
++ngx_http_lua_init_worker_by_file(ngx_log_t *log, ngx_str_t init_worker_src,
+     lua_State *L)
  {
      int         status;
  
@@ -635,18 +662,19 @@ index b47058be..a31d424b 100644
  #include <malloc.h>
  #endif
 diff --git src/ngx_http_lua_module.c src/ngx_http_lua_module.c
-index 7358a956..857deb45 100644
+index 16f44246..ea40b587 100644
 --- src/ngx_http_lua_module.c
 +++ src/ngx_http_lua_module.c
-@@ -11,6 +11,7 @@
+@@ -10,7 +10,7 @@
+ #endif
  #include "ddebug.h"
  
- 
+-
 +#include "ngx_meta_lua_api.h"
  #include "ngx_http_lua_directive.h"
  #include "ngx_http_lua_capturefilter.h"
  #include "ngx_http_lua_contentby.h"
-@@ -108,7 +109,7 @@ static ngx_command_t ngx_http_lua_cmds[] = {
+@@ -120,7 +120,7 @@ static ngx_command_t ngx_http_lua_cmds[] = {
  
      { ngx_string("lua_shared_dict"),
        NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE2,
@@ -655,7 +683,7 @@ index 7358a956..857deb45 100644
        0,
        0,
        NULL },
-@@ -671,7 +672,6 @@ ngx_http_lua_init(ngx_conf_t *cf)
+@@ -728,7 +728,6 @@ ngx_http_lua_init(ngx_conf_t *cf)
      ngx_int_t                   rc;
      ngx_array_t                *arr;
      ngx_http_handler_pt        *h;
@@ -663,7 +691,7 @@ index 7358a956..857deb45 100644
      ngx_http_core_main_conf_t  *cmcf;
      ngx_http_lua_main_conf_t   *lmcf;
      ngx_pool_cleanup_t         *cln;
-@@ -850,18 +850,11 @@ ngx_http_lua_init(ngx_conf_t *cf)
+@@ -917,19 +916,12 @@ ngx_http_lua_init(ngx_conf_t *cf)
  
          ngx_http_lua_assert(lmcf->lua != NULL);
  
@@ -679,15 +707,17 @@ index 7358a956..857deb45 100644
 -                /* an error happened */
 -                return NGX_ERROR;
 -            }
+-        }
 +        if (ngx_meta_lua_post_init_handler(cf, lmcf->init_handler,
 +                                           lmcf->init_src, lmcf->lua)
 +            != NGX_OK)
 +        {
 +            return NGX_ERROR;
-         }
++         }
  
          dd("Lua VM initialized!");
-@@ -921,11 +914,8 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
+     }
+@@ -988,11 +980,8 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
       *      lmcf->watcher = NULL;
       *      lmcf->regex_cache_entries = 0;
       *      lmcf->jit_stack = NULL;
@@ -699,7 +729,7 @@ index 7358a956..857deb45 100644
       *      lmcf->preload_hooks = NULL;
       *      lmcf->requires_header_filter = 0;
       *      lmcf->requires_body_filter = 0;
-@@ -933,7 +923,6 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
+@@ -1000,7 +989,6 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
       *      lmcf->requires_rewrite = 0;
       *      lmcf->requires_access = 0;
       *      lmcf->requires_log = 0;
@@ -708,7 +738,7 @@ index 7358a956..857deb45 100644
  
      lmcf->pool = cf->pool;
 diff --git src/ngx_http_lua_setby.c src/ngx_http_lua_setby.c
-index f00468c9..c6ef36f4 100644
+index 98e8d47f..4994ccd2 100644
 --- src/ngx_http_lua_setby.c
 +++ src/ngx_http_lua_setby.c
 @@ -19,7 +19,6 @@
@@ -721,10 +751,10 @@ index f00468c9..c6ef36f4 100644
  
 diff --git src/ngx_http_lua_shdict.c src/ngx_http_lua_shdict.c
 deleted file mode 100644
-index 07effa88..00000000
+index 2e0b0440..00000000
 --- src/ngx_http_lua_shdict.c
 +++ /dev/null
-@@ -1,2095 +0,0 @@
+@@ -1,2132 +0,0 @@
 -
 -/*
 - * Copyright (C) Yichun Zhang (agentzh)
@@ -1670,7 +1700,7 @@ index 07effa88..00000000
 -
 -        ngx_shmtx_unlock(&ctx->shpool->mutex);
 -
--        lua_pushboolean(L, 0);
+-        lua_pushnil(L);
 -        lua_pushliteral(L, "no memory");
 -        return 2;
 -    }
@@ -2819,13 +2849,50 @@ index 07effa88..00000000
 -#endif
 -
 -
+-#if (NGX_DARWIN)
+-int
+-ngx_http_lua_ffi_shdict_get_macos(ngx_http_lua_shdict_get_params_t *p)
+-{
+-    return ngx_http_lua_ffi_shdict_get(p->zone,
+-                                       (u_char *) p->key, p->key_len,
+-                                       p->value_type, p->str_value_buf,
+-                                       p->str_value_len, p->num_value,
+-                                       p->user_flags, p->get_stale,
+-                                       p->is_stale, p->errmsg);
+-}
+-
+-
+-int
+-ngx_http_lua_ffi_shdict_store_macos(ngx_http_lua_shdict_store_params_t *p)
+-{
+-    return ngx_http_lua_ffi_shdict_store(p->zone, p->op,
+-                                         (u_char *) p->key, p->key_len,
+-                                         p->value_type,
+-                                         (u_char *) p->str_value_buf,
+-                                         p->str_value_len, p->num_value,
+-                                         p->exptime, p->user_flags,
+-                                         p->errmsg, p->forcible);
+-}
+-
+-
+-int
+-ngx_http_lua_ffi_shdict_incr_macos(ngx_http_lua_shdict_incr_params_t *p)
+-{
+-    return ngx_http_lua_ffi_shdict_incr(p->zone, (u_char *) p->key, p->key_len,
+-                                        p->num_value, p->errmsg,
+-                                        p->has_init, p->init, p->init_ttl,
+-                                        p->forcible);
+-}
+-#endif
+-
+-
 -/* vi:set ft=c ts=4 sw=4 et fdm=marker: */
 diff --git src/ngx_http_lua_shdict.h src/ngx_http_lua_shdict.h
 deleted file mode 100644
-index 90a0099f..00000000
+index 67dd4d4e..00000000
 --- src/ngx_http_lua_shdict.h
 +++ /dev/null
-@@ -1,67 +0,0 @@
+@@ -1,113 +0,0 @@
 -
 -/*
 - * Copyright (C) Yichun Zhang (agentzh)
@@ -2883,6 +2950,52 @@ index 90a0099f..00000000
 -} ngx_http_lua_shm_zone_ctx_t;
 -
 -
+-#if (NGX_DARWIN)
+-typedef struct {
+-    void                  *zone;
+-    const unsigned char   *key;
+-    size_t                 key_len;
+-    int                   *value_type;
+-    unsigned char        **str_value_buf;
+-    size_t                *str_value_len;
+-    double                *num_value;
+-    int                   *user_flags;
+-    int                    get_stale;
+-    int                   *is_stale;
+-    char                 **errmsg;
+-} ngx_http_lua_shdict_get_params_t;
+-
+-
+-typedef struct {
+-    void                  *zone;
+-    int                    op;
+-    const unsigned char   *key;
+-    size_t                 key_len;
+-    int                    value_type;
+-    const unsigned char   *str_value_buf;
+-    size_t                 str_value_len;
+-    double                 num_value;
+-    long                   exptime;
+-    int                    user_flags;
+-    char                 **errmsg;
+-    int                   *forcible;
+-} ngx_http_lua_shdict_store_params_t;
+-
+-
+-typedef struct {
+-    void                  *zone;
+-    const unsigned char   *key;
+-    size_t                 key_len;
+-    double                *num_value;
+-    char                 **errmsg;
+-    int                    has_init;
+-    double                 init;
+-    long                   init_ttl;
+-    int                   *forcible;
+-} ngx_http_lua_shdict_incr_params_t;
+-#endif
+-
+-
 -ngx_int_t ngx_http_lua_shdict_init_zone(ngx_shm_zone_t *shm_zone, void *data);
 -void ngx_http_lua_shdict_rbtree_insert_value(ngx_rbtree_node_t *temp,
 -    ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel);
@@ -2894,7 +3007,7 @@ index 90a0099f..00000000
 -
 -/* vi:set ft=c ts=4 sw=4 et fdm=marker: */
 diff --git src/ngx_http_lua_util.c src/ngx_http_lua_util.c
-index 5fe9b506..33d6a657 100644
+index 8fd26561..2e5a3b45 100644
 --- src/ngx_http_lua_util.c
 +++ src/ngx_http_lua_util.c
 @@ -12,6 +12,7 @@
@@ -2913,16 +3026,16 @@ index 5fe9b506..33d6a657 100644
  #include "ngx_http_lua_coroutine.h"
  #include "ngx_http_lua_socket_tcp.h"
  #include "ngx_http_lua_socket_udp.h"
-@@ -114,7 +114,7 @@ static ngx_int_t ngx_http_lua_handle_rewrite_jump(lua_State *L,
+@@ -117,7 +117,7 @@ static ngx_int_t ngx_http_lua_handle_rewrite_jump(lua_State *L,
  static int ngx_http_lua_thread_traceback(lua_State *L, lua_State *co,
      ngx_http_lua_co_ctx_t *coctx);
  static void ngx_http_lua_inject_ngx_api(lua_State *L,
 -    ngx_http_lua_main_conf_t *lmcf, ngx_log_t *log);
 +    ngx_cycle_t *cycle, ngx_http_lua_main_conf_t *lmcf, ngx_log_t *log);
  static void ngx_http_lua_inject_arg_api(lua_State *L);
- static int ngx_http_lua_param_get(lua_State *L);
  static int ngx_http_lua_param_set(lua_State *L);
-@@ -808,13 +808,13 @@ ngx_http_lua_init_globals(lua_State *L, ngx_cycle_t *cycle,
+ static ngx_int_t ngx_http_lua_output_filter(ngx_http_request_t *r,
+@@ -817,12 +817,12 @@ ngx_http_lua_init_globals(lua_State *L, ngx_cycle_t *cycle,
      ngx_http_lua_inject_ndk_api(L);
  #endif /* defined(NDK) && NDK */
  
@@ -2933,13 +3046,11 @@ index 5fe9b506..33d6a657 100644
  
  static void
 -ngx_http_lua_inject_ngx_api(lua_State *L, ngx_http_lua_main_conf_t *lmcf,
--    ngx_log_t *log)
-+ngx_http_lua_inject_ngx_api(lua_State *L, ngx_cycle_t *cycle,
-+    ngx_http_lua_main_conf_t *lmcf, ngx_log_t *log)
++ngx_http_lua_inject_ngx_api(lua_State *L, ngx_cycle_t *cycle, ngx_http_lua_main_conf_t *lmcf,
+     ngx_log_t *log)
  {
-     lua_createtable(L, 0 /* narr */, 113 /* nrec */);    /* ngx.* */
- 
-@@ -836,7 +836,7 @@ ngx_http_lua_inject_ngx_api(lua_State *L, ngx_http_lua_main_conf_t *lmcf,
+     lua_createtable(L, 0 /* narr */, 115 /* nrec */);    /* ngx.* */
+@@ -845,7 +845,7 @@ ngx_http_lua_inject_ngx_api(lua_State *L, ngx_http_lua_main_conf_t *lmcf,
      ngx_http_lua_inject_req_api(log, L);
      ngx_http_lua_inject_resp_header_api(L);
      ngx_http_lua_create_headers_metatable(log, L);
@@ -2949,17 +3060,37 @@ index 5fe9b506..33d6a657 100644
      ngx_http_lua_inject_socket_udp_api(log, L);
      ngx_http_lua_inject_uthread_api(log, L);
 diff --git src/ngx_http_lua_util.h src/ngx_http_lua_util.h
-index 1768e5e2..9c5d26de 100644
+index faea7a07..20d5410a 100644
 --- src/ngx_http_lua_util.h
 +++ src/ngx_http_lua_util.h
-@@ -327,7 +327,9 @@ ngx_http_lua_create_ctx(ngx_http_request_t *r)
+@@ -334,7 +334,7 @@ ngx_http_lua_create_ctx(ngx_http_request_t *r)
          ngx_http_lua_assert(L != NULL);
  
          if (lmcf->init_handler) {
 -            if (lmcf->init_handler(r->connection->log, lmcf, L) != NGX_OK) {
-+            if (lmcf->init_handler(r->connection->log, lmcf->init_src, L)
-+                != NGX_OK)
-+            {
++            if (lmcf->init_handler(r->connection->log, lmcf->init_src, L) != NGX_OK) {
                  /* an error happened */
                  return NULL;
              }
+diff --git src/ngx_http_lua_worker_thread.c src/ngx_http_lua_worker_thread.c
+index ed7b0892..26aa1295 100644
+--- src/ngx_http_lua_worker_thread.c
++++ src/ngx_http_lua_worker_thread.c
+@@ -16,7 +16,7 @@
+ #include "ngx_http_lua_util.h"
+ #include "ngx_http_lua_string.h"
+ #include "ngx_http_lua_config.h"
+-#include "ngx_http_lua_shdict.h"
++#include "ngx_meta_lua_api.h"
+ 
+ #ifndef STRINGIFY
+ #define TOSTRING(x)  #x
+@@ -154,7 +154,7 @@ ngx_http_lua_get_task_ctx(lua_State *L, ngx_http_request_t *r)
+         lua_newtable(vm);    /* ngx.* */
+         ngx_http_lua_inject_string_api(vm);
+         ngx_http_lua_inject_config_api(vm);
+-        ngx_http_lua_inject_shdict_api(lmcf, vm);
++        ngx_meta_lua_inject_shdict_api(vm, lmcf->cycle, &ngx_http_lua_module);
+         lua_setglobal(vm, "ngx");
+ 
+         /* inject API via ffi */
