@@ -16,10 +16,10 @@ index 3caabe2..6361a23 100644
  	$(INSTALL) lib/ngx/ssl/*.lua $(DESTDIR)$(LUA_LIB_DIR)/ngx/ssl/
  
 diff --git lib/resty/core.lua lib/resty/core.lua
-index 5472230..7d3ab16 100644
+index e92084c..fd823ce 100644
 --- lib/resty/core.lua
 +++ lib/resty/core.lua
-@@ -23,6 +23,7 @@ if subsystem == 'http' then
+@@ -25,6 +25,7 @@ if subsystem == 'http' then
  end
  
  
@@ -29,10 +29,10 @@ index 5472230..7d3ab16 100644
  
 diff --git lib/resty/core/socket/tcp.lua lib/resty/core/socket/tcp.lua
 new file mode 100644
-index 0000000..89454ad
+index 0000000..f66f51f
 --- /dev/null
 +++ lib/resty/core/socket/tcp.lua
-@@ -0,0 +1,284 @@
+@@ -0,0 +1,305 @@
 +-- Copyright (C) by OpenResty Inc.
 +
 +
@@ -178,44 +178,65 @@ index 0000000..89454ad
 +
 +    local client_cert, client_pkey
 +
-+    local client_cert_path = options.client_cert_path
-+    local client_pkey_path = options.client_priv_key_path
-+    if client_cert_path then
-+        if not client_pkey_path then
++    if options.client_cert_path or options.client_cert then
++        if options.client_cert_path and options.client_cert then
++            error("client client_cert_path and client_cert both setting ", 2)
++        end
++
++        if not options.client_priv_key_path and not options.client_priv_key then
 +            error("client certificate supplied without corresponding " ..
-+                  "private key", 2)
++                    "private key", 2)
 +        end
 +
-+        if type(client_cert_path) ~= "string" then
-+            error("bad client_cert option type", 2)
++        if options.client_priv_key_path and options.client_priv_key then
++            error("client certificate private key supplied with " ..
++                    "client_priv_key and client_priv_key_path", 2)
 +        end
 +
-+        if type(client_pkey_path) ~= "string" then
-+            error("bad client_priv_key option type", 2)
++        if options.client_cert then
++            if type(options.client_cert) ~= "string" then
++                error("bad client_cert option type", 2)
++            end
++        else
++            if type(options.client_cert_path) ~= "string" then
++                error("bad client_cert option type", 2)
++            end
++
++            local txt, err = read_file(options.client_cert_path)
++            if not txt then
++                return nil, err
++            end
++
++            options.client_cert = txt
 +        end
 +
-+        local txt, err = read_file(client_cert_path)
-+        if not txt then
-+            return nil, err
++        if options.client_priv_key then
++            if type(options.client_priv_key) ~= "string" then
++                error("bad client_priv_key option type", 2)
++            end
++        else
++            if type(options.client_priv_key_path) ~= "string" then
++                error("bad client_priv_key_path option type", 2)
++            end
++
++            local txt, err = read_file(options.client_priv_key_path)
++            if not txt then
++                return nil, err
++            end
++
++            options.client_priv_key = txt
 +        end
 +
-+        local cert, err = ssl.parse_pem_cert(txt)
++        local cert, err = ssl.parse_pem_cert(options.client_cert)
 +        if not cert then
 +            return nil, err
 +        end
-+
 +        client_cert = cert
 +
-+        local txt, err = read_file(client_pkey_path)
-+        if not txt then
-+            return nil, err
-+        end
-+
-+        local pkey, err = ssl.parse_pem_priv_key(txt)
++        local pkey, err = ssl.parse_pem_priv_key(options.client_priv_key)
 +        if not pkey then
 +            return nil, err
 +        end
-+
 +        client_pkey = pkey
 +    end
 +
