@@ -8,10 +8,17 @@ on:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        op_version:
+          - "1.21.4.1"
+          - "1.21.4.2"
+
     runs-on: "ubuntu-20.04"
+
     env:
+      OPENRESTY_VERSION: ${{ matrix.op_version }}
       OPENRESTY_PREFIX: "/usr/local/openresty"
-      OPENRESTY_VERSION: "1.21.4.2"
 
     steps:
       - name: Check out code
