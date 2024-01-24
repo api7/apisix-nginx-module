@@ -1,0 +1,44 @@
+diff --git docs/html/50x.html docs/html/50x.html
+index 0680bcb..bcf7a65 100644
+--- docs/html/50x.html
++++ docs/html/50x.html
+@@ -75,9 +75,8 @@
+ <body>
+ <section class="main main-theme">
+   <h1>An error occurred.</h1>
+-  <p>Sorry, the page you are looking for is currently unavailable. Please try again later.</p>
+-  <p>If you are the system administrator of this resource then you should check the <a href="http://nginx.org/r/error_log">error log</a> for details.</p>
+-  <p>Commercial support is available at <a href="https://openresty.com/">openresty.com</a>.</p>
++  <p>You can report issue to <a href="https://github.com/apache/apisix/issues">APISIX</a></p>
++  <p><em>Faithfully yours, <a href="https://apisix.apache.org/">APISIX</a>.</em></p>
+ </section>
+ <section class="social white-theme">
+   <ul>
+diff --git src/http/ngx_http_special_response.c src/http/ngx_http_special_response.c
+index b5db811..697c366 100644
+--- src/http/ngx_http_special_response.c
++++ src/http/ngx_http_special_response.c
+@@ -20,6 +20,7 @@ static ngx_int_t ngx_http_send_refresh(ngx_http_request_t *r);
+ 
+ static u_char ngx_http_error_full_tail[] =
+ "<hr><center>" NGINX_VER "</center>" CRLF
++"<p><em>Powered by <a href=\"https://apisix.apache.org/\">APISIX</a>.</em></p>"
+ "</body>" CRLF
+ "</html>" CRLF
+ ;
+@@ -27,6 +28,7 @@ static u_char ngx_http_error_full_tail[] =
+ 
+ static u_char ngx_http_error_build_tail[] =
+ "<hr><center>" NGINX_VER_BUILD "</center>" CRLF
++"<p><em>Powered by <a href=\"https://apisix.apache.org/\">APISIX</a>.</em></p>"
+ "</body>" CRLF
+ "</html>" CRLF
+ ;
+@@ -34,6 +36,7 @@ static u_char ngx_http_error_build_tail[] =
+ 
+ static u_char ngx_http_error_tail[] =
+ "<hr><center>openresty</center>" CRLF
++"<p><em>Powered by <a href=\"https://apisix.apache.org/\">APISIX</a>.</em></p>"
+ "</body>" CRLF
+ "</html>" CRLF
+ ;
