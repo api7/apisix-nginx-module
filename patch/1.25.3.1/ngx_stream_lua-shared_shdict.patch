@@ -1,5 +1,5 @@
 diff --git config config
-index 07240ea..536b66b 100644
+index 8db9062..c7b7f35 100644
 --- config
 +++ config
 @@ -260,7 +260,6 @@ STREAM_LUA_SRCS=" \
@@ -10,7 +10,7 @@ index 07240ea..536b66b 100644
                  $ngx_addon_dir/src/ngx_stream_lua_variable.c \
                  $ngx_addon_dir/src/ngx_stream_lua_timer.c \
                  $ngx_addon_dir/src/ngx_stream_lua_config.c \
-@@ -304,7 +303,6 @@ STREAM_LUA_DEPS=" \
+@@ -305,7 +304,6 @@ STREAM_LUA_DEPS=" \
                  $ngx_addon_dir/src/ngx_stream_lua_phase.h \
                  $ngx_addon_dir/src/ngx_stream_lua_ctx.h \
                  $ngx_addon_dir/src/ngx_stream_lua_script.h \
@@ -19,7 +19,7 @@ index 07240ea..536b66b 100644
                  $ngx_addon_dir/src/ngx_stream_lua_config.h \
                  $ngx_addon_dir/src/api/ngx_stream_lua_api.h \
 diff --git src/api/ngx_stream_lua_api.h src/api/ngx_stream_lua_api.h
-index 92f933d..e722580 100644
+index ba1fbd5..bb8ca8e 100644
 --- src/api/ngx_stream_lua_api.h
 +++ src/api/ngx_stream_lua_api.h
 @@ -57,15 +57,6 @@ lua_State *ngx_stream_lua_get_global_state(ngx_conf_t *cf);
@@ -201,7 +201,7 @@ index cf01b36..fcc685c 100644
 -
  /* vi:set ft=c ts=4 sw=4 et fdm=marker: */
 diff --git src/ngx_stream_lua_common.h src/ngx_stream_lua_common.h
-index 0aa0a5e..28ef2d1 100644
+index f76229e..ec65afb 100644
 --- src/ngx_stream_lua_common.h
 +++ src/ngx_stream_lua_common.h
 @@ -31,6 +31,8 @@
@@ -213,7 +213,7 @@ index 0aa0a5e..28ef2d1 100644
  
  #include "ngx_stream_lua_request.h"
  
-@@ -53,6 +55,11 @@
+@@ -56,6 +58,11 @@
  #endif
  
  
@@ -225,7 +225,7 @@ index 0aa0a5e..28ef2d1 100644
  
  
  #if LUA_VERSION_NUM != 501
-@@ -158,8 +165,6 @@ typedef struct ngx_stream_lua_balancer_peer_data_s
+@@ -162,8 +169,6 @@ typedef struct ngx_stream_lua_balancer_peer_data_s
  typedef struct ngx_stream_lua_sema_mm_s  ngx_stream_lua_sema_mm_t;
  
  
@@ -234,7 +234,7 @@ index 0aa0a5e..28ef2d1 100644
  typedef ngx_int_t (*ngx_stream_lua_srv_conf_handler_pt)(
      ngx_stream_lua_request_t *r, ngx_stream_lua_srv_conf_t *lscf, lua_State *L);
  
-@@ -207,10 +212,10 @@ struct ngx_stream_lua_main_conf_s {
+@@ -214,10 +219,10 @@ struct ngx_stream_lua_main_conf_s {
  
      ngx_flag_t           postponed_to_preread_phase_end;
  
@@ -247,7 +247,7 @@ index 0aa0a5e..28ef2d1 100644
      ngx_str_t                                    init_worker_src;
  
      ngx_stream_lua_balancer_peer_data_t          *balancer_peer_data;
-@@ -220,8 +225,6 @@ struct ngx_stream_lua_main_conf_s {
+@@ -227,8 +232,6 @@ struct ngx_stream_lua_main_conf_s {
                       * data pointer in the main conf.
                       */
  
@@ -256,7 +256,7 @@ index 0aa0a5e..28ef2d1 100644
      ngx_stream_lua_sema_mm_t               *sema_mm;
  
      ngx_uint_t           malloc_trim_cycle;  /* a cycle is defined as the number
-@@ -234,7 +237,6 @@ struct ngx_stream_lua_main_conf_s {
+@@ -241,7 +244,6 @@ struct ngx_stream_lua_main_conf_s {
      unsigned             requires_preread:1;
  
      unsigned             requires_log:1;
@@ -468,10 +468,10 @@ index f2e2c40..060ee41 100644
  
  #endif /* _NGX_STREAM_LUA_INITBY_H_INCLUDED_ */
 diff --git src/ngx_stream_lua_initworkerby.c src/ngx_stream_lua_initworkerby.c
-index 0c329a5..151cf19 100644
+index 786ba34..b50e2fe 100644
 --- src/ngx_stream_lua_initworkerby.c
 +++ src/ngx_stream_lua_initworkerby.c
-@@ -297,7 +297,8 @@ ngx_stream_lua_init_worker(ngx_cycle_t *cycle)
+@@ -305,7 +305,8 @@ ngx_stream_lua_init_worker(ngx_cycle_t *cycle)
  
      ngx_stream_lua_set_req(lmcf->lua, r);
  
@@ -481,7 +481,7 @@ index 0c329a5..151cf19 100644
  
      ngx_destroy_pool(c->pool);
      return NGX_OK;
-@@ -318,12 +319,12 @@ failed:
+@@ -326,12 +327,12 @@ failed:
  
  ngx_int_t
  ngx_stream_lua_init_worker_by_inline(ngx_log_t *log,
@@ -497,7 +497,7 @@ index 0c329a5..151cf19 100644
               || ngx_stream_lua_do_call(log, L);
  
      return ngx_stream_lua_report(log, L, status, "init_worker_by_lua");
-@@ -332,11 +333,11 @@ ngx_stream_lua_init_worker_by_inline(ngx_log_t *log,
+@@ -340,11 +341,11 @@ ngx_stream_lua_init_worker_by_inline(ngx_log_t *log,
  
  ngx_int_t
  ngx_stream_lua_init_worker_by_file(ngx_log_t *log,
@@ -529,7 +529,7 @@ index 43f6de3..53a443a 100644
  ngx_int_t ngx_stream_lua_init_worker(ngx_cycle_t *cycle);
  
 diff --git src/ngx_stream_lua_module.c src/ngx_stream_lua_module.c
-index 6034add..45e3b89 100644
+index f7dca96..60a0b9e 100644
 --- src/ngx_stream_lua_module.c
 +++ src/ngx_stream_lua_module.c
 @@ -19,6 +19,7 @@
@@ -540,7 +540,7 @@ index 6034add..45e3b89 100644
  #include "ngx_stream_lua_directive.h"
  #include "ngx_stream_lua_contentby.h"
  #include "ngx_stream_lua_util.h"
-@@ -103,7 +104,7 @@ static ngx_command_t ngx_stream_lua_cmds[] = {
+@@ -116,7 +117,7 @@ static ngx_command_t ngx_stream_lua_cmds[] = {
  
      { ngx_string("lua_shared_dict"),
        NGX_STREAM_MAIN_CONF|NGX_CONF_TAKE2,
@@ -549,7 +549,7 @@ index 6034add..45e3b89 100644
        0,
        0,
        NULL },
-@@ -465,7 +466,6 @@ static ngx_int_t
+@@ -514,7 +515,6 @@ static ngx_int_t
  ngx_stream_lua_init(ngx_conf_t *cf)
  {
      ngx_int_t                           rc;
@@ -557,7 +557,7 @@ index 6034add..45e3b89 100644
      ngx_array_t                        *arr;
      ngx_pool_cleanup_t                 *cln;
  
-@@ -577,18 +577,11 @@ ngx_stream_lua_init(ngx_conf_t *cf)
+@@ -644,18 +644,11 @@ ngx_stream_lua_init(ngx_conf_t *cf)
  
          ngx_stream_lua_assert(lmcf->lua != NULL);
  
@@ -581,7 +581,7 @@ index 6034add..45e3b89 100644
          }
  
          dd("Lua VM initialized!");
-@@ -648,11 +641,8 @@ ngx_stream_lua_create_main_conf(ngx_conf_t *cf)
+@@ -715,11 +708,8 @@ ngx_stream_lua_create_main_conf(ngx_conf_t *cf)
       *      lmcf->watcher = NULL;
       *      lmcf->regex_cache_entries = 0;
       *      lmcf->jit_stack = NULL;
@@ -593,7 +593,7 @@ index 6034add..45e3b89 100644
       *      lmcf->preload_hooks = NULL;
       *      lmcf->requires_header_filter = 0;
       *      lmcf->requires_body_filter = 0;
-@@ -660,7 +650,6 @@ ngx_stream_lua_create_main_conf(ngx_conf_t *cf)
+@@ -727,7 +717,6 @@ ngx_stream_lua_create_main_conf(ngx_conf_t *cf)
       *      lmcf->requires_rewrite = 0;
       *      lmcf->requires_access = 0;
       *      lmcf->requires_log = 0;
@@ -603,10 +603,10 @@ index 6034add..45e3b89 100644
      lmcf->pool = cf->pool;
 diff --git src/ngx_stream_lua_shdict.c src/ngx_stream_lua_shdict.c
 deleted file mode 100644
-index 6b137f5..0000000
+index 7be30e3..0000000
 --- src/ngx_stream_lua_shdict.c
 +++ /dev/null
-@@ -1,2030 +0,0 @@
+@@ -1,2068 +0,0 @@
 -
 -/*
 - * !!! DO NOT EDIT DIRECTLY !!!
@@ -2636,13 +2636,51 @@ index 6b137f5..0000000
 -#endif
 -
 -
+-#if (NGX_DARWIN)
+-int
+-ngx_stream_lua_ffi_shdict_get_macos(ngx_stream_lua_shdict_get_params_t *p)
+-{
+-    return ngx_stream_lua_ffi_shdict_get(p->zone,
+-                                         (u_char *) p->key, p->key_len,
+-                                         p->value_type, p->str_value_buf,
+-                                         p->str_value_len, p->num_value,
+-                                         p->user_flags, p->get_stale,
+-                                         p->is_stale, p->errmsg);
+-}
+-
+-
+-int
+-ngx_stream_lua_ffi_shdict_store_macos(ngx_stream_lua_shdict_store_params_t *p)
+-{
+-    return ngx_stream_lua_ffi_shdict_store(p->zone, p->op,
+-                                           (u_char *) p->key, p->key_len,
+-                                           p->value_type,
+-                                           (u_char *) p->str_value_buf,
+-                                           p->str_value_len, p->num_value,
+-                                           p->exptime, p->user_flags,
+-                                           p->errmsg, p->forcible);
+-}
+-
+-
+-int
+-ngx_stream_lua_ffi_shdict_incr_macos(ngx_stream_lua_shdict_incr_params_t *p)
+-{
+-    return ngx_stream_lua_ffi_shdict_incr(p->zone,
+-                                          (u_char *) p->key, p->key_len,
+-                                          p->num_value, p->errmsg,
+-                                          p->has_init, p->init, p->init_ttl,
+-                                          p->forcible);
+-}
+-#endif
+-
+-
 -/* vi:set ft=c ts=4 sw=4 et fdm=marker: */
 diff --git src/ngx_stream_lua_shdict.h src/ngx_stream_lua_shdict.h
 deleted file mode 100644
-index 630c5b6..0000000
+index 3554764..0000000
 --- src/ngx_stream_lua_shdict.h
 +++ /dev/null
-@@ -1,75 +0,0 @@
+@@ -1,121 +0,0 @@
 -
 -/*
 - * !!! DO NOT EDIT DIRECTLY !!!
@@ -2708,6 +2746,52 @@ index 630c5b6..0000000
 -} ngx_stream_lua_shm_zone_ctx_t;
 -
 -
+-#if (NGX_DARWIN)
+-typedef struct {
+-    void                  *zone;
+-    const unsigned char   *key;
+-    size_t                 key_len;
+-    int                   *value_type;
+-    unsigned char        **str_value_buf;
+-    size_t                *str_value_len;
+-    double                *num_value;
+-    int                   *user_flags;
+-    int                    get_stale;
+-    int                   *is_stale;
+-    char                 **errmsg;
+-} ngx_stream_lua_shdict_get_params_t;
+-
+-
+-typedef struct {
+-    void                  *zone;
+-    int                    op;
+-    const unsigned char   *key;
+-    size_t                 key_len;
+-    int                    value_type;
+-    const unsigned char   *str_value_buf;
+-    size_t                 str_value_len;
+-    double                 num_value;
+-    long                   exptime;
+-    int                    user_flags;
+-    char                 **errmsg;
+-    int                   *forcible;
+-} ngx_stream_lua_shdict_store_params_t;
+-
+-
+-typedef struct {
+-    void                  *zone;
+-    const unsigned char   *key;
+-    size_t                 key_len;
+-    double                *num_value;
+-    char                 **errmsg;
+-    int                    has_init;
+-    double                 init;
+-    long                   init_ttl;
+-    int                   *forcible;
+-} ngx_stream_lua_shdict_incr_params_t;
+-#endif
+-
+-
 -ngx_int_t ngx_stream_lua_shdict_init_zone(ngx_shm_zone_t *shm_zone, void *data);
 -void ngx_stream_lua_shdict_rbtree_insert_value(ngx_rbtree_node_t *temp,
 -    ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel);
@@ -2719,7 +2803,7 @@ index 630c5b6..0000000
 -
 -/* vi:set ft=c ts=4 sw=4 et fdm=marker: */
 diff --git src/ngx_stream_lua_util.c src/ngx_stream_lua_util.c
-index 58061b4..ab52d5a 100644
+index e79f18e..8a24031 100644
 --- src/ngx_stream_lua_util.c
 +++ src/ngx_stream_lua_util.c
 @@ -20,6 +20,7 @@
@@ -2774,10 +2858,10 @@ index 58061b4..ab52d5a 100644
      ngx_stream_lua_inject_socket_udp_api(log, L);
      ngx_stream_lua_inject_uthread_api(log, L);
 diff --git src/ngx_stream_lua_util.h src/ngx_stream_lua_util.h
-index deb255f..e1c2f92 100644
+index 3ea872d..fac430a 100644
 --- src/ngx_stream_lua_util.h
 +++ src/ngx_stream_lua_util.h
-@@ -344,7 +344,9 @@ ngx_stream_lua_create_ctx(ngx_stream_session_t *r)
+@@ -363,7 +363,9 @@ ngx_stream_lua_create_ctx(ngx_stream_session_t *r)
          ngx_stream_lua_assert(L != NULL);
  
          if (lmcf->init_handler) {
