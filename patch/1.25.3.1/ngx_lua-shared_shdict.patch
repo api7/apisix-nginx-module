@@ -3076,7 +3076,7 @@ index faea7a0..4c81ac5 100644
                  return NULL;
              }
 diff --git src/ngx_http_lua_worker_thread.c src/ngx_http_lua_worker_thread.c
-index 3820d63..4c669fa 100644
+index 3820d63..45f7111 100644
 --- src/ngx_http_lua_worker_thread.c
 +++ src/ngx_http_lua_worker_thread.c
 @@ -16,7 +16,7 @@
@@ -3093,7 +3093,7 @@ index 3820d63..4c669fa 100644
          ngx_http_lua_inject_string_api(vm);
          ngx_http_lua_inject_config_api(vm);
 -        ngx_http_lua_inject_shdict_api(lmcf, vm);
-+        ngx_meta_lua_inject_shdict_api(lmcf, vm);
++        ngx_meta_lua_inject_shdict_api(vm, lmcf->cycle, &ngx_http_lua_module);
          lua_setglobal(vm, "ngx");
  
          lua_getglobal(vm, "require");
