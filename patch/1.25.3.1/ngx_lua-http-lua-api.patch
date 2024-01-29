@@ -1,0 +1,13 @@
+diff --git src/api/ngx_http_lua_api.h src/api/ngx_http_lua_api.h
+index 193c44e..1724519 100644
+--- src/api/ngx_http_lua_api.h
++++ src/api/ngx_http_lua_api.h
+@@ -8,7 +8,7 @@
+ #define _NGX_HTTP_LUA_API_H_INCLUDED_
+ 
+ 
+-#include <nginx.h>
++#include <nginx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_http.h>
+ 
