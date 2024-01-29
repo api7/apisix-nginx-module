@@ -1,5 +1,5 @@
 diff --git src/ngx_http_lua_socket_tcp.c src/ngx_http_lua_socket_tcp.c
-index 230679f..7cb3daf 100644
+index 230679f..106bd76 100644
 --- src/ngx_http_lua_socket_tcp.c
 +++ src/ngx_http_lua_socket_tcp.c
 @@ -23,8 +23,8 @@ static int ngx_http_lua_socket_tcp(lua_State *L);
@@ -22,6 +22,15 @@ index 230679f..7cb3daf 100644
      ngx_http_lua_socket_tcp_upstream_t *u, ngx_ssl_session_t *sess,
      int enable_session_reuse, ngx_str_t *server_name, int verify,
      int ocsp_status_req, STACK_OF(X509) *chain, EVP_PKEY *pkey,
+@@ -1687,7 +1687,7 @@ ngx_http_lua_ffi_socket_tcp_sslhandshake(ngx_http_request_t *r,
+ 
+         u->ssl_session_reuse = enable_session_reuse;
+ 
+-        (void) ngx_http_lua_ssl_handshake_retval_handler(r, u, NULL);
++        (void) ngx_http_lua_tls_handshake_retval_handler(r, u, NULL);
+ 
+         return NGX_OK;
+     }
 @@ -1713,12 +1713,12 @@ ngx_http_lua_ffi_socket_tcp_sslhandshake(ngx_http_request_t *r,
  
      if (sess != NULL) {
