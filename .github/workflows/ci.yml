@@ -28,7 +28,7 @@ jobs:
 
       - name: Get dependencies
         run: |
-          sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl luarocks libpcre libpcre-dev
+          sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl luarocks libpcre3 libpcre3-dev
           sudo luarocks install lua-resty-http > build.log 2>&1 || (cat build.log && exit 1)
 
       - name: Before install
