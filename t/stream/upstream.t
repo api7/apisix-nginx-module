@@ -62,4 +62,4 @@ __DATA__
     proxy_ssl_name admin.apisix.dev;
 --- stream_request eval
 "GET / HTTP/1.0\r\nHost: admin.apisix.dev\r\n\r\n"
---- stream_response_like: ^HTTP/1.1 200 OK.*admin.apisix.dev
+--- stream_response_like: ^.+400 The plain HTTP request was sent to HTTPS port.+$

@@ -210,6 +210,6 @@ exited
     }
 --- response_body
 ok
---- shutdown_error_log
+--- error_log
 lua pipe destroy process:
 lua pipe kill process:
