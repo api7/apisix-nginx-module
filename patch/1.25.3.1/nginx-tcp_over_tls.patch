@@ -1,5 +1,5 @@
 diff --git src/stream/ngx_stream_proxy_module.c src/stream/ngx_stream_proxy_module.c
-index 82dca1e..1ea383c 100644
+index 82dca1e..bb17aeb 100644
 --- src/stream/ngx_stream_proxy_module.c
 +++ src/stream/ngx_stream_proxy_module.c
 @@ -8,6 +8,9 @@
@@ -16,14 +16,14 @@ index 82dca1e..1ea383c 100644
  
  #if (NGX_STREAM_SSL)
  
-++#if (NGX_STREAM_APISIX)
-++    if (pc->type == SOCK_STREAM &&
-++        (ngx_stream_apisix_is_proxy_ssl_enabled(s) || pscf->ssl_enable))
-++    {
-++#else
++#if (NGX_STREAM_APISIX)
++    if (pc->type == SOCK_STREAM &&
++        (ngx_stream_apisix_is_proxy_ssl_enabled(s) || pscf->ssl_enable))
++    {
++#else
 +
      if (pc->type == SOCK_STREAM && pscf->ssl_enable) {
-++#endif
++#endif
  
          if (u->proxy_protocol) {
              if (ngx_stream_proxy_send_proxy_protocol(s) != NGX_OK) {
