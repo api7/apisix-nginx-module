@@ -3076,15 +3076,19 @@ index faea7a0..4c81ac5 100644
                  return NULL;
              }
 diff --git src/ngx_http_lua_worker_thread.c src/ngx_http_lua_worker_thread.c
-index 3820d63..45f7111 100644
+index 3820d63..06d12f2 100644
 --- src/ngx_http_lua_worker_thread.c
 +++ src/ngx_http_lua_worker_thread.c
-@@ -16,7 +16,7 @@
+@@ -12,11 +12,11 @@
+ #include "ddebug.h"
+ 
+ 
++#include "ngx_meta_lua_api.h"
+ #include "ngx_http_lua_worker_thread.h"
  #include "ngx_http_lua_util.h"
  #include "ngx_http_lua_string.h"
  #include "ngx_http_lua_config.h"
 -#include "ngx_http_lua_shdict.h"
-+#include "ngx_meta_lua_api.h"
  
  #ifndef STRINGIFY
  #define TOSTRING(x)  #x
