@@ -11,6 +11,8 @@ jobs:
     strategy:
       matrix:
         op_version:
+          - "1.21.4.1"
+          - "1.21.4.2"
           - "1.25.3.1"
 
     runs-on: "ubuntu-20.04"
@@ -28,7 +30,7 @@ jobs:
 
       - name: Get dependencies
         run: |
-          sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl luarocks libpcre3 libpcre3-dev
+          sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl luarocks libpcre3 libpcre3-dev zlib1g-dev
           sudo luarocks install lua-resty-http > build.log 2>&1 || (cat build.log && exit 1)
 
       - name: Before install
