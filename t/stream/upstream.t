@@ -63,4 +63,3 @@ __DATA__
 --- stream_request eval
 "GET / HTTP/1.0\r\nHost: admin.apisix.dev\r\n\r\n"
 --- stream_response_like: ^HTTP/1.1 200 OK.*admin.apisix.dev
-
