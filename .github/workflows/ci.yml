@@ -36,7 +36,7 @@ jobs:
       - name: Before install
         run: |
           sudo cpanm --notest Test::Nginx > build.log 2>&1 || (cat build.log && exit 1)
-          git clone https://github.com/iresty/test-nginx.git test-nginx
+          git clone https://github.com/openresty/test-nginx.git test-nginx
 
       - name: Install
         run: |
