@@ -11,8 +11,7 @@ jobs:
     strategy:
       matrix:
         op_version:
-          - "1.21.4.1"
-          - "1.21.4.2"
+          - "1.25.3.1"
 
     runs-on: "ubuntu-20.04"
 
@@ -29,17 +28,17 @@ jobs:
 
       - name: Get dependencies
         run: |
-          sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl luarocks
+          sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl luarocks libpcre3 libpcre3-dev zlib1g-dev
           sudo luarocks install lua-resty-http > build.log 2>&1 || (cat build.log && exit 1)
 
       - name: Before install
         run: |
           sudo cpanm --notest Test::Nginx > build.log 2>&1 || (cat build.log && exit 1)
-          git clone https://github.com/iresty/test-nginx.git test-nginx
+          git clone https://github.com/openresty/test-nginx.git test-nginx
 
       - name: Install
         run: |
-          wget https://raw.githubusercontent.com/api7/apisix-build-tools/master/build-apisix-base.sh
+          wget https://raw.githubusercontent.com/zll600/apisix-build-tools/upgrade_openresty-1.25.3.1/build-apisix-base.sh
           chmod +x build-apisix-base.sh
           OR_PREFIX=$OPENRESTY_PREFIX CC="clang -fsanitize=address -fcolor-diagnostics -Qunused-arguments" \
               cc_opt="-Werror" ./build-apisix-base.sh latest
