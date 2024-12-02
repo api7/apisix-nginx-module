@@ -849,20 +849,20 @@ ngx_http_apisix_is_ntls_enabled(ngx_http_conf_ctx_t *conf_ctx)
 static u_char*
 ngx_http_apisix_error_log_handler(ngx_http_request_t *r, u_char *buf, size_t len)
 {
-		ngx_http_variable_value_t *request_id_var;
-		ngx_http_apisix_loc_conf_t *loc_conf;
+    ngx_http_variable_value_t *request_id_var;
+    ngx_http_apisix_loc_conf_t *loc_conf;
 
-		loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_apisix_module);
-		if (loc_conf->request_id_var_index == NGX_CONF_UNSET) {
-			return buf;
-		}
+    loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_apisix_module);
+    if (loc_conf->request_id_var_index == NGX_CONF_UNSET) {
+        return buf;
+    }
 
-		request_id_var = ngx_http_get_indexed_variable(r, loc_conf->request_id_var_index);
-		if (request_id_var == NULL || request_id_var->not_found) {
-			return buf;
-		}
-		buf = ngx_snprintf(buf, len, ", request_id: \"%v\"", request_id_var);
-		return buf;
+    request_id_var = ngx_http_get_indexed_variable(r, loc_conf->request_id_var_index);
+    if (request_id_var == NULL || request_id_var->not_found) {
+        return buf;
+    }
+    buf = ngx_snprintf(buf, len, ", request_id: \"%v\"", request_id_var);
+    return buf;
 }
 
 
@@ -904,7 +904,7 @@ ngx_http_apisix_replace_error_log_handler(ngx_http_request_t *r)
 
     ctx = ngx_http_apisix_get_module_ctx(r);
     if (ctx == NULL) {
-        return NGX_OK;
+        return NGX_ERROR;
     }
 
     if (r->log_handler == NULL){
@@ -935,8 +935,8 @@ ngx_http_apisix_error_log_init(ngx_conf_t *cf)
     if (h == NULL) {
     ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
                         "failed setting error log handler");
-    return NGX_CONF_ERROR;
-}
+        return NGX_CONF_ERROR;
+    }
 
     *h = ngx_http_apisix_replace_error_log_handler;
 

@@ -42,18 +42,9 @@ qr/.*request_id: "1234".*$/
 
 
 
-=== TEST 3: scoping: value is appended correctly to error logs
-based on the location where the directive is defined
+=== TEST 3: scoping: value is appended correctly to error logs based on the location where the directive is defined
 --- config
-    location /append_req_id {
-        set $req_id_a 123456;
-        apisix_request_id_var $req_id_a;
-        content_by_lua_block {
-            ngx.log(ngx.INFO, "log_msg")
-            ngx.exit(200)
-        }
-    }
-    location /append_method {
+    location = /append_method {
         set $req_id_b 654321;
         apisix_request_id_var $req_id_b;
 
@@ -62,12 +53,18 @@ based on the location where the directive is defined
             ngx.exit(200)
         }
     }
---- pipelined_requests eval
-["GET /append_req_id", "GET /append_method"]
---- error_code eval
-[200, 200, 200]
+    location = /append_req_id {
+        set $req_id_a 123456;
+        apisix_request_id_var $req_id_a;
+        content_by_lua_block {
+            ngx.log(ngx.INFO, "log_msg")
+            ngx.exit(200)
+        }
+    }
+--- request
+GET /append_method
 --- error_log eval
-[ 'request_id: "123456"', 'request_id: "654321"' ]
+qr/log_msg.*request_id: "654321"$/
 --- no_error_log
 [error]
 [crit]
@@ -75,7 +72,19 @@ based on the location where the directive is defined
 
 
 
-=== TEST 4: scoping: value is NOT appended to error logs for the location where the directive is NOT defined
+=== TEST 4: Send request to different location
+--- request
+GET /append_req_id
+--- error_log eval
+qr/log_msg.*request_id: "123456"$/
+--- no_error_log
+[error]
+[crit]
+[alert]
+
+
+
+=== TEST 5: scoping: value is NOT appended to error logs for the location where the directive is NOT defined
 --- config
     location /append {
         set $req_id 123456;
@@ -99,7 +108,7 @@ qr/log_msg.*request_id/
 
 
 
-=== TEST 5: scoping: value is appended correctly to error logs when the directive is in the main configuration
+=== TEST 6: scoping: value is appended correctly to error logs when the directive is in the main configuration
 --- http_config
     apisix_request_id_var $req_id;
 --- config
@@ -122,7 +131,7 @@ qr/log_msg.*request_id: "123456"$/
 
 
 
-=== TEST 6: scoping: value is appended correctly to error logs and the local directive overrides the global one
+=== TEST 7: scoping: value is appended correctly to error logs and the local directive overrides the global one
 --- http_config
     apisix_request_id_var $req_id_global;
 --- config
@@ -146,7 +155,7 @@ qr/log_msg.*request_id: "global"$/
 
 
 
-=== TEST 7: Request ID variable changes are applied to the error log output
+=== TEST 8: Request ID variable changes are applied to the error log output
 --- config
     location = /test {
         set $my_var "";
