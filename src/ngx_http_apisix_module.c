@@ -1,4 +1,4 @@
-#include <ngx_config.h>
+
 #include <ngx_core.h>
 #include <ngx_http.h>
 #include <ngx_http_realip_module.c>
@@ -19,12 +19,20 @@ static ngx_str_t remote_port = ngx_string("remote_port");
 static ngx_str_t realip_remote_addr = ngx_string("realip_remote_addr");
 static ngx_str_t realip_remote_port = ngx_string("realip_remote_port");
 
-
+static ngx_int_t ngx_http_apisix_init(ngx_conf_t *cf);
 static void *ngx_http_apisix_create_main_conf(ngx_conf_t *cf);
 static void *ngx_http_apisix_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_apisix_merge_loc_conf(ngx_conf_t *cf, void *parent,
     void *child);
 
+static ngx_int_t
+ngx_http_apisix_init(ngx_conf_t *cf)
+{
+    if (ngx_http_apisix_error_log_init(cf) !=  NGX_CONF_OK) {
+        return NGX_ERROR;
+    }
+    return NGX_OK;
+}
 
 static ngx_command_t ngx_http_apisix_cmds[] = {
     { ngx_string("apisix_delay_client_max_body_check"),
@@ -33,20 +41,19 @@ static ngx_command_t ngx_http_apisix_cmds[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_apisix_loc_conf_t, delay_client_max_body_check),
       NULL },
-      { ngx_string("apisix_error_log_request_id"),
+    {
+        ngx_string("apisix_request_id_var"),
         NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-        ngx_http_apisix_error_log_request_id, //TODO: Implement this setup function
+        ngx_http_apisix_error_log_request_id,
         NGX_HTTP_LOC_CONF_OFFSET,
         offsetof(ngx_http_apisix_loc_conf_t, request_id_var_index),
         NULL
-      },
+    },
     ngx_null_command
 };
-
-
 static ngx_http_module_t ngx_http_apisix_module_ctx = {
     NULL,                                    /* preconfiguration */
-    NULL,                                    /* postconfiguration */
+    ngx_http_apisix_init,                                    /* postconfiguration */
 
     ngx_http_apisix_create_main_conf,        /* create main configuration */
     NULL,                                    /* init main configuration */
@@ -74,7 +81,6 @@ ngx_module_t ngx_http_apisix_module = {
     NGX_MODULE_V1_PADDING
 };
 
-
 static void *
 ngx_http_apisix_create_main_conf(ngx_conf_t *cf)
 {
@@ -94,7 +100,7 @@ ngx_http_apisix_create_main_conf(ngx_conf_t *cf)
     return acf;
 }
 
-
+//These below functions are responsible for translating genertic configuration into our specific struct.
 static void *
 ngx_http_apisix_create_loc_conf(ngx_conf_t *cf)
 {
