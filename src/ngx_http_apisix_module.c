@@ -1,9 +1,9 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
-#include <ngx_http_realip_module.h>
+#include <ngx_http_realip_module.c>
 #include "ngx_http_apisix_module.h"
-
+#include "ngx_http_apisix_log_handler.c"
 
 #define NGX_HTTP_APISIX_SSL_ENC     1
 #define NGX_HTTP_APISIX_SSL_SIGN    2
@@ -33,7 +33,13 @@ static ngx_command_t ngx_http_apisix_cmds[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_apisix_loc_conf_t, delay_client_max_body_check),
       NULL },
-
+      { ngx_string("apisix_error_log_request_id"),
+        NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+        ngx_http_apisix_error_log_request_id, //TODO: Implement this setup function
+        NGX_HTTP_LOC_CONF_OFFSET,
+        offsetof(ngx_http_apisix_loc_conf_t, request_id_var_index),
+        NULL
+      },
     ngx_null_command
 };
 
@@ -100,7 +106,7 @@ ngx_http_apisix_create_loc_conf(ngx_conf_t *cf)
     }
 
     conf->delay_client_max_body_check = NGX_CONF_UNSET;
-
+    conf->request_id_var_index = NGX_CONF_UNSET;
     return conf;
 }
 
@@ -111,6 +117,7 @@ ngx_http_apisix_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_http_apisix_loc_conf_t *prev = parent;
     ngx_http_apisix_loc_conf_t *conf = child;
 
+    ngx_conf_merge_value(conf->request_id_var_index, prev->request_id_var_index, NGX_CONF_UNSET);
     ngx_conf_merge_value(conf->delay_client_max_body_check,
                          prev->delay_client_max_body_check, 0);
 
