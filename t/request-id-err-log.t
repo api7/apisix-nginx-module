@@ -4,7 +4,7 @@ run_tests;
 
 __DATA__
 
-=== TEST 1: global client_max_body_size set
+=== TEST 1: request_id in error log set
 --- config
     location /t {
 				set $request_id 1234;
