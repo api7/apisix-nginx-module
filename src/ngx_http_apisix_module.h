@@ -4,6 +4,7 @@
 
 #include <ngx_http.h>
 
+
 typedef struct {
     ngx_flag_t      delay_client_max_body_check;
     ngx_int_t       request_id_var_index;

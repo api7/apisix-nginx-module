@@ -4,6 +4,7 @@
 #include <ngx_http_realip_module.h>
 #include "ngx_http_apisix_module.h"
 
+
 #define NGX_HTTP_APISIX_SSL_ENC     1
 #define NGX_HTTP_APISIX_SSL_SIGN    2
 
@@ -53,7 +54,7 @@ static ngx_command_t ngx_http_apisix_cmds[] = {
 
 static ngx_http_module_t ngx_http_apisix_module_ctx = {
     NULL,                                    /* preconfiguration */
-    ngx_http_apisix_init,                                    /* postconfiguration */
+    ngx_http_apisix_init,                    /* postconfiguration */
 
     ngx_http_apisix_create_main_conf,        /* create main configuration */
     NULL,                                    /* init main configuration */
@@ -81,6 +82,7 @@ ngx_module_t ngx_http_apisix_module = {
     NGX_MODULE_V1_PADDING
 };
 
+
 static void *
 ngx_http_apisix_create_main_conf(ngx_conf_t *cf)
 {
@@ -100,7 +102,6 @@ ngx_http_apisix_create_main_conf(ngx_conf_t *cf)
     return acf;
 }
 
-//These below functions are responsible for translating genertic configuration into our specific struct.
 static void *
 ngx_http_apisix_create_loc_conf(ngx_conf_t *cf)
 {
@@ -840,11 +841,6 @@ ngx_http_apisix_is_ntls_enabled(ngx_http_conf_ctx_t *conf_ctx)
 }
 
 /*******************Log handler***************** */
-/*
- * This function contains the logic to append the Request ID to
- * the error log line when being called.
- * Get the location configuration from helper function. Find indexed variable with the loc_conf->request_id_var_index. and add that to buffer.
- */
 static u_char*
 ngx_http_apisix_error_log_handler(ngx_http_request_t *r, u_char *buf, size_t len)
 {
@@ -865,12 +861,6 @@ ngx_http_apisix_error_log_handler(ngx_http_request_t *r, u_char *buf, size_t len
 }
 
 
-/*
- * This function replaces the original HTTP error
- * log handler (r->log_handler). It executes the original logic
- * and then our error log handler: ngx_http_apisix_error_log_handler
- * This function returns the final message.
- */
 static u_char*
 ngx_http_apisix_combined_error_log_handler(ngx_http_request_t *r, ngx_http_request_t *sr, u_char *buf, size_t len)
 {
@@ -894,8 +884,6 @@ ngx_http_apisix_combined_error_log_handler(ngx_http_request_t *r, ngx_http_reque
 }
 
 
-//It replaces the r->log_handler which is the log handler of the request with the combined log handler.
-// Creates the apisix context we need from the request to act on it.
 static ngx_int_t
 ngx_http_apisix_replace_error_log_handler(ngx_http_request_t *r)
 {
@@ -921,8 +909,7 @@ ngx_http_apisix_replace_error_log_handler(ngx_http_request_t *r)
     return NGX_DECLINED;
 }
 
-//This function is part of postconfiguration passed to module context and will override the post_read_phase with custom log handler.
-// It extracts the pointer to log handler from the post read phase handlers and then override that with new function address.
+
 char *
 ngx_http_apisix_error_log_init(ngx_conf_t *cf)
 {
@@ -942,8 +929,7 @@ ngx_http_apisix_error_log_init(ngx_conf_t *cf)
     return NGX_CONF_OK;
 }
 
-// This function does the translation of the configuration file to the internal representation.
-// So this will just set the value in loc_conf that it gets by reference.
+
 char * 
 ngx_http_apisix_error_log_request_id(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
