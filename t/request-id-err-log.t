@@ -4,11 +4,11 @@ run_tests;
 
 __DATA__
 
-=== TEST 1: request_id in error log set
+=== TEST 1: apisix_request_id in error log set
 --- config
     location /t {
-        set $request_id_new 1234;
-        lua_error_log_request_id $request_id_new;
+        set $apisix_request_id 1234;
+        lua_error_log_request_id $apisix_request_id;
         content_by_lua_block {
             ngx.log(ngx.INFO, "log_msg")
             ngx.exit(200)
@@ -25,11 +25,11 @@ qr/log_msg.*request_id: "1234"$/
 
 
 
-=== TEST 2: request_id in error log set when a runtime error occurs
+=== TEST 2: apisix_request_id in error log set when a runtime error occurs
 --- config
     location /t {
-        set $request_id_new 1234;
-        lua_error_log_request_id $request_id_new;
+        set $apisix_request_id 1234;
+        lua_error_log_request_id $apisix_request_id;
         content_by_lua_block {
             error("error_message")
         }
@@ -45,16 +45,16 @@ qr/.*request_id: "1234".*$/
 === TEST 3: scoping: value is appended correctly to error logs based on the location where the directive is defined
 --- config
     location = /append_method {
-        set $req_id_b 654321;
-        lua_error_log_request_id $req_id_b;
+        set $apisix_request_id_b 654321;
+        lua_error_log_request_id $apisix_request_id_b;
         content_by_lua_block {
             ngx.log(ngx.INFO, "log_msg")
             ngx.exit(200)
         }
     }
     location = /append_req_id {
-        set $req_id_a 123456;
-        lua_error_log_request_id $req_id_a;
+        set $apisix_request_id_a 123456;
+        lua_error_log_request_id $apisix_request_id_a;
         content_by_lua_block {
             ngx.log(ngx.INFO, "log_msg")
             ngx.exit(200)
@@ -86,8 +86,8 @@ qr/log_msg.*request_id: "123456"$/
 === TEST 5: scoping: value is NOT appended to error logs for the location where the directive is NOT defined
 --- config
     location /append {
-        set $req_id 123456;
-        lua_error_log_request_id $req_id;
+        set $apisix_request_id 123456;
+        lua_error_log_request_id $apisix_request_id;
         content_by_lua_block {
             ngx.log(ngx.ERR, "log_msg")
             ngx.exit(200)
@@ -109,9 +109,9 @@ qr/log_msg.*request_id/
 
 === TEST 6: scoping: value is appended correctly to error logs when the directive is in the main configuration
 --- http_config
-    lua_error_log_request_id $req_id;
+    lua_error_log_request_id $apisix_request_id;
 --- config
-    set $req_id 123456;
+    set $apisix_request_id 123456;
     location = /test {
         content_by_lua_block {
             ngx.log(ngx.INFO, "log_msg")
@@ -132,13 +132,13 @@ qr/log_msg.*request_id: "123456"$/
 
 === TEST 7: scoping: value is appended correctly to error logs and the local directive overrides the global one
 --- http_config
-    lua_error_log_request_id $req_id_global;
+    lua_error_log_request_id $apisix_request_id_global;
 --- config
-    set $req_id_global global;
-    set $req_id_local local;
+    set $apisix_request_id_global global;
+    set $apisix_request_id_local local;
 
     location = /test {
-        lua_error_log_request_id $req_id_local;
+        lua_error_log_request_id $apisix_request_id_local;
         content_by_lua_block {
             ngx.log(ngx.INFO, "log_msg")
             ngx.exit(200)
