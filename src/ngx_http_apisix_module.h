@@ -6,7 +6,7 @@
 
 typedef struct {
     ngx_flag_t      delay_client_max_body_check;
-    ngx_int_t       request_id_var_index;
+    ngx_int_t       apisix_request_id_var_index;
 
 } ngx_http_apisix_loc_conf_t;
 

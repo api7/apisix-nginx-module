@@ -41,11 +41,11 @@ static ngx_command_t ngx_http_apisix_cmds[] = {
       offsetof(ngx_http_apisix_loc_conf_t, delay_client_max_body_check),
       NULL },
     {
-        ngx_string("apisix_request_id_var"),
+        ngx_string("lua_error_log_request_id"),
         NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
         ngx_http_apisix_error_log_request_id,
         NGX_HTTP_LOC_CONF_OFFSET,
-        offsetof(ngx_http_apisix_loc_conf_t, request_id_var_index),
+        offsetof(ngx_http_apisix_loc_conf_t, apisix_request_id_var_index),
         NULL
     },
     ngx_null_command
@@ -112,7 +112,7 @@ ngx_http_apisix_create_loc_conf(ngx_conf_t *cf)
     }
 
     conf->delay_client_max_body_check = NGX_CONF_UNSET;
-    conf->request_id_var_index = NGX_CONF_UNSET;
+    conf->apisix_request_id_var_index = NGX_CONF_UNSET;
     return conf;
 }
 
@@ -123,7 +123,7 @@ ngx_http_apisix_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_http_apisix_loc_conf_t *prev = parent;
     ngx_http_apisix_loc_conf_t *conf = child;
 
-    ngx_conf_merge_value(conf->request_id_var_index, prev->request_id_var_index, NGX_CONF_UNSET);
+    ngx_conf_merge_value(conf->apisix_request_id_var_index, prev->apisix_request_id_var_index, NGX_CONF_UNSET);
     ngx_conf_merge_value(conf->delay_client_max_body_check,
                          prev->delay_client_max_body_check, 0);
 
@@ -843,7 +843,7 @@ ngx_http_apisix_is_ntls_enabled(ngx_http_conf_ctx_t *conf_ctx)
 /*
  * This function contains the logic to append the Request ID to
  * the error log line when being called.
- * Get the location configuration from helper function. Find indexed variable with the loc_conf->request_id_var_index. and add that to buffer.
+ * Get the location configuration from helper function. Find indexed variable with the loc_conf->apisix_request_id_var_index. and add that to buffer.
  */
 static u_char*
 ngx_http_apisix_error_log_handler(ngx_http_request_t *r, u_char *buf, size_t len)
@@ -852,11 +852,11 @@ ngx_http_apisix_error_log_handler(ngx_http_request_t *r, u_char *buf, size_t len
     ngx_http_apisix_loc_conf_t *loc_conf;
 
     loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_apisix_module);
-    if (loc_conf->request_id_var_index == NGX_CONF_UNSET) {
+    if (loc_conf->apisix_request_id_var_index == NGX_CONF_UNSET) {
         return buf;
     }
 
-    request_id_var = ngx_http_get_indexed_variable(r, loc_conf->request_id_var_index);
+    request_id_var = ngx_http_get_indexed_variable(r, loc_conf->apisix_request_id_var_index);
     if (request_id_var == NULL || request_id_var->not_found) {
         return buf;
     }
@@ -959,8 +959,8 @@ ngx_http_apisix_error_log_request_id(ngx_conf_t *cf, ngx_command_t *cmd, void *c
     value[1].len--;
     value[1].data++;
 
-    loc_conf->request_id_var_index = ngx_http_get_variable_index(cf, &value[1]);
-    if (loc_conf->request_id_var_index == NGX_ERROR) {
+    loc_conf->apisix_request_id_var_index = ngx_http_get_variable_index(cf, &value[1]);
+    if (loc_conf->apisix_request_id_var_index == NGX_ERROR) {
         return NGX_CONF_ERROR;
     }
 
