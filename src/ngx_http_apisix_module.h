@@ -7,6 +7,8 @@
 
 typedef struct {
     ngx_flag_t      delay_client_max_body_check;
+    ngx_int_t       apisix_request_id_var_index;
+
 } ngx_http_apisix_loc_conf_t;
 
 
@@ -24,7 +26,7 @@ typedef struct {
     off_t                client_max_body_size;
 
     ngx_http_apisix_gzip_t *gzip;
-
+    ngx_http_log_handler_pt  orig_log_handler;
     unsigned             client_max_body_size_set:1;
     unsigned             mirror_enabled:1;
     unsigned             request_buffering:1;
@@ -57,5 +59,7 @@ ngx_int_t ngx_http_apisix_is_body_filter_by_lua_skipped(ngx_http_request_t *r);
 
 ngx_flag_t ngx_http_apisix_is_ntls_enabled(ngx_http_conf_ctx_t *conf_ctx);
 
-
+char * ngx_http_apisix_error_log_request_id(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+char * ngx_http_apisix_error_log_init(ngx_conf_t *cf);
+char * ngx_http_apisix_error_log_request_id(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 #endif /* _NGX_HTTP_APISIX_H_INCLUDED_ */

@@ -19,12 +19,20 @@ static ngx_str_t remote_port = ngx_string("remote_port");
 static ngx_str_t realip_remote_addr = ngx_string("realip_remote_addr");
 static ngx_str_t realip_remote_port = ngx_string("realip_remote_port");
 
-
+static ngx_int_t ngx_http_apisix_init(ngx_conf_t *cf);
 static void *ngx_http_apisix_create_main_conf(ngx_conf_t *cf);
 static void *ngx_http_apisix_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_apisix_merge_loc_conf(ngx_conf_t *cf, void *parent,
     void *child);
 
+static ngx_int_t
+ngx_http_apisix_init(ngx_conf_t *cf)
+{
+    if (ngx_http_apisix_error_log_init(cf) !=  NGX_CONF_OK) {
+        return NGX_ERROR;
+    }
+    return NGX_OK;
+}
 
 static ngx_command_t ngx_http_apisix_cmds[] = {
     { ngx_string("apisix_delay_client_max_body_check"),
@@ -33,14 +41,20 @@ static ngx_command_t ngx_http_apisix_cmds[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_apisix_loc_conf_t, delay_client_max_body_check),
       NULL },
-
+    {
+        ngx_string("lua_error_log_request_id"),
+        NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+        ngx_http_apisix_error_log_request_id,
+        NGX_HTTP_LOC_CONF_OFFSET,
+        offsetof(ngx_http_apisix_loc_conf_t, apisix_request_id_var_index),
+        NULL
+    },
     ngx_null_command
 };
 
-
 static ngx_http_module_t ngx_http_apisix_module_ctx = {
     NULL,                                    /* preconfiguration */
-    NULL,                                    /* postconfiguration */
+    ngx_http_apisix_init,                    /* postconfiguration */
 
     ngx_http_apisix_create_main_conf,        /* create main configuration */
     NULL,                                    /* init main configuration */
@@ -88,7 +102,6 @@ ngx_http_apisix_create_main_conf(ngx_conf_t *cf)
     return acf;
 }
 
-
 static void *
 ngx_http_apisix_create_loc_conf(ngx_conf_t *cf)
 {
@@ -100,7 +113,7 @@ ngx_http_apisix_create_loc_conf(ngx_conf_t *cf)
     }
 
     conf->delay_client_max_body_check = NGX_CONF_UNSET;
-
+    conf->apisix_request_id_var_index = NGX_CONF_UNSET;
     return conf;
 }
 
@@ -111,6 +124,7 @@ ngx_http_apisix_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_http_apisix_loc_conf_t *prev = parent;
     ngx_http_apisix_loc_conf_t *conf = child;
 
+    ngx_conf_merge_value(conf->apisix_request_id_var_index, prev->apisix_request_id_var_index, NGX_CONF_UNSET);
     ngx_conf_merge_value(conf->delay_client_max_body_check,
                          prev->delay_client_max_body_check, 0);
 
@@ -825,3 +839,117 @@ ngx_http_apisix_is_ntls_enabled(ngx_http_conf_ctx_t *conf_ctx)
     acf = ngx_http_get_module_main_conf(conf_ctx, ngx_http_apisix_module);
     return acf->enable_ntls;
 }
+
+/*******************Log handler***************** */
+static u_char*
+ngx_http_apisix_error_log_handler(ngx_http_request_t *r, u_char *buf, size_t len)
+{
+    ngx_http_variable_value_t *request_id_var;
+    ngx_http_apisix_loc_conf_t *loc_conf;
+
+    loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_apisix_module);
+    if (loc_conf->apisix_request_id_var_index == NGX_CONF_UNSET) {
+        return buf;
+    }
+
+    request_id_var = ngx_http_get_indexed_variable(r, loc_conf->apisix_request_id_var_index);
+    if (request_id_var == NULL || request_id_var->not_found) {
+        return buf;
+    }
+    buf = ngx_snprintf(buf, len, ", request_id: \"%v\"", request_id_var);
+    return buf;
+}
+
+
+static u_char*
+ngx_http_apisix_combined_error_log_handler(ngx_http_request_t *r, ngx_http_request_t *sr, u_char *buf, size_t len)
+{
+    u_char *p;
+    ngx_http_apisix_ctx_t *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+    if (ctx == NULL || ctx->orig_log_handler == NULL) {
+        return buf;
+    }
+
+    //Get the original log message
+    p = ctx->orig_log_handler(r, sr, buf, len);
+    //p - buf calculates the number of bytes written by the original log handler into the buffer.
+    //len -= (p - buf) reduces the remaining buffer length by the amount already used.
+    len -= p-buf;
+
+    //Apisix log handler
+    buf = ngx_http_apisix_error_log_handler(r, buf, len);
+    return buf;
+}
+
+
+static ngx_int_t
+ngx_http_apisix_replace_error_log_handler(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    if (r->log_handler == NULL){
+        return NGX_DECLINED;
+    }
+
+/*
+    * Store the original log handler in ctx->orig_log_handler, replace
+    * it with the combined log handler, which will execute the original
+    * handler's logic in addition to our own.
+    */
+    ctx->orig_log_handler = r->log_handler;
+    r->log_handler = ngx_http_apisix_combined_error_log_handler;
+
+    return NGX_DECLINED;
+}
+
+
+char *
+ngx_http_apisix_error_log_init(ngx_conf_t *cf)
+{
+    ngx_http_handler_pt *h;
+    ngx_http_core_main_conf_t *cmcf;
+
+    cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);
+    h = ngx_array_push(&cmcf->phases[NGX_HTTP_POST_READ_PHASE].handlers);
+    if (h == NULL) {
+    ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                        "failed setting error log handler");
+        return NGX_CONF_ERROR;
+    }
+
+    *h = ngx_http_apisix_replace_error_log_handler;
+
+    return NGX_CONF_OK;
+}
+
+
+char * 
+ngx_http_apisix_error_log_request_id(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_str_t *value;
+    ngx_http_apisix_loc_conf_t *loc_conf = conf;
+
+    value = cf->args->elts;
+    if (value[1].data[0] != '$') {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "invalid variable name \"%V\"", &value[1]);
+        return NGX_CONF_ERROR;
+    }
+
+    value[1].len--;
+    value[1].data++;
+
+    loc_conf->apisix_request_id_var_index = ngx_http_get_variable_index(cf, &value[1]);
+    if (loc_conf->apisix_request_id_var_index == NGX_ERROR) {
+        return NGX_CONF_ERROR;
+    }
+
+    return NGX_CONF_OK;
+}
+
