@@ -877,6 +877,7 @@ ngx_http_apisix_combined_error_log_handler(ngx_http_request_t *r, ngx_http_reque
     //p - buf calculates the number of bytes written by the original log handler into the buffer.
     //len -= (p - buf) reduces the remaining buffer length by the amount already used.
     len -= p-buf;
+    buf = p;
 
     //Apisix log handler
     buf = ngx_http_apisix_error_log_handler(r, buf, len);
