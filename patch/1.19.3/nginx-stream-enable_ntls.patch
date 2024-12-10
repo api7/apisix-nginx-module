@@ -1,0 +1,29 @@
+diff --git a/src/stream/ngx_stream_ssl_module.c b/src/stream/ngx_stream_ssl_module.c
+index 79f30a86..d39c11fc 100644
+--- a/src/stream/ngx_stream_ssl_module.c
++++ b/src/stream/ngx_stream_ssl_module.c
+@@ -8,6 +8,10 @@
+ #include <ngx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_stream.h>
++#if (NGX_STREAM_APISIX)
++// #include <stdio.h>
++#include <ngx_stream_apisix_module.h>
++#endif
+ 
+ 
+ typedef ngx_int_t (*ngx_ssl_variable_handler_pt)(ngx_connection_t *c,
+@@ -375,6 +379,13 @@ ngx_stream_ssl_init_connection(ngx_ssl_t *ssl, ngx_connection_t *c)
+         return NGX_ERROR;
+     }
+ 
++#if (TONGSUO_VERSION_NUMBER && NGX_STREAM_APISIX)
++    if (ngx_stream_apisix_is_ntls_enabled(s)) {
++        SSL_enable_ntls(c->ssl->connection);
++        // fprintf(stderr, "==ngx_stream_apisix_is_ntls_enabled:SSL_enable_ntls===");
++    }
++#endif
++
+     rc = ngx_ssl_handshake(c);
+ 
+     if (rc == NGX_ERROR) {
