@@ -1,0 +1,21 @@
+diff --git src/ngx_http_lua_headers.c src/ngx_http_lua_headers.c
+index 85836a1..cb53998 100644
+--- src/ngx_http_lua_headers.c
++++ src/ngx_http_lua_headers.c
+@@ -1333,4 +1333,16 @@ ngx_http_lua_ffi_set_resp_header_macos(ngx_http_lua_set_resp_header_params_t *p)
+ #endif
+ 
+ 
++#if (NGX_DARWIN)
++int
++ngx_http_lua_ffi_set_resp_header_macos(ngx_http_lua_set_resp_header_params_t *p)
++{
++    return ngx_http_lua_ffi_set_resp_header(p->r, p->key_data, p->key_len,
++                                            p->is_nil, p->sval, p->sval_len,
++                                            p->mvals, p->mvals_len,
++                                            p->override, p->errmsg);
++}
++#endif
++
++
+ /* vi:set ft=c ts=4 sw=4 et fdm=marker: */

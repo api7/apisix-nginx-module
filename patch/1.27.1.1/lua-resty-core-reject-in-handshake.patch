@@ -1,0 +1,48 @@
+diff --git lib/ngx/ssl.lua lib/ngx/ssl.lua
+index 8792be0..c4afc80 100644
+--- lib/ngx/ssl.lua
++++ lib/ngx/ssl.lua
+@@ -86,7 +86,7 @@ if subsystem == 'http' then
+     void ngx_http_lua_ffi_free_priv_key(void *cdata);
+ 
+     int ngx_http_lua_ffi_ssl_verify_client(void *r,
+-        void *cdata, int depth, char **err);
++        void *cdata, int depth, int reject_in_handshake, char **err);
+     ]]
+ 
+     ngx_lua_ffi_ssl_set_der_certificate =
+@@ -157,7 +157,7 @@ elseif subsystem == 'stream' then
+     void ngx_stream_lua_ffi_free_priv_key(void *cdata);
+ 
+     int ngx_stream_lua_ffi_ssl_verify_client(void *r,
+-        void *cdata, int depth, char **err);
++        void *cdata, int depth, int reject_in_handshake, char **err);
+     ]]
+ 
+     ngx_lua_ffi_ssl_set_der_certificate =
+@@ -417,7 +417,7 @@ function _M.set_priv_key(priv_key)
+ end
+ 
+ 
+-function _M.verify_client(ca_certs, depth)
++function _M.verify_client(ca_certs, depth, reject_in_handshake)
+     local r = get_request()
+     if not r then
+         error("no request found")
+@@ -427,7 +427,15 @@ function _M.verify_client(ca_certs, depth)
+         depth = -1
+     end
+ 
+-    local rc = ngx_lua_ffi_ssl_verify_client(r, ca_certs, depth, errmsg)
++    if reject_in_handshake == nil then
++        -- reject by default so we can migrate to the new behavior
++        -- without modifying Lua code
++        reject_in_handshake = true
++    end
++
++    local reject_in_handshake_int = reject_in_handshake and 1 or 0
++    local rc = ngx_lua_ffi_ssl_verify_client(r, ca_certs, depth,
++                                             reject_in_handshake_int, errmsg)
+     if rc == FFI_OK then
+         return true
+     end
