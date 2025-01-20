@@ -10,12 +10,12 @@ local NGX_OK = ngx.OK
 base.allows_subsystem("http")
 
 
-ffi.cdef[[
+ffi.cdef([[
 typedef intptr_t        ngx_int_t;
 ngx_int_t ngx_http_apisix_upstream_set_cert_and_key(ngx_http_request_t *r, void *cert, void *key);
 ngx_int_t ngx_http_apisix_upstream_set_ssl_trusted_store(ngx_http_request_t *r, void *store);
 int ngx_http_apisix_set_upstream_ssl_verify(ngx_http_request_t *r, int verify);
-]]
+]])
 local _M = {}
 
 
