@@ -383,6 +383,42 @@ failed:
 
     ngx_http_apisix_flush_ssl_error();
 }
+
+
+int
+ngx_http_apisix_upstream_set_ssl_verify(ngx_http_request_t *r, int verify)
+{
+    ngx_http_apisix_ctx_t       *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+    
+    ctx->upstream_ssl_verify_set = 1;
+    ctx->upstream_ssl_verify = verify;
+
+    return NGX_OK;
+}
+
+ngx_flag_t
+ngx_http_apisix_get_upstream_ssl_verify(ngx_http_request_t *r, ngx_flag_t proxy_ssl_verify)
+{
+    ngx_http_apisix_ctx_t       *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx == NULL) {
+        return proxy_ssl_verify;
+    }
+
+    if (!ctx->upstream_ssl_verify_set) {
+        return proxy_ssl_verify;
+    }
+
+    return ctx->upstream_ssl_verify;
+}
 #endif
 
 
