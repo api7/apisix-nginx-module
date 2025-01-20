@@ -82,9 +82,10 @@ jobs:
         run: |
           wget https://raw.githubusercontent.com/api7/apisix-build-tools/refs/heads/release/api7ee-runtime/build-api7ee-runtime.sh
           chmod +x build-api7ee-runtime.sh
-          ./build-api7ee-runtime.sh latest
+          sudo ./build-api7ee-runtime.sh latest
 
       - name: Script
         run: |
+          sudo su
           export PATH=$OPENRESTY_PREFIX/nginx/sbin:$PATH
           prove -I. -Itest-nginx/lib -r t/
