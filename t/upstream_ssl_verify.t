@@ -53,9 +53,9 @@ __DATA__
     location /t {
         access_by_lua_block {
             local upstream = require("resty.apisix.upstream")
-            local ok, err = upstream.set_upstream_ssl_verify(true)
+            local ok, err = upstream.set_ssl_verify(true)
             if not ok then
-                ngx.log(ngx.ERR, "set_upstream_ssl_verify failed: ", err)
+                ngx.log(ngx.ERR, "set_ssl_verify failed: ", err)
                 ngx.exit(500)
             end
         }
@@ -74,9 +74,9 @@ upstream SSL certificate verify error: (20:unable to get local issuer certificat
     location /t {
         access_by_lua_block {
             local upstream = require("resty.apisix.upstream")
-            local ok, err = upstream.set_upstream_ssl_verify(false)
+            local ok, err = upstream.set_ssl_verify(false)
             if not ok then
-                ngx.log(ngx.ERR, "set_upstream_ssl_verify failed: ", err)
+                ngx.log(ngx.ERR, "set_ssl_verify failed: ", err)
                 ngx.exit(500)
             end
         }
@@ -95,9 +95,9 @@ ok
     location /t {
         access_by_lua_block {
             local upstream = require("resty.apisix.upstream")
-            local ok, err = upstream.set_upstream_ssl_verify(true)
+            local ok, err = upstream.set_ssl_verify(true)
             if not ok then
-                ngx.log(ngx.ERR, "set_upstream_ssl_verify failed: ", err)
+                ngx.log(ngx.ERR, "set_ssl_verify failed: ", err)
                 ngx.exit(500)
             end
         }
@@ -118,7 +118,7 @@ ok
     location /t {
         content_by_lua_block {
             local upstream = require("resty.apisix.upstream")
-            upstream.set_upstream_ssl_verify(true)
+            upstream.set_ssl_verify(true)
         }
     }
 --- error_code: 500
@@ -133,22 +133,22 @@ API disabled in the current context
         rewrite_by_lua_block {
             local upstream = require("resty.apisix.upstream")
             ngx.status = 500
-            local ok, _ = pcall(upstream.set_upstream_ssl_verify, 1)
+            local ok, _ = pcall(upstream.set_ssl_verify, 1)
             if not ok then
                 ngx.say("invalid argument type: number")
             end
             
-            local ok, _ = pcall(upstream.set_upstream_ssl_verify, "true")
+            local ok, _ = pcall(upstream.set_ssl_verify, "true")
             if not ok then
                 ngx.say("invalid argument type: string")
             end
 
-            local ok, err = pcall(upstream.set_upstream_ssl_verify, nil)
+            local ok, err = pcall(upstream.set_ssl_verify, nil)
             if not ok then
                 ngx.say("invalid argument type: nil")
             end
 
-            local ok, err = pcall(upstream.set_upstream_ssl_verify, {})
+            local ok, err = pcall(upstream.set_ssl_verify, {})
             if not ok then
                 ngx.say("invalid argument type: table")
             end
@@ -188,9 +188,9 @@ invalid argument type: table
                 ngx.exit(500)
             end
 
-            local ok, err = upstream.set_upstream_ssl_verify(false)
+            local ok, err = upstream.set_ssl_verify(false)
             if not ok then
-                ngx.log(ngx.ERR, "set_upstream_ssl_verify failed: ", err)
+                ngx.log(ngx.ERR, "set_ssl_verify failed: ", err)
                 ngx.exit(500)
             end
         }
@@ -255,9 +255,9 @@ ok
                 ngx.exit(500)
             end
 
-            local ok, err = upstream.set_upstream_ssl_verify(true)
+            local ok, err = upstream.set_ssl_verify(true)
             if not ok then
-                ngx.log(ngx.ERR, "set_upstream_ssl_verify failed: ", err)
+                ngx.log(ngx.ERR, "set_ssl_verify failed: ", err)
                 ngx.exit(500)
             end
         }

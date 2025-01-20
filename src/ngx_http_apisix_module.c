@@ -386,7 +386,7 @@ failed:
 
 
 int
-ngx_http_apisix_set_upstream_ssl_verify(ngx_http_request_t *r, int verify)
+ngx_http_apisix_upstream_set_ssl_verify(ngx_http_request_t *r, int verify)
 {
     ngx_http_apisix_ctx_t       *ctx;
 

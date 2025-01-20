@@ -14,7 +14,7 @@ ffi.cdef([[
 typedef intptr_t        ngx_int_t;
 ngx_int_t ngx_http_apisix_upstream_set_cert_and_key(ngx_http_request_t *r, void *cert, void *key);
 ngx_int_t ngx_http_apisix_upstream_set_ssl_trusted_store(ngx_http_request_t *r, void *store);
-int ngx_http_apisix_set_upstream_ssl_verify(ngx_http_request_t *r, int verify);
+int ngx_http_apisix_upstream_set_ssl_verify(ngx_http_request_t *r, int verify);
 ]])
 local _M = {}
 
@@ -71,7 +71,7 @@ end
 _M.set_ssl_trusted_store = set_ssl_trusted_store
 
 
-local set_upstream_ssl_verify
+local set_ssl_verify
 do
     local ALLOWED_PHASES = {
         ['rewrite'] = true,
@@ -79,7 +79,7 @@ do
         ['access'] = true,
         ['preread'] = true,
     }
-    function set_upstream_ssl_verify(verify)
+    function set_ssl_verify(verify)
         if not ALLOWED_PHASES[get_phase()] then
             error("API disabled in the current context", 2)
         end
@@ -90,7 +90,7 @@ do
 
         local r = get_request()
 
-        local ret = C.ngx_http_apisix_set_upstream_ssl_verify(
+        local ret = C.ngx_http_apisix_upstream_set_ssl_verify(
             r, verify)
         if ret == NGX_OK then
             return true
@@ -103,7 +103,7 @@ do
         error("unknown return code: " .. tostring(ret))
     end
 end
-_M.set_upstream_ssl_verify = set_upstream_ssl_verify
+_M.set_ssl_verify = set_ssl_verify
 
 
 return _M
