@@ -22,6 +22,7 @@ typedef struct {
 typedef struct {
     STACK_OF(X509)      *upstream_cert;
     EVP_PKEY            *upstream_pkey;
+    X509_STORE          *upstream_trusted_store;
 
     off_t                client_max_body_size;
 
