@@ -1,79 +1,54 @@
 diff --git lib/ngx/balancer.lua lib/ngx/balancer.lua
-index 7d64d63..781cbd1 100644
+index 18bdc2c..cc1c61a 100644
 --- lib/ngx/balancer.lua
 +++ lib/ngx/balancer.lua
-@@ -3,6 +3,7 @@
+@@ -3,7 +3,7 @@
  
  local base = require "resty.core.base"
  base.allows_subsystem('http', 'stream')
+-
 +require "resty.core.hash"
  
- 
  local ffi = require "ffi"
-@@ -17,8 +18,10 @@ local error = error
+ local C = ffi.C
+@@ -20,6 +20,7 @@ local error = error
  local type = type
  local tonumber = tonumber
  local max = math.max
 +local ngx_crc32_long = ngx.crc32_long
+ 
  local subsystem = ngx.config.subsystem
  local ngx_lua_ffi_balancer_set_current_peer
-+local ngx_lua_ffi_balancer_enable_keepalive
- local ngx_lua_ffi_balancer_set_more_tries
- local ngx_lua_ffi_balancer_get_last_failure
- local ngx_lua_ffi_balancer_set_timeouts -- used by both stream and http
-@@ -27,7 +30,11 @@ local ngx_lua_ffi_balancer_set_timeouts -- used by both stream and http
- if subsystem == 'http' then
-     ffi.cdef[[
+@@ -36,7 +37,7 @@ if subsystem == 'http' then
      int ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
--        const unsigned char *addr, size_t addr_len, int port, char **err);
-+        const unsigned char *addr, size_t addr_len, int port,
+         const unsigned char *addr, size_t addr_len, int port,
+         const unsigned char *host, ssize_t host_len,
+-        char **err);
 +        unsigned int cpool_crc32, unsigned int cpool_size, char **err);
-+
-+    int ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
-+        unsigned long timeout, unsigned int max_requests, char **err);
  
-     int ngx_http_lua_ffi_balancer_set_more_tries(ngx_http_request_t *r,
-         int count, char **err);
-@@ -46,6 +53,9 @@ if subsystem == 'http' then
-     ngx_lua_ffi_balancer_set_current_peer =
-         C.ngx_http_lua_ffi_balancer_set_current_peer
- 
-+    ngx_lua_ffi_balancer_enable_keepalive =
-+        C.ngx_http_lua_ffi_balancer_enable_keepalive
-+
-     ngx_lua_ffi_balancer_set_more_tries =
-         C.ngx_http_lua_ffi_balancer_set_more_tries
- 
-@@ -96,6 +106,11 @@ else
+     int ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
+         unsigned long timeout, unsigned int max_requests, char **err);
+@@ -130,6 +131,7 @@ else
+     error("unknown subsystem: " .. subsystem)
  end
  
- 
 +local DEFAULT_KEEPALIVE_POOL_SIZE = 30
-+local DEFAULT_KEEPALIVE_IDLE_TIMEOUT = 60000
-+local DEFAULT_KEEPALIVE_MAX_REQUESTS = 100
-+
-+
- local peer_state_names = {
-     [1] = "keepalive",
-     [2] = "next",
-@@ -106,25 +121,147 @@ local peer_state_names = {
+ local DEFAULT_KEEPALIVE_IDLE_TIMEOUT = 60000
+ local DEFAULT_KEEPALIVE_MAX_REQUESTS = 100
+ 
+@@ -143,27 +145,61 @@ local peer_state_names = {
  local _M = { version = base.version }
  
- 
--function _M.set_current_peer(addr, port)
--    local r = get_request()
--    if not r then
--        error("no request found")
-+if subsystem == "http" then
+ if subsystem == "http" then
+-    function _M.set_current_peer(addr, port, host)
 +    function _M.set_current_peer(addr, port, opts)
-+        local r = get_request()
-+        if not r then
-+            error("no request found")
-+        end
-+
+         local r = get_request()
+         if not r then
+             error("no request found")
+         end
+ 
 +        local pool_crc32
 +        local pool_size
-+
 +        if opts then
 +            if type(opts) ~= "table" then
 +                error("bad argument #3 to 'set_current_peer' " ..
@@ -104,116 +79,113 @@ index 7d64d63..781cbd1 100644
 +            end
 +        end
 +
-+        if not port then
-+            port = 0
+         if not port then
+             port = 0
 +
-+        elseif type(port) ~= "number" then
-+            port = tonumber(port)
-+        end
-+
+         elseif type(port) ~= "number" then
+             port = tonumber(port)
+         end
+ 
+-        if host ~= nil and type(host) ~= "string" then
+-            error("bad argument #3 to 'set_current_peer' "
+-                  .. "(string expected, got " .. type(host) .. ")")
 +        if not pool_crc32 then
 +            pool_crc32 = 0
-+        end
-+
+         end
+ 
+-        local rc = ngx_lua_ffi_balancer_set_current_peer(r, addr, #addr,
+-                                                         port,
+-                                                         host,
+-                                                         host and #host or 0,
 +        if not pool_size then
 +            pool_size = DEFAULT_KEEPALIVE_POOL_SIZE
 +        end
 +
 +        local rc = ngx_lua_ffi_balancer_set_current_peer(r, addr, #addr, port,
 +                                                         pool_crc32, pool_size,
-+                                                         errmsg)
-+        if rc == FFI_OK then
-+            return true
-+        end
-+
-+        return nil, ffi_str(errmsg[0])
+                                                          errmsg)
+         if rc == FFI_OK then
+             return true
+@@ -172,26 +208,26 @@ if subsystem == "http" then
+         return nil, ffi_str(errmsg[0])
      end
- 
--    if not port then
--        port = 0
--    elseif type(port) ~= "number" then
--        port = tonumber(port)
-+else
+ else
+-    function _M.set_current_peer(addr, port, host)
 +    function _M.set_current_peer(addr, port, opts)
-+        local r = get_request()
-+        if not r then
-+            error("no request found")
-+        end
-+
+         local r = get_request()
+         if not r then
+             error("no request found")
+         end
+ 
 +        if opts then
 +            error("bad argument #3 to 'set_current_peer' ('opts' not yet " ..
 +                  "implemented in " .. subsystem .. " subsystem)", 2)
 +        end
 +
-+        if not port then
-+            port = 0
+         if not port then
+             port = 0
 +
-+        elseif type(port) ~= "number" then
-+            port = tonumber(port)
-+        end
-+
-+        local rc = ngx_lua_ffi_balancer_set_current_peer(r, addr, #addr,
+         elseif type(port) ~= "number" then
+             port = tonumber(port)
+         end
+ 
+-        if host ~= nil then
+-            error("bad argument #3 to 'set_current_peer' ('host' not yet " ..
+-                  "implemented in " .. subsystem .. " subsystem)", 2)
+-        end
+-
+         local rc = ngx_lua_ffi_balancer_set_current_peer(r, addr, #addr,
+-                                                         port,
+-                                                         errmsg)
 +                                                         port, errmsg)
-+        if rc == FFI_OK then
-+            return true
-+        end
-+
-+        return nil, ffi_str(errmsg[0])
-     end
-+end
+         if rc == FFI_OK then
+             return true
+         end
+diff --git lib/ngx/ssl.lua lib/ngx/ssl.lua
+index b696bea..f3b20e0 100644
+--- lib/ngx/ssl.lua
++++ lib/ngx/ssl.lua
+@@ -100,7 +100,7 @@ if subsystem == 'http' then
+     void ngx_http_lua_ffi_free_priv_key(void *cdata);
  
--    local rc = ngx_lua_ffi_balancer_set_current_peer(r, addr, #addr,
--                                                     port, errmsg)
--    if rc == FFI_OK then
--        return true
-+
-+if subsystem == "http" then
-+    function _M.enable_keepalive(idle_timeout, max_requests)
-+        local r = get_request()
-+        if not r then
-+            error("no request found")
-+        end
-+
-+        if not idle_timeout then
-+            idle_timeout = DEFAULT_KEEPALIVE_IDLE_TIMEOUT
-+
-+        elseif type(idle_timeout) ~= "number" then
-+            error("bad argument #1 to 'enable_keepalive' " ..
-+                  "(number expected, got " .. type(idle_timeout) .. ")", 2)
-+
-+        elseif idle_timeout < 0 then
-+            error("bad argument #1 to 'enable_keepalive' (expected >= 0)", 2)
-+
-+        else
-+            idle_timeout = idle_timeout * 1000
-+        end
-+
-+        if not max_requests then
-+            max_requests = DEFAULT_KEEPALIVE_MAX_REQUESTS
-+
-+        elseif type(max_requests) ~= "number" then
-+            error("bad argument #2 to 'enable_keepalive' " ..
-+                  "(number expected, got " .. type(max_requests) .. ")", 2)
-+
-+        elseif max_requests < 0 then
-+            error("bad argument #2 to 'enable_keepalive' (expected >= 0)", 2)
-+        end
-+
-+        local rc = ngx_lua_ffi_balancer_enable_keepalive(r, idle_timeout,
-+                                                         max_requests, errmsg)
-+        if rc == FFI_OK then
-+            return true
-+        end
-+
-+        return nil, ffi_str(errmsg[0])
-     end
+     int ngx_http_lua_ffi_ssl_verify_client(void *r,
+-        void *client_certs, void *trusted_certs, int depth, char **err);
++        void *client_certs, void *trusted_certs, int depth, int reject_in_handshake, char **err);
  
--    return nil, ffi_str(errmsg[0])
-+else
-+    function _M.enable_keepalive()
-+        error("'enable_keepalive' not yet implemented in " .. subsystem ..
-+              " subsystem", 2)
-+    end
+     int ngx_http_lua_ffi_ssl_client_random(ngx_http_request_t *r,
+         const unsigned char *out, size_t *outlen, char **err);
+@@ -198,7 +198,7 @@ elseif subsystem == 'stream' then
+     void ngx_stream_lua_ffi_free_priv_key(void *cdata);
+ 
+     int ngx_stream_lua_ffi_ssl_verify_client(void *r,
+-        void *client_certs, void *trusted_certs, int depth, char **err);
++        void *client_certs, void *trusted_certs, int depth, int reject_in_handshake, char **err);
+ 
+     int ngx_stream_lua_ffi_ssl_client_random(ngx_stream_lua_request_t *r,
+         unsigned char *out, size_t *outlen, char **err);
+@@ -484,7 +484,7 @@ function _M.set_priv_key(priv_key)
  end
  
  
+-function _M.verify_client(client_certs, depth, trusted_certs)
++function _M.verify_client(client_certs, depth, trusted_certs, reject_in_handshake)
+     local r = get_request()
+     if not r then
+         error("no request found")
+@@ -494,8 +494,15 @@ function _M.verify_client(client_certs, depth, trusted_certs)
+         depth = -1
+     end
+ 
++    if reject_in_handshake == nil then
++        -- reject by default so we can migrate to the new behavior
++        -- without modifying Lua code
++        reject_in_handshake = true
++    end
++
++    local reject_in_handshake_int = reject_in_handshake and 1 or 0
+     local rc = ngx_lua_ffi_ssl_verify_client(r, client_certs, trusted_certs,
+-                                             depth, errmsg)
++                                             depth, reject_in_handshake_int, errmsg)
+     if rc == FFI_OK then
+         return true
+     end
