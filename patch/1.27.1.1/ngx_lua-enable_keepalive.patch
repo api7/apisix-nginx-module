@@ -1,5 +1,5 @@
 diff --git src/ngx_http_lua_balancer.c src/ngx_http_lua_balancer.c
-index ae0f1380..cc407775 100644
+index ae0f1380..8345026d 100644
 --- src/ngx_http_lua_balancer.c
 +++ src/ngx_http_lua_balancer.c
 @@ -31,10 +31,39 @@ typedef struct {
@@ -574,6 +574,15 @@ index ae0f1380..cc407775 100644
  }
  
  
+@@ -789,7 +966,7 @@ ngx_http_lua_balancer_dummy_handler(ngx_event_t *ev)
+ static void
+ ngx_http_lua_balancer_close_handler(ngx_event_t *ev)
+ {
+-    ngx_http_lua_balancer_ka_item_t     *item;
++    ngx_http_lua_balancer_keepalive_item_t     *item;
+ 
+     int                n;
+     char               buf[1];
 @@ -820,8 +997,10 @@ close:
      ngx_http_lua_balancer_close(c);
  
