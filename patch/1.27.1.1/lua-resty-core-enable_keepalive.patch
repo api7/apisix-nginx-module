@@ -1,5 +1,5 @@
 diff --git lib/ngx/balancer.lua lib/ngx/balancer.lua
-index 18bdc2c..cc1c61a 100644
+index 18bdc2c..3a98f53 100644
 --- lib/ngx/balancer.lua
 +++ lib/ngx/balancer.lua
 @@ -3,7 +3,7 @@
@@ -19,16 +19,17 @@ index 18bdc2c..cc1c61a 100644
  
  local subsystem = ngx.config.subsystem
  local ngx_lua_ffi_balancer_set_current_peer
-@@ -36,7 +37,7 @@ if subsystem == 'http' then
+@@ -35,8 +36,7 @@ if subsystem == 'http' then
+     ffi.cdef[[
      int ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
          const unsigned char *addr, size_t addr_len, int port,
-         const unsigned char *host, ssize_t host_len,
+-        const unsigned char *host, ssize_t host_len,
 -        char **err);
 +        unsigned int cpool_crc32, unsigned int cpool_size, char **err);
  
      int ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
          unsigned long timeout, unsigned int max_requests, char **err);
-@@ -130,6 +131,7 @@ else
+@@ -130,6 +130,7 @@ else
      error("unknown subsystem: " .. subsystem)
  end
  
@@ -36,7 +37,7 @@ index 18bdc2c..cc1c61a 100644
  local DEFAULT_KEEPALIVE_IDLE_TIMEOUT = 60000
  local DEFAULT_KEEPALIVE_MAX_REQUESTS = 100
  
-@@ -143,27 +145,61 @@ local peer_state_names = {
+@@ -143,27 +144,61 @@ local peer_state_names = {
  local _M = { version = base.version }
  
  if subsystem == "http" then
@@ -106,7 +107,7 @@ index 18bdc2c..cc1c61a 100644
                                                           errmsg)
          if rc == FFI_OK then
              return true
-@@ -172,26 +208,26 @@ if subsystem == "http" then
+@@ -172,26 +207,26 @@ if subsystem == "http" then
          return nil, ffi_str(errmsg[0])
      end
  else
