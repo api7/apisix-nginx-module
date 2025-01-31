@@ -1,0 +1,144 @@
+diff --git lib/ngx/balancer.lua lib/ngx/balancer.lua
+index 18bdc2c..3a98f53 100644
+--- lib/ngx/balancer.lua
++++ lib/ngx/balancer.lua
+@@ -3,7 +3,7 @@
+ 
+ local base = require "resty.core.base"
+ base.allows_subsystem('http', 'stream')
+-
++require "resty.core.hash"
+ 
+ local ffi = require "ffi"
+ local C = ffi.C
+@@ -20,6 +20,7 @@ local error = error
+ local type = type
+ local tonumber = tonumber
+ local max = math.max
++local ngx_crc32_long = ngx.crc32_long
+ 
+ local subsystem = ngx.config.subsystem
+ local ngx_lua_ffi_balancer_set_current_peer
+@@ -35,8 +36,7 @@ if subsystem == 'http' then
+     ffi.cdef[[
+     int ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
+         const unsigned char *addr, size_t addr_len, int port,
+-        const unsigned char *host, ssize_t host_len,
+-        char **err);
++        unsigned int cpool_crc32, unsigned int cpool_size, char **err);
+ 
+     int ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
+         unsigned long timeout, unsigned int max_requests, char **err);
+@@ -130,6 +130,7 @@ else
+     error("unknown subsystem: " .. subsystem)
+ end
+ 
++local DEFAULT_KEEPALIVE_POOL_SIZE = 30
+ local DEFAULT_KEEPALIVE_IDLE_TIMEOUT = 60000
+ local DEFAULT_KEEPALIVE_MAX_REQUESTS = 100
+ 
+@@ -143,27 +144,61 @@ local peer_state_names = {
+ local _M = { version = base.version }
+ 
+ if subsystem == "http" then
+-    function _M.set_current_peer(addr, port, host)
++    function _M.set_current_peer(addr, port, opts)
+         local r = get_request()
+         if not r then
+             error("no request found")
+         end
+ 
++        local pool_crc32
++        local pool_size
++        if opts then
++            if type(opts) ~= "table" then
++                error("bad argument #3 to 'set_current_peer' " ..
++                      "(table expected, got " .. type(opts) .. ")", 2)
++            end
++
++            local pool = opts.pool
++            pool_size = opts.pool_size
++
++            if pool then
++                if type(pool) ~= "string" then
++                    error("bad option 'pool' to 'set_current_peer' " ..
++                          "(string expected, got " .. type(pool) .. ")", 2)
++                end
++
++                pool_crc32 = ngx_crc32_long(pool)
++            end
++
++            if pool_size then
++                if type(pool_size) ~= "number" then
++                    error("bad option 'pool_size' to 'set_current_peer' " ..
++                          "(number expected, got " .. type(pool_size) .. ")", 2)
++
++                elseif pool_size < 1 then
++                    error("bad option 'pool_size' to 'set_current_peer' " ..
++                          "(expected > 0)", 2)
++                end
++            end
++        end
++
+         if not port then
+             port = 0
++
+         elseif type(port) ~= "number" then
+             port = tonumber(port)
+         end
+ 
+-        if host ~= nil and type(host) ~= "string" then
+-            error("bad argument #3 to 'set_current_peer' "
+-                  .. "(string expected, got " .. type(host) .. ")")
++        if not pool_crc32 then
++            pool_crc32 = 0
+         end
+ 
+-        local rc = ngx_lua_ffi_balancer_set_current_peer(r, addr, #addr,
+-                                                         port,
+-                                                         host,
+-                                                         host and #host or 0,
++        if not pool_size then
++            pool_size = DEFAULT_KEEPALIVE_POOL_SIZE
++        end
++
++        local rc = ngx_lua_ffi_balancer_set_current_peer(r, addr, #addr, port,
++                                                         pool_crc32, pool_size,
+                                                          errmsg)
+         if rc == FFI_OK then
+             return true
+@@ -172,26 +207,26 @@ if subsystem == "http" then
+         return nil, ffi_str(errmsg[0])
+     end
+ else
+-    function _M.set_current_peer(addr, port, host)
++    function _M.set_current_peer(addr, port, opts)
+         local r = get_request()
+         if not r then
+             error("no request found")
+         end
+ 
++        if opts then
++            error("bad argument #3 to 'set_current_peer' ('opts' not yet " ..
++                  "implemented in " .. subsystem .. " subsystem)", 2)
++        end
++
+         if not port then
+             port = 0
++
+         elseif type(port) ~= "number" then
+             port = tonumber(port)
+         end
+ 
+-        if host ~= nil then
+-            error("bad argument #3 to 'set_current_peer' ('host' not yet " ..
+-                  "implemented in " .. subsystem .. " subsystem)", 2)
+-        end
+-
+         local rc = ngx_lua_ffi_balancer_set_current_peer(r, addr, #addr,
+-                                                         port,
+-                                                         errmsg)
++                                                         port, errmsg)
+         if rc == FFI_OK then
+             return true
+         end
