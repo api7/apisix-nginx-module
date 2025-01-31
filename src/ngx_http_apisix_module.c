@@ -158,6 +158,15 @@ ngx_http_apisix_cleanup_cert_and_key(ngx_http_apisix_ctx_t *ctx)
         ctx->upstream_pkey = NULL;
     }
 }
+
+static void
+ngx_http_apisix_cleanup_trusted_store(ngx_http_apisix_ctx_t *ctx)
+{
+    if (ctx->upstream_trusted_store != NULL) {
+        X509_STORE_free(ctx->upstream_trusted_store);
+        ctx->upstream_trusted_store = NULL;
+    }
+}
 #endif
 
 
@@ -168,6 +177,7 @@ ngx_http_apisix_cleanup(void *data)
 
 #if (NGX_HTTP_SSL)
     ngx_http_apisix_cleanup_cert_and_key(ctx);
+    ngx_http_apisix_cleanup_trusted_store(ctx);
 #endif
 }
 
@@ -250,6 +260,41 @@ failed:
     return NGX_ERROR;
 }
 
+ngx_int_t
+ngx_http_apisix_upstream_set_ssl_trusted_store(ngx_http_request_t *r, void *data)
+{
+    X509_STORE                  *store = data;
+    ngx_http_apisix_ctx_t       *ctx;
+
+    if (store == NULL) {
+        return NGX_ERROR;
+    }
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    if (ctx->upstream_trusted_store != NULL) {
+        ngx_http_apisix_cleanup_trusted_store(ctx);
+    }
+    
+    if (X509_STORE_up_ref(store) == 0) {
+        goto failed;
+    }
+
+    ctx->upstream_trusted_store = store;
+
+    return NGX_OK;
+
+failed:
+
+    ngx_http_apisix_flush_ssl_error();
+
+    return NGX_ERROR;
+}
+
 
 void
 ngx_http_apisix_set_upstream_ssl(ngx_http_request_t *r, ngx_connection_t *c)
@@ -258,6 +303,7 @@ ngx_http_apisix_set_upstream_ssl(ngx_http_request_t *r, ngx_connection_t *c)
     ngx_http_apisix_ctx_t       *ctx;
     STACK_OF(X509)              *cert;
     EVP_PKEY                    *pkey;
+    X509_STORE                  *store;
     X509                        *x509;
 #ifdef OPENSSL_IS_BORINGSSL
     size_t                       i;
@@ -275,8 +321,9 @@ ngx_http_apisix_set_upstream_ssl(ngx_http_request_t *r, ngx_connection_t *c)
     }
 
     if (ctx->upstream_cert != NULL) {
-        cert = ctx->upstream_cert;
-        pkey = ctx->upstream_pkey;
+        cert  = ctx->upstream_cert;
+        pkey  = ctx->upstream_pkey;
+        store = ctx->upstream_trusted_store;
 
         if (sk_X509_num(cert) < 1) {
             ngx_ssl_error(NGX_LOG_ERR, c->log, 0,
@@ -317,6 +364,17 @@ ngx_http_apisix_set_upstream_ssl(ngx_http_request_t *r, ngx_connection_t *c)
                           "SSL_use_PrivateKey() failed");
             goto failed;
         }
+
+        if (store != NULL) {
+            ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0,
+                           "overriding upstream SSL trusted store");
+        
+            if (SSL_set1_verify_cert_store(sc, store) == 0) {
+                ngx_ssl_error(NGX_LOG_ALERT, c->log, 0,
+                              "SSL_set1_verify_cert_store() failed");
+                goto failed;
+            }
+        }
     }
 
     return;
@@ -324,6 +382,42 @@ ngx_http_apisix_set_upstream_ssl(ngx_http_request_t *r, ngx_connection_t *c)
 failed:
 
     ngx_http_apisix_flush_ssl_error();
+}
+
+
+int
+ngx_http_apisix_upstream_set_ssl_verify(ngx_http_request_t *r, int verify)
+{
+    ngx_http_apisix_ctx_t       *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+    
+    ctx->upstream_ssl_verify_set = 1;
+    ctx->upstream_ssl_verify = verify;
+
+    return NGX_OK;
+}
+
+ngx_flag_t
+ngx_http_apisix_get_upstream_ssl_verify(ngx_http_request_t *r, ngx_flag_t proxy_ssl_verify)
+{
+    ngx_http_apisix_ctx_t       *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx == NULL) {
+        return proxy_ssl_verify;
+    }
+
+    if (!ctx->upstream_ssl_verify_set) {
+        return proxy_ssl_verify;
+    }
+
+    return ctx->upstream_ssl_verify;
 }
 #endif
 
