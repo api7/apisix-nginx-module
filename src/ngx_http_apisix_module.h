@@ -22,6 +22,7 @@ typedef struct {
 typedef struct {
     STACK_OF(X509)      *upstream_cert;
     EVP_PKEY            *upstream_pkey;
+    X509_STORE          *upstream_trusted_store;
 
     off_t                client_max_body_size;
 
@@ -34,10 +35,13 @@ typedef struct {
     unsigned             request_header_set:1;
     unsigned             header_filter_by_lua_skipped:1;
     unsigned             body_filter_by_lua_skipped:1;
+    unsigned             upstream_ssl_verify:1;
+    unsigned             upstream_ssl_verify_set:1;
 } ngx_http_apisix_ctx_t;
 
 
 void ngx_http_apisix_set_upstream_ssl(ngx_http_request_t *r, ngx_connection_t *c);
+ngx_flag_t ngx_http_apisix_get_upstream_ssl_verify(ngx_http_request_t *r, ngx_flag_t proxy_ssl_verify);
 
 ngx_flag_t ngx_http_apisix_delay_client_max_body_check(ngx_http_request_t *r);
 off_t ngx_http_apisix_client_max_body_size(ngx_http_request_t *r);
