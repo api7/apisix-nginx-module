@@ -1,0 +1,41 @@
+diff --git src/stream/ngx_stream_proxy_module.c src/stream/ngx_stream_proxy_module.c
+index 82dca1e..bb17aeb 100644
+--- src/stream/ngx_stream_proxy_module.c
++++ src/stream/ngx_stream_proxy_module.c
+@@ -8,6 +8,9 @@
+ #include <ngx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_stream.h>
++#if (NGX_STREAM_APISIX)
++#include <ngx_stream_apisix_module.h>
++#endif
+ 
+ 
+ typedef struct {
+@@ -823,7 +826,14 @@ ngx_stream_proxy_init_upstream(ngx_stream_session_t *s)
+ 
+ #if (NGX_STREAM_SSL)
+ 
++#if (NGX_STREAM_APISIX)
++    if (pc->type == SOCK_STREAM &&
++        (ngx_stream_apisix_is_proxy_ssl_enabled(s) || pscf->ssl_enable))
++    {
++#else
++
+     if (pc->type == SOCK_STREAM && pscf->ssl_enable) {
++#endif
+ 
+         if (u->proxy_protocol) {
+             if (ngx_stream_proxy_send_proxy_protocol(s) != NGX_OK) {
+@@ -2223,7 +2233,11 @@ ngx_stream_proxy_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
+     ngx_conf_merge_ptr_value(conf->ssl_conf_commands,
+                               prev->ssl_conf_commands, NULL);
+ 
++#if (NGX_STREAM_APISIX)
++    if (ngx_stream_proxy_set_ssl(cf, conf) != NGX_OK) {
++#else
+     if (conf->ssl_enable && ngx_stream_proxy_set_ssl(cf, conf) != NGX_OK) {
++#endif
+         return NGX_CONF_ERROR;
+     }
+ 

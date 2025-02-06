@@ -55,45 +55,7 @@ timeout
 
 
 
-=== TEST 3: read with peek
---- stream_server_config
-    preread_by_lua_block {
-        local ffi = require("ffi")
-        local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
-        sk:settimeout(5)
-        sk:peek(4)
-        local p = assert(sk:read(9))
-        ngx.say(ffi.string(p, 9))
-        ngx.exit(200)
-    }
-    proxy_pass 127.0.0.1:1990;
---- stream_request
-hello world
---- stream_response
-hello wor
-
-
-
-=== TEST 4: read with peek (peeked data > read)
---- stream_server_config
-    preread_by_lua_block {
-        local ffi = require("ffi")
-        local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
-        sk:settimeout(5)
-        sk:peek(11)
-        local p = assert(sk:read(9))
-        ngx.say(ffi.string(p, 9))
-        ngx.exit(200)
-    }
-    proxy_pass 127.0.0.1:1990;
---- stream_request
-hello world
---- stream_response
-hello wor
-
-
-
-=== TEST 5: read over buffer
+=== TEST 3: read over buffer
 --- stream_server_config
     content_by_lua_block {
         local ffi = require("ffi")
@@ -110,7 +72,7 @@ hello wor
 
 
 
-=== TEST 6: read over buffer in the middle
+=== TEST 4: read over buffer in the middle
 --- stream_server_config
     content_by_lua_block {
         local ffi = require("ffi")
@@ -143,7 +105,7 @@ stream lua tcp socket allocate new new buf of size 4608
 
 
 
-=== TEST 7: read & move
+=== TEST 5: read & move
 --- stream_config
     server {
         listen 1995;
@@ -186,7 +148,7 @@ hello world
 
 
 
-=== TEST 8: multiple moves
+=== TEST 6: multiple moves
 --- stream_config
     server {
         listen 1995;
@@ -219,7 +181,7 @@ hello world
 
 
 
-=== TEST 9: multiple moves + read over buffer in the middle
+=== TEST 7: multiple moves + read over buffer in the middle
 --- stream_config
     server {
         listen 1995;
@@ -259,7 +221,7 @@ stream lua tcp socket allocate new new buf of size 144
 
 
 
-=== TEST 10: drain & move
+=== TEST 8: drain & move
 --- stream_config
     server {
         listen 1995;
@@ -302,7 +264,7 @@ hello world
 
 
 
-=== TEST 11: read & drain & move & reset_read_buf
+=== TEST 9: read & drain & move & reset_read_buf
 --- stream_config
     server {
         listen 1995;
@@ -337,7 +299,7 @@ hello world
 
 
 
-=== TEST 12: move & reset_read_buf + read over buffer in the middle
+=== TEST 10: move & reset_read_buf + read over buffer in the middle
 --- stream_config
     server {
         listen 1995;
@@ -375,7 +337,7 @@ hello world
 
 
 
-=== TEST 13: read_line
+=== TEST 11: read_line
 --- stream_server_config
     content_by_lua_block {
         local ffi = require("ffi")
@@ -398,7 +360,7 @@ hello world
 
 
 
-=== TEST 14: read_line, bad `\r\n`
+=== TEST 12: read_line, bad `\r\n`
 --- stream_server_config
     content_by_lua_block {
         local ffi = require("ffi")
@@ -421,7 +383,7 @@ hello world
 
 
 
-=== TEST 15: read_line, no `\r\n`
+=== TEST 13: read_line, no `\r\n`
 --- stream_server_config
     content_by_lua_block {
         local ffi = require("ffi")
@@ -446,7 +408,7 @@ socket read timed out
 
 
 
-=== TEST 16: read_line within len
+=== TEST 14: read_line within len
 --- stream_server_config
     content_by_lua_block {
         local ffi = require("ffi")
@@ -469,7 +431,7 @@ socket read timed out
 
 
 
-=== TEST 17: read_line within len, no `\r\n`
+=== TEST 15: read_line within len, no `\r\n`
 --- stream_server_config
     content_by_lua_block {
         local ffi = require("ffi")

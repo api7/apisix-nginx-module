@@ -1,0 +1,142 @@
+diff --git src/core/ngx_connection.c src/core/ngx_connection.c
+index b7c0fe2..2e3e3c2 100644
+--- src/core/ngx_connection.c
++++ src/core/ngx_connection.c
+@@ -434,6 +434,10 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
+                 continue;
+             }
+ 
++            if (ngx_is_privileged_agent != ls[i].privileged_agent) {
++                continue;
++            }
++
+ #if (NGX_HAVE_REUSEPORT)
+ 
+             if (ls[i].add_reuseport) {
+diff --git src/core/ngx_connection.h src/core/ngx_connection.h
+index 84dd804..d3d6930 100644
+--- src/core/ngx_connection.h
++++ src/core/ngx_connection.h
+@@ -66,6 +66,7 @@ struct ngx_listening_s {
+     unsigned            shared:1;    /* shared between threads or processes */
+     unsigned            addr_ntop:1;
+     unsigned            wildcard:1;
++    unsigned            privileged_agent:1;
+ 
+ #if (NGX_HAVE_INET6)
+     unsigned            ipv6only:1;
+diff --git src/event/ngx_event.c src/event/ngx_event.c
+index d0b4a55..54bdaae 100644
+--- src/event/ngx_event.c
++++ src/event/ngx_event.c
+@@ -845,7 +845,9 @@ ngx_event_process_init(ngx_cycle_t *cycle)
+     for (i = 0; i < cycle->listening.nelts; i++) {
+ 
+ #if (NGX_HAVE_REUSEPORT)
+-        if (ls[i].reuseport && ls[i].worker != ngx_worker) {
++        if ((ngx_is_privileged_agent && !ls[i].privileged_agent)
++            || (ls[i].reuseport && ls[i].worker != ngx_worker))
++        {
+             ngx_log_debug2(NGX_LOG_DEBUG_CORE, cycle->log, 0,
+                            "closing unused fd:%d listening on %V",
+                            ls[i].fd, &ls[i].addr_text);
+@@ -860,6 +862,10 @@ ngx_event_process_init(ngx_cycle_t *cycle)
+ 
+             continue;
+         }
++
++        if (!ngx_is_privileged_agent && ls[i].privileged_agent) {
++            continue;
++        }
+ #endif
+ 
+         c = ngx_get_connection(ls[i].fd, cycle->log);
+diff --git src/http/ngx_http.c src/http/ngx_http.c
+index d835f89..8f019c2 100644
+--- src/http/ngx_http.c
++++ src/http/ngx_http.c
+@@ -1262,6 +1262,13 @@ ngx_http_add_addresses(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
+             continue;
+         }
+ 
++        if (lsopt->privileged_agent != addr[i].opt.privileged_agent) {
++            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
++                               "%V is already occupied by privileged agent",
++                               &addr[i].opt.addr_text);
++            return NGX_ERROR;
++        }
++
+         /* the address is already in the address list */
+ 
+         if (ngx_http_add_server(cf, cscf, &addr[i]) != NGX_OK) {
+@@ -1886,6 +1893,8 @@ ngx_http_add_listening(ngx_conf_t *cf, ngx_http_conf_addr_t *addr)
+     ls->quic = addr->opt.quic;
+ #endif
+ 
++    ls->privileged_agent = addr->opt.privileged_agent;
++
+     return ls;
+ }
+ 
+diff --git src/http/ngx_http_core_module.c src/http/ngx_http_core_module.c
+index 7845f8f..161de8b 100644
+--- src/http/ngx_http_core_module.c
++++ src/http/ngx_http_core_module.c
+@@ -4308,6 +4308,20 @@ ngx_http_core_listen(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+             continue;
+         }
+ 
++        if (ngx_strncmp(value[n].data, "enable_process=", 15) == 0) {
++            if (ngx_strcmp(&value[n].data[15], "privileged_agent") == 0) {
++                lsopt.privileged_agent = 1;
++
++            } else {
++                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
++                                   "invalid enable_process value: \"%s\"",
++                                   &value[n].data[15]);
++                return NGX_CONF_ERROR;
++            }
++
++            continue;
++        }
++
+         ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                            "invalid parameter \"%V\"", &value[n]);
+         return NGX_CONF_ERROR;
+diff --git src/http/ngx_http_core_module.h src/http/ngx_http_core_module.h
+index 765e7ff..302a14b 100644
+--- src/http/ngx_http_core_module.h
++++ src/http/ngx_http_core_module.h
+@@ -83,6 +83,7 @@ typedef struct {
+     unsigned                   reuseport:1;
+     unsigned                   so_keepalive:2;
+     unsigned                   proxy_protocol:1;
++    unsigned                   privileged_agent:1;
+ 
+     int                        backlog;
+     int                        rcvbuf;
+diff --git src/os/unix/ngx_process_cycle.c src/os/unix/ngx_process_cycle.c
+index dadf03f..6794b34 100644
+--- src/os/unix/ngx_process_cycle.c
++++ src/os/unix/ngx_process_cycle.c
+@@ -1227,7 +1227,11 @@ ngx_privileged_agent_process_cycle(ngx_cycle_t *cycle, void *data)
+     ngx_process = NGX_PROCESS_HELPER;
+     ngx_is_privileged_agent = 1;
+ 
+-    ngx_close_listening_sockets(cycle);
++    if (ngx_open_listening_sockets(cycle) != NGX_OK) {
++        ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
++                      "failed to init privileged agent listeners");
++        exit(2);
++    }
+ 
+     /* Set a moderate number of connections for a helper process. */
+     cycle->connection_n = ccf->privileged_agent_connections;
+@@ -1242,6 +1246,7 @@ ngx_privileged_agent_process_cycle(ngx_cycle_t *cycle, void *data)
+ 
+         if (ngx_terminate || ngx_quit) {
+             ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "exiting");
++            ngx_close_listening_sockets(cycle);
+             ngx_worker_process_exit(cycle);
+         }
+ 

@@ -1,0 +1,40 @@
+diff --git src/ngx_stream_lua_ssl_certby.c src/ngx_stream_lua_ssl_certby.c
+index a34e187..e4cdb1a 100644
+--- src/ngx_stream_lua_ssl_certby.c
++++ src/ngx_stream_lua_ssl_certby.c
+@@ -1470,9 +1470,16 @@ ngx_stream_lua_ssl_verify_callback(int ok, X509_STORE_CTX *x509_store)
+ #endif
+ 
+ 
++static int
++ngx_stream_lua_ssl_verify_reject_in_handshake_callback(int ok, X509_STORE_CTX *x509_store)
++{
++    return ok;
++}
++
++
+ int
+ ngx_stream_lua_ffi_ssl_verify_client(ngx_stream_lua_request_t *r,
+-    void *client_cert, void *trusted_certs, int depth, char **err)
++    void *client_cert, void *trusted_certs, int depth, int reject_in_handshake, char **err)
+ {
+ #ifdef LIBRESSL_VERSION_NUMBER
+ 
+@@ -1421,8 +1428,15 @@ ngx_stream_lua_ffi_ssl_verify_client(ngx_stream_lua_request_t *r,
+ 
+     /* enable verify */
+ 
+-    SSL_set_verify(ssl_conn, SSL_VERIFY_PEER,
+-                   ngx_stream_lua_ssl_verify_callback);
++    if (reject_in_handshake) {
++        SSL_set_verify(ssl_conn,
++                       SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT ,
++                       ngx_stream_lua_ssl_verify_reject_in_handshake_callback);
++
++    } else {
++        SSL_set_verify(ssl_conn, SSL_VERIFY_PEER,
++                       ngx_stream_lua_ssl_verify_callback);
++    }
+ 
+     /* set depth */
+ 
