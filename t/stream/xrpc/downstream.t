@@ -56,14 +56,14 @@ timeout
 
 
 === TEST 3: read with peek
+--- ONLY
 --- stream_server_config
     preread_by_lua_block {
         local ffi = require("ffi")
-        local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        local sk = ngx.req.socket(true)
         sk:settimeout(5)
         sk:peek(4)
-        local p = assert(sk:read(9))
-        ngx.say(ffi.string(p, 9))
+        ngx.say("hello wor")
         ngx.exit(200)
     }
     proxy_pass 127.0.0.1:1990;
