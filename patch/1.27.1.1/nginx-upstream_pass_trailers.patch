@@ -1,18 +1,8 @@
 diff --git src/http/ngx_http_upstream.c src/http/ngx_http_upstream.c
-index d29e503cb..014082d30 100644
+index d04d91e..2dd1102 100644
 --- src/http/ngx_http_upstream.c
 +++ src/http/ngx_http_upstream.c
-@@ -8,6 +8,9 @@
- #include <ngx_config.h>
- #include <ngx_core.h>
- #include <ngx_http.h>
-+#if (NGX_HTTP_APISIX)
-+#include <ngx_http_apisix_module.h>
-+#endif
- 
- 
- #if (NGX_HTTP_CACHE)
-@@ -2977,6 +2980,12 @@ ngx_http_upstream_process_trailers(ngx_http_request_t *r,
+@@ -2989,6 +2989,12 @@ ngx_http_upstream_process_trailers(ngx_http_request_t *r,
          return NGX_OK;
      }
  
