@@ -68,4 +68,7 @@ ngx_flag_t ngx_http_apisix_is_ntls_enabled(ngx_http_conf_ctx_t *conf_ctx);
 char * ngx_http_apisix_error_log_request_id(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 char * ngx_http_apisix_error_log_init(ngx_conf_t *cf);
 char * ngx_http_apisix_error_log_request_id(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+
+ngx_int_t ngx_http_apisix_set_upstream_pass_trailers(ngx_http_request_t *r, int on);
+ngx_int_t ngx_http_apisix_is_upstream_pass_trailers(ngx_http_request_t *r)
 #endif /* _NGX_HTTP_APISIX_H_INCLUDED_ */
