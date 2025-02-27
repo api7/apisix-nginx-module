@@ -1,7 +1,7 @@
-diff --git a/src/http/ngx_http_upstream.c b/src/http/ngx_http_upstream.c
+diff --git src/http/ngx_http_upstream.c src/http/ngx_http_upstream.c
 index d04d91e..d4926ce 100644
---- a/src/http/ngx_http_upstream.c
-+++ b/src/http/ngx_http_upstream.c
+--- src/http/ngx_http_upstream.c
++++ src/http/ngx_http_upstream.c
 @@ -8,6 +8,9 @@
  #include <ngx_config.h>
  #include <ngx_core.h>
