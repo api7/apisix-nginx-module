@@ -1048,3 +1048,34 @@ ngx_http_apisix_error_log_request_id(ngx_conf_t *cf, ngx_command_t *cmd, void *c
     return NGX_CONF_OK;
 }
 
+
+ngx_int_t
+ngx_http_apisix_set_upstream_pass_trailers(ngx_http_request_t *r, int on)
+{
+    ngx_http_apisix_ctx_t       *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    ctx->upstream_pass_trailers = on;
+    ctx->upstream_pass_trailers_set = 1;
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_http_apisix_is_upstream_pass_trailers(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t          *ctx;
+
+    ctx = ngx_http_apisix_get_module_ctx(r);
+
+    if (ctx != NULL && ctx->upstream_pass_trailers_set) {
+        return ctx->upstream_pass_trailers;
+    }
+
+    return 1;
+}

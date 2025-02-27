@@ -37,6 +37,8 @@ typedef struct {
     unsigned             body_filter_by_lua_skipped:1;
     unsigned             upstream_ssl_verify:1;
     unsigned             upstream_ssl_verify_set:1;
+    unsigned             upstream_pass_trailers:1;
+    unsigned             upstream_pass_trailers_set:1;
 } ngx_http_apisix_ctx_t;
 
 
