@@ -12,6 +12,7 @@ jobs:
       matrix:
         op_version:
           - "1.25.3.1"
+          - "1.27.1.1"
 
     runs-on: "ubuntu-20.04"
 
