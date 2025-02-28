@@ -1069,7 +1069,8 @@ ngx_http_apisix_set_upstream_pass_trailers(ngx_http_request_t *r, int on)
 ngx_int_t
 ngx_http_apisix_is_upstream_pass_trailers(ngx_http_request_t *r)
 {
-    ngx_http_apisix_ctx_t          *ctx;
+    return 0;
+    /* ngx_http_apisix_ctx_t          *ctx;
 
     ctx = ngx_http_apisix_get_module_ctx(r);
 
@@ -1078,5 +1079,5 @@ ngx_http_apisix_is_upstream_pass_trailers(ngx_http_request_t *r)
         return ctx->upstream_pass_trailers;
     }
 
-    return 1;
+    return 1; */
 }
