@@ -57,14 +57,14 @@ Since the processing logic for the trailer is located in the upstream module, it
 --- http_config
 server {
     listen 1985;
-    location /t {
+    location / {
         add_trailer "foo" "bar";
         echo "hello";
     }
 }
 --- config
 location /up {
-    proxy_pass http://127.0.0.1:1985/t;
+    grpc_pass grpc://127.0.0.1:1985;
 }
 location /t {
     access_by_lua_block {
@@ -108,14 +108,14 @@ Since the processing logic for the trailer is located in the upstream module, it
 --- http_config
 server {
     listen 1985;
-    location /t {
+    location / {
         add_trailer "foo" "bar";
         echo "hello";
     }
 }
 --- config
 location /up {
-    proxy_pass http://127.0.0.1:1985/t;
+    grpc_pass grpc://127.0.0.1:1985;
 }
 location /t {
     access_by_lua_block {
