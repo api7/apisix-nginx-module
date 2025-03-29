@@ -1074,7 +1074,7 @@ ngx_http_apisix_is_upstream_pass_trailers(ngx_http_request_t *r)
     ctx = ngx_http_apisix_get_module_ctx(r);
 
     if (ctx != NULL && ctx->upstream_pass_trailers_set) {
-        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "apisix upstream pass trailers set: %d", ctx->upstream_pass_trailers);
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "apisix upstream pass trailers set: %d", ctx->upstream_pass_trailers);
         return ctx->upstream_pass_trailers;
     }
 
