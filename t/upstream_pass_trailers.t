@@ -23,7 +23,7 @@ location /a6.RouteService/GetRoute {
         ngx.req.set_body_data(ngx.decode_base64("AAAAAAcKBXdvcmxkCgo="))
 
         -- keep upstream trailers
-        assert(require("resty.apisix.upstream").set_pass_trailers(false), 'failed to set pass trailers')
+        assert(require("resty.apisix.upstream").set_pass_trailers(true), 'failed to set pass trailers')
     }
     grpc_pass grpc://127.0.0.1:50001;
 }
@@ -53,8 +53,8 @@ location /t {
         assert(string.find(data, "grpc-status: 0", 1, true), "missing trailer")
     }
 }
---- request
-GET /t
+--- error_log
+apisix upstream pass trailers set: 1
 
 
 
@@ -98,5 +98,5 @@ location /t {
         assert(not string.find(data, "grpc-status: 0", 1, true), "exist trailer")
     }
 }
---- request
-GET /t
+--- error_log
+apisix upstream pass trailers set: 0
