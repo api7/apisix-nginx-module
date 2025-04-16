@@ -16,8 +16,10 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Set up Clang
-        uses: egor-tensin/setup-clang@v1
+      - name: Set up build environment
+        run: |
+          sudo apt update
+          sudo apt install -y git wget build-essential
 
       - name: Get dependencies
         run: sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl
@@ -31,7 +33,7 @@ jobs:
         run: |
           # TODO: use a fixed release once they have created one.
           # See https://github.com/Tongsuo-Project/Tongsuo/issues/318
-          git clone https://github.com/api7/tongsuo --depth 1
+          git clone https://github.com/Tongsuo-Project/Tongsuo -b 8.4.0 --depth 1
           pushd tongsuo
           ./config shared enable-ntls -g --prefix=/usr/local/tongsuo
           make -j2
