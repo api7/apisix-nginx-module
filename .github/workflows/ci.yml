@@ -12,6 +12,7 @@ jobs:
       matrix:
         op_version:
           - "1.25.3.1"
+          - "1.27.1.1"
 
     runs-on: "ubuntu-20.04"
 
@@ -31,6 +32,7 @@ jobs:
           sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl luarocks libpcre3 libpcre3-dev zlib1g-dev
           sudo luarocks install lua-resty-http > build.log 2>&1 || (cat build.log && exit 1)
           sudo luarocks install lua-resty-openssl > build.log 2>&1 || (cat build.log && exit 1)
+          cd t/assets/grpc && ./setup.sh > build.log 2>&1 || (cat build.log && exit 1) && cd ../../..
 
       - name: Before install
         run: |

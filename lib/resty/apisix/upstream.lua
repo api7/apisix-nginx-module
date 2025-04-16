@@ -5,6 +5,7 @@ local get_phase = ngx.get_phase
 local C = ffi.C
 local NGX_ERROR = ngx.ERROR
 local NGX_OK = ngx.OK
+local type = type
 
 
 base.allows_subsystem("http")
@@ -15,6 +16,8 @@ typedef intptr_t        ngx_int_t;
 ngx_int_t ngx_http_apisix_upstream_set_cert_and_key(ngx_http_request_t *r, void *cert, void *key);
 ngx_int_t ngx_http_apisix_upstream_set_ssl_trusted_store(ngx_http_request_t *r, void *store);
 int ngx_http_apisix_upstream_set_ssl_verify(ngx_http_request_t *r, int verify);
+
+ngx_int_t ngx_http_apisix_set_upstream_pass_trailers(ngx_http_request_t *r, int on);
 ]])
 local _M = {}
 
@@ -104,6 +107,21 @@ do
     end
 end
 _M.set_ssl_verify = set_ssl_verify
+
+
+function _M.set_pass_trailers(on)
+    if type(on) ~= 'boolean' then
+        return nil, "on expects a boolean but found " .. type(on)
+    end
+
+    local r = get_request()
+    local ret = C.ngx_http_apisix_set_upstream_pass_trailers(r, on and 1 or 0)
+    if ret == NGX_ERROR then
+        return nil, "error while setting upstream pass_trailers"
+    end
+
+    return true
+end
 
 
 return _M
