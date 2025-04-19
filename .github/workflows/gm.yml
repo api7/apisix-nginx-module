@@ -52,7 +52,7 @@ jobs:
 
           export cc_opt="-I${openssl_prefix}/include -Werror"
           export ld_opt="-L${openssl_prefix}/lib64 -Wl,-rpath,${openssl_prefix}/lib64"
-          OR_PREFIX=$OPENRESTY_PREFIX CC="clang -fsanitize=address -fcolor-diagnostics -Qunused-arguments" \
+          OR_PREFIX=$OPENRESTY_PREFIX CC="gcc -fsanitize=address -fdiagnostics-color=always -Wno-unused-but-set-variable -Wno-unused-parameter" \
               ./build-apisix-base.sh latest
 
       - name: Script
