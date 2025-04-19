@@ -31,8 +31,6 @@ jobs:
 
       - name: Install SSL lib
         run: |
-          # TODO: use a fixed release once they have created one.
-          # See https://github.com/Tongsuo-Project/Tongsuo/issues/318
           git clone -b 8.4.0 --depth 1 https://github.com/Tongsuo-Project/Tongsuo tongsuo
           pushd tongsuo
           ./config shared enable-ntls -g --prefix=/usr/local/tongsuo
