@@ -16,8 +16,10 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Set up Clang
-        uses: egor-tensin/setup-clang@v1
+      - name: Set up build environment
+        run: |
+          sudo apt update
+          sudo apt install -y git wget build-essential
 
       - name: Get dependencies
         run: sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl
@@ -29,9 +31,7 @@ jobs:
 
       - name: Install SSL lib
         run: |
-          # TODO: use a fixed release once they have created one.
-          # See https://github.com/Tongsuo-Project/Tongsuo/issues/318
-          git clone https://github.com/api7/tongsuo --depth 1
+          git clone -b 8.4.0 --depth 1 https://github.com/Tongsuo-Project/Tongsuo tongsuo
           pushd tongsuo
           ./config shared enable-ntls -g --prefix=/usr/local/tongsuo
           make -j2
@@ -45,12 +45,13 @@ jobs:
       - name: Install
         run: |
           wget https://raw.githubusercontent.com/api7/apisix-build-tools/master/build-apisix-base.sh
+          sed -i '/--with-http_v3_module[[:space:]]*\\$/d' build-apisix-base.sh ## tongsuo does not support quic tls
           chmod +x build-apisix-base.sh
           export openssl_prefix=/usr/local/tongsuo
 
           export cc_opt="-I${openssl_prefix}/include -Werror"
           export ld_opt="-L${openssl_prefix}/lib64 -Wl,-rpath,${openssl_prefix}/lib64"
-          OR_PREFIX=$OPENRESTY_PREFIX CC="clang -fsanitize=address -fcolor-diagnostics -Qunused-arguments" \
+          OR_PREFIX=$OPENRESTY_PREFIX CC="gcc -fsanitize=address -fdiagnostics-color=always -Wno-unused-but-set-variable -Wno-unused-parameter" \
               ./build-apisix-base.sh latest
 
       - name: Script

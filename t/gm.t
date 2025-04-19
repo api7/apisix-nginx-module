@@ -364,7 +364,7 @@ SSL_do_handshake() failed
     }
 
 --- error_log
-New, TLSv1.2, Cipher is ECDHE-RSA-AES256-GCM-SHA384
+New, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA384
 --- no_error_log
 [error]
 [alert]
