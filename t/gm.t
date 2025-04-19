@@ -353,7 +353,7 @@ SSL_do_handshake() failed
                 if ngx.shared.done:get("handshake") then
                     local out = f:read('*a')
                     ngx.log(ngx.INFO, out)
-                    ngx.say("ok")
+                    ngx.say("ok", out)
                     f:close()
                     return
                 end
@@ -369,3 +369,5 @@ New, TLSv1.2, Cipher is ECDHE-RSA-AES256-GCM-SHA384
 [error]
 [alert]
 [emerg]
+--- response_body
+123
