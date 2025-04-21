@@ -1,0 +1,12 @@
+diff --git src/ngx_http_lua_bodyfilterby.c src/ngx_http_lua_bodyfilterby.c
+index c0484c8d..179a501a 100644
+--- src/ngx_http_lua_bodyfilterby.c
++++ src/ngx_http_lua_bodyfilterby.c
+@@ -368,6 +368,7 @@ ngx_http_lua_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
+         }
+ 
+     } else {
++        ctx->context = old_context;
+         out = NULL;
+     }
+ 
