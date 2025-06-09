@@ -73,7 +73,7 @@ elif [[ "$root" == *openresty-1.27.1.1 ]]; then
       apply_patch "$patch_dir" "$root" "ngx_lua" "0.10.27"
       apply_patch "$patch_dir" "$root" "ngx_stream_lua" "0.0.15"
 elif [[ "$root" == *openresty-1.27.1.2 ]]; then
-      patch_dir="$PWD/1.27.1.2"
+      patch_dir="$PWD/1.27.1.1"
       apply_patch "$patch_dir" "$root" "nginx" "1.27.1"
       apply_patch "$patch_dir" "$root" "lua-resty-core" "0.1.31"
       apply_patch "$patch_dir" "$root" "ngx_lua" "0.10.28"
