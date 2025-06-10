@@ -1,31 +1,7 @@
-From 823e886851263a8ce84fd22aeead4c3aa819bce1 Mon Sep 17 00:00:00 2001
-From: Sergey Kandaurov <pluknet@nginx.com>
-Date: Wed, 22 Jan 2025 18:55:44 +0400
-Subject: [PATCH] SNI: added restriction for TLSv1.3 cross-SNI session
- resumption.
-
-In OpenSSL, session resumption always happens in the default SSL context,
-prior to invoking the SNI callback.  Further, unlike in TLSv1.2 and older
-protocols, SSL_get_servername() returns values received in the resumption
-handshake, which may be different from the value in the initial handshake.
-Notably, this makes the restriction added in b720f650b insufficient for
-sessions resumed with different SNI server name.
-
-Considering the example from b720f650b, previously, a client was able to
-request example.org by presenting a certificate for example.org, then to
-resume and request example.com.
-
-The fix is to reject handshakes resumed with a different server name, if
-verification of client certificates is enabled in a corresponding server
-configuration.
----
- src/http/ngx_http_request.c | 27 +++++++++++++++++++++++++--
- 1 file changed, 25 insertions(+), 2 deletions(-)
-
-diff --git a/src/http/ngx_http_request.c b/src/http/ngx_http_request.c
+diff --git src/http/ngx_http_request.c src/http/ngx_http_request.c
 index 013b7158e..d5ac3d415 100644
---- a/src/http/ngx_http_request.c
-+++ b/src/http/ngx_http_request.c
+--- src/http/ngx_http_request.c
++++ src/http/ngx_http_request.c
 @@ -909,6 +909,31 @@ ngx_http_ssl_servername(ngx_ssl_conn_t *ssl_conn, int *ad, void *arg)
          goto done;
      }
@@ -67,6 +43,3 @@ index 013b7158e..d5ac3d415 100644
      c->ssl->buffer_size = sscf->buffer_size;
  
      if (sscf->ssl.ctx) {
--- 
-2.43.0
-
