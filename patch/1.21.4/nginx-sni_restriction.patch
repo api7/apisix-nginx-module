@@ -1,5 +1,5 @@
 diff --git src/http/ngx_http_request.c src/http/ngx_http_request.c
-index 013b7158e..0f8e981b5 100644
+index 013b7158e..6bac89cf4 100644
 --- src/http/ngx_http_request.c
 +++ src/http/ngx_http_request.c
 @@ -909,6 +909,31 @@ ngx_http_ssl_servername(ngx_ssl_conn_t *ssl_conn, int *ad, void *arg)
@@ -43,7 +43,7 @@ index 013b7158e..0f8e981b5 100644
      c->ssl->buffer_size = sscf->buffer_size;
  
      if (sscf->ssl.ctx) {
-@@ -958,6 +981,29 @@ done:
+@@ -958,6 +981,27 @@ done:
  
      sscf = ngx_http_get_module_srv_conf(hc->conf_ctx, ngx_http_ssl_module);
  
@@ -56,16 +56,14 @@ index 013b7158e..0f8e981b5 100644
 +     * is only returned in OpenSSL 1.1.1+ as well
 +     */
 +
-+    if (sscf->verify) {
-+        const char  *hostname;
++    const char  *hostname;
 +
-+        hostname = SSL_SESSION_get0_hostname(SSL_get0_session(ssl_conn));
++    hostname = SSL_SESSION_get0_hostname(SSL_get0_session(ssl_conn));
 +
-+        if (hostname != NULL && ngx_strcmp(hostname, servername) != 0) {
-+            c->ssl->handshake_rejected = 1;
-+            *ad = SSL_AD_ACCESS_DENIED;
-+            return SSL_TLSEXT_ERR_ALERT_FATAL;
-+        }
++    if (hostname != NULL && ngx_strcmp(hostname, servername) != 0) {
++        c->ssl->handshake_rejected = 1;
++        *ad = SSL_AD_ACCESS_DENIED;
++        return SSL_TLSEXT_ERR_ALERT_FATAL;
 +    }
 +
 +#endif
