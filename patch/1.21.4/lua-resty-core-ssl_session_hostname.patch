@@ -1,5 +1,5 @@
 diff --git lib/ngx/ssl.lua lib/ngx/ssl.lua
-index 8792be0..aa1d0f8 100644
+index 8792be0..16b9c13 100644
 --- lib/ngx/ssl.lua
 +++ lib/ngx/ssl.lua
 @@ -26,6 +26,7 @@ local ngx_lua_ffi_ssl_set_der_private_key
@@ -20,16 +20,15 @@ index 8792be0..aa1d0f8 100644
      int ngx_http_lua_ffi_ssl_raw_client_addr(ngx_http_request_t *r, char **addr,
          size_t *addrlen, int *addrtype, char **err);
  
-@@ -96,7 +100,7 @@ if subsystem == 'http' then
-         C.ngx_http_lua_ffi_ssl_set_der_private_key
+@@ -97,6 +101,7 @@ if subsystem == 'http' then
      ngx_lua_ffi_ssl_raw_server_addr = C.ngx_http_lua_ffi_ssl_raw_server_addr
      ngx_lua_ffi_ssl_server_port = C.ngx_http_lua_ffi_ssl_server_port
--    ngx_lua_ffi_ssl_server_name = C.ngx_http_lua_ffi_ssl_server_name
+     ngx_lua_ffi_ssl_server_name = C.ngx_http_lua_ffi_ssl_server_name
 +    ngx_lua_ffi_ssl_session_hostname = C.ngx_http_lua_ffi_ssl_session_hostname
      ngx_lua_ffi_ssl_raw_client_addr = C.ngx_http_lua_ffi_ssl_raw_client_addr
      ngx_lua_ffi_cert_pem_to_der = C.ngx_http_lua_ffi_cert_pem_to_der
      ngx_lua_ffi_priv_key_pem_to_der = C.ngx_http_lua_ffi_priv_key_pem_to_der
-@@ -129,6 +133,9 @@ elseif subsystem == 'stream' then
+@@ -129,6 +134,9 @@ elseif subsystem == 'stream' then
      int ngx_stream_lua_ffi_ssl_server_name(ngx_stream_lua_request_t *r,
          char **name, size_t *namelen, char **err);
  
@@ -39,7 +38,7 @@ index 8792be0..aa1d0f8 100644
      int ngx_stream_lua_ffi_ssl_raw_client_addr(ngx_stream_lua_request_t *r,
          char **addr, size_t *addrlen, int *addrtype, char **err);
  
-@@ -168,6 +175,7 @@ elseif subsystem == 'stream' then
+@@ -168,6 +176,7 @@ elseif subsystem == 'stream' then
      ngx_lua_ffi_ssl_raw_server_addr = C.ngx_stream_lua_ffi_ssl_raw_server_addr
      ngx_lua_ffi_ssl_server_port = C.ngx_stream_lua_ffi_ssl_server_port
      ngx_lua_ffi_ssl_server_name = C.ngx_stream_lua_ffi_ssl_server_name
@@ -47,7 +46,7 @@ index 8792be0..aa1d0f8 100644
      ngx_lua_ffi_ssl_raw_client_addr = C.ngx_stream_lua_ffi_ssl_raw_client_addr
      ngx_lua_ffi_cert_pem_to_der = C.ngx_stream_lua_ffi_cert_pem_to_der
      ngx_lua_ffi_priv_key_pem_to_der = C.ngx_stream_lua_ffi_priv_key_pem_to_der
-@@ -299,6 +307,27 @@ function _M.server_name()
+@@ -299,6 +308,27 @@ function _M.server_name()
  end
  
  
