@@ -1,5 +1,5 @@
 diff --git src/ngx_http_lua_ssl_certby.c src/ngx_http_lua_ssl_certby.c
-index b8e70dde..f00f794f 100644
+index b8e70dde..c3bfc790 100644
 --- src/ngx_http_lua_ssl_certby.c
 +++ src/ngx_http_lua_ssl_certby.c
 @@ -870,6 +870,46 @@ ngx_http_lua_ffi_ssl_server_name(ngx_http_request_t *r, char **name,
@@ -24,7 +24,7 @@ index b8e70dde..f00f794f 100644
 +    }
 +
 +#if (defined(TLS1_3_VERSION)                                                   \
-+     && !defined(LIBRESSL_VERSION_NUMBER) && !defined(OPENSSL_IS_BORINGSSL)
++     && !defined(LIBRESSL_VERSION_NUMBER) && !defined(OPENSSL_IS_BORINGSSL))
 +
 +    /*
 +     * SSL_SESSION_get0_hostname() is only available in OpenSSL 1.1.1+,
