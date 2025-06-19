@@ -1,5 +1,5 @@
 diff --git src/ngx_stream_lua_ssl_certby.c src/ngx_stream_lua_ssl_certby.c
-index 7b4cc5b..a67386d 100644
+index 7b4cc5b..054a45e 100644
 --- src/ngx_stream_lua_ssl_certby.c
 +++ src/ngx_stream_lua_ssl_certby.c
 @@ -882,6 +882,49 @@ ngx_stream_lua_ffi_ssl_server_name(ngx_stream_lua_request_t *r, char **name,
@@ -7,7 +7,7 @@ index 7b4cc5b..a67386d 100644
  
  
 +int
-+ngx_stream_lua_ffi_ssl_session_hostname(ngx_stream_request_t *r, char **name,
++ngx_stream_lua_ffi_ssl_session_hostname(ngx_stream_lua_request_t *r, char **name,
 +    size_t *namelen, char **err)
 +{
 +    ngx_ssl_conn_t          *ssl_conn;
