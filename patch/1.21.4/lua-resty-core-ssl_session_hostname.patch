@@ -1,0 +1,76 @@
+diff --git lib/ngx/ssl.lua lib/ngx/ssl.lua
+index 8792be0..16b9c13 100644
+--- lib/ngx/ssl.lua
++++ lib/ngx/ssl.lua
+@@ -26,6 +26,7 @@ local ngx_lua_ffi_ssl_set_der_private_key
+ local ngx_lua_ffi_ssl_raw_server_addr
+ local ngx_lua_ffi_ssl_server_port
+ local ngx_lua_ffi_ssl_server_name
++local ngx_lua_ffi_ssl_session_hostname
+ local ngx_lua_ffi_ssl_raw_client_addr
+ local ngx_lua_ffi_cert_pem_to_der
+ local ngx_lua_ffi_priv_key_pem_to_der
+@@ -58,6 +59,9 @@ if subsystem == 'http' then
+     int ngx_http_lua_ffi_ssl_server_name(ngx_http_request_t *r, char **name,
+         size_t *namelen, char **err);
+ 
++    int ngx_http_lua_ffi_ssl_session_hostname(ngx_http_request_t *r, char **name,
++        size_t *namelen, char **err);
++
+     int ngx_http_lua_ffi_ssl_raw_client_addr(ngx_http_request_t *r, char **addr,
+         size_t *addrlen, int *addrtype, char **err);
+ 
+@@ -97,6 +101,7 @@ if subsystem == 'http' then
+     ngx_lua_ffi_ssl_raw_server_addr = C.ngx_http_lua_ffi_ssl_raw_server_addr
+     ngx_lua_ffi_ssl_server_port = C.ngx_http_lua_ffi_ssl_server_port
+     ngx_lua_ffi_ssl_server_name = C.ngx_http_lua_ffi_ssl_server_name
++    ngx_lua_ffi_ssl_session_hostname = C.ngx_http_lua_ffi_ssl_session_hostname
+     ngx_lua_ffi_ssl_raw_client_addr = C.ngx_http_lua_ffi_ssl_raw_client_addr
+     ngx_lua_ffi_cert_pem_to_der = C.ngx_http_lua_ffi_cert_pem_to_der
+     ngx_lua_ffi_priv_key_pem_to_der = C.ngx_http_lua_ffi_priv_key_pem_to_der
+@@ -129,6 +134,9 @@ elseif subsystem == 'stream' then
+     int ngx_stream_lua_ffi_ssl_server_name(ngx_stream_lua_request_t *r,
+         char **name, size_t *namelen, char **err);
+ 
++    int ngx_stream_lua_ffi_ssl_session_hostname(ngx_stream_lua_request_t *r,
++        char **name, size_t *namelen, char **err);
++
+     int ngx_stream_lua_ffi_ssl_raw_client_addr(ngx_stream_lua_request_t *r,
+         char **addr, size_t *addrlen, int *addrtype, char **err);
+ 
+@@ -168,6 +176,7 @@ elseif subsystem == 'stream' then
+     ngx_lua_ffi_ssl_raw_server_addr = C.ngx_stream_lua_ffi_ssl_raw_server_addr
+     ngx_lua_ffi_ssl_server_port = C.ngx_stream_lua_ffi_ssl_server_port
+     ngx_lua_ffi_ssl_server_name = C.ngx_stream_lua_ffi_ssl_server_name
++    ngx_lua_ffi_ssl_session_hostname = C.ngx_stream_lua_ffi_ssl_session_hostname
+     ngx_lua_ffi_ssl_raw_client_addr = C.ngx_stream_lua_ffi_ssl_raw_client_addr
+     ngx_lua_ffi_cert_pem_to_der = C.ngx_stream_lua_ffi_cert_pem_to_der
+     ngx_lua_ffi_priv_key_pem_to_der = C.ngx_stream_lua_ffi_priv_key_pem_to_der
+@@ -299,6 +308,27 @@ function _M.server_name()
+ end
+ 
+ 
++function _M.session_hostname()
++    local r = get_request()
++    if not r then
++        error("no request found")
++    end
++
++    local sizep = get_size_ptr()
++
++    local rc = ngx_lua_ffi_ssl_session_hostname(r, charpp, sizep, errmsg)
++    if rc ~= FFI_OK then
++        return nil, ffi_str(errmsg[0])
++    end
++
++    if sizep[0] == 0 then
++        return nil
++    end
++
++    return ffi_str(charpp[0], sizep[0])
++end
++
++
+ function _M.raw_client_addr()
+     local r = get_request()
+     if not r then
