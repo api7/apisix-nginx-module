@@ -1,8 +1,8 @@
 diff --git src/ngx_stream_lua_ssl_certby.c src/ngx_stream_lua_ssl_certby.c
-index 7b4cc5b..054a45e 100644
+index 7b4cc5b..3aa44bb 100644
 --- src/ngx_stream_lua_ssl_certby.c
 +++ src/ngx_stream_lua_ssl_certby.c
-@@ -882,6 +882,49 @@ ngx_stream_lua_ffi_ssl_server_name(ngx_stream_lua_request_t *r, char **name,
+@@ -882,6 +882,46 @@ ngx_stream_lua_ffi_ssl_server_name(ngx_stream_lua_request_t *r, char **name,
  }
  
  
@@ -32,15 +32,12 @@ index 7b4cc5b..054a45e 100644
 +     * is only returned in OpenSSL 1.1.1+ as well
 +     */
 +
-+    SSL_SESSION *sess = SSL_get0_session(ssl_conn);
-+    if (sess != NULL) {
-+      *name = (char *) SSL_SESSION_get0_hostname(sess);
-+      if (*name) {
-+          *namelen = ngx_strlen(*name);
-+          return NGX_OK;
-+      }
-+    }
++    *name = (char *) SSL_SESSION_get0_hostname(SSL_get0_session(ssl_conn));
 +
++    if (*name) {
++        *namelen = ngx_strlen(*name);
++        return NGX_OK;
++    }
 +#endif
 +
 +    *name = "";
