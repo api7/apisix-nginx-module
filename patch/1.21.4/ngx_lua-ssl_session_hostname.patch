@@ -1,0 +1,51 @@
+diff --git src/ngx_http_lua_ssl_certby.c src/ngx_http_lua_ssl_certby.c
+index b8e70dde..c3bfc790 100644
+--- src/ngx_http_lua_ssl_certby.c
++++ src/ngx_http_lua_ssl_certby.c
+@@ -870,6 +870,46 @@ ngx_http_lua_ffi_ssl_server_name(ngx_http_request_t *r, char **name,
+ }
+ 
+ 
++int
++ngx_http_lua_ffi_ssl_session_hostname(ngx_http_request_t *r, char **name,
++    size_t *namelen, char **err)
++{
++    ngx_ssl_conn_t          *ssl_conn;
++
++    if (r->connection == NULL || r->connection->ssl == NULL) {
++        *err = "bad request";
++        return NGX_ERROR;
++    }
++
++    ssl_conn = r->connection->ssl->connection;
++    if (ssl_conn == NULL) {
++        *err = "bad ssl conn";
++        return NGX_ERROR;
++    }
++
++#if (defined(TLS1_3_VERSION)                                                   \
++     && !defined(LIBRESSL_VERSION_NUMBER) && !defined(OPENSSL_IS_BORINGSSL))
++
++    /*
++     * SSL_SESSION_get0_hostname() is only available in OpenSSL 1.1.1+,
++     * but servername being negotiated in every TLSv1.3 handshake
++     * is only returned in OpenSSL 1.1.1+ as well
++     */
++
++    *name = (char *) SSL_SESSION_get0_hostname(SSL_get0_session(ssl_conn));
++
++    if (*name) {
++        *namelen = ngx_strlen(*name);
++        return NGX_OK;
++    }
++#endif
++
++    *name = "";
++    *namelen = 0;
++    return NGX_OK;
++}
++
++
+ int
+ ngx_http_lua_ffi_ssl_server_port(ngx_http_request_t *r,
+     unsigned short *server_port, char **err)
