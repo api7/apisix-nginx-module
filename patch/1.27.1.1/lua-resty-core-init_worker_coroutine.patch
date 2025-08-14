@@ -1,0 +1,13 @@
+diff --git lib/resty/core/coroutine.lua lib/resty/core/coroutine.lua
+index 9c95b16..57cd4c7 100644
+--- lib/resty/core/coroutine.lua
++++ lib/resty/core/coroutine.lua
+@@ -13,7 +13,7 @@ do
+             local r = get_request()
+             if r ~= nil then
+                 local ctx = get_raw_phase(r, errmsg)
+-                if ctx ~= 0x020 and ctx ~= 0x040 then
++                if ctx ~= 0x020 and ctx ~= 0x040 and ctx ~= 0x100 then
+                     return ours(...)
+                 end
+             end
