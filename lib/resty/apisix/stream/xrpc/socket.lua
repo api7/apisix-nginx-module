@@ -26,7 +26,17 @@ ngx_stream_lua_ffi_socket_tcp_read_buf(ngx_stream_lua_request_t *r,
     size_t *actual_len, u_char *errbuf, size_t *errbuf_size);
 
 int
+ngx_stream_lua_ffi_socket_tcp_read_any(ngx_stream_lua_request_t *r,
+    ngx_stream_lua_socket_tcp_upstream_t *u, u_char **res, size_t len,
+    size_t *actual_len, u_char *errbuf, size_t *errbuf_size);
+
+int
 ngx_stream_lua_ffi_socket_tcp_get_read_buf_result(ngx_stream_lua_request_t *r,
+    ngx_stream_lua_socket_tcp_upstream_t *u, u_char **buf, size_t len,
+    size_t *actual_len, u_char *errbuf, size_t *errbuf_size);
+
+int
+ngx_stream_lua_ffi_socket_tcp_get_read_any_result(ngx_stream_lua_request_t *r,
     ngx_stream_lua_socket_tcp_upstream_t *u, u_char **buf, size_t len,
     size_t *actual_len, u_char *errbuf, size_t *errbuf_size);
 
@@ -50,7 +60,9 @@ ngx_stream_lua_ffi_socket_tcp_has_pending_data(ngx_stream_lua_request_t *r,
     u_char *errbuf, size_t *errbuf_size);
 ]]
 local socket_tcp_read = C.ngx_stream_lua_ffi_socket_tcp_read_buf
+local socket_tcp_read_any = C.ngx_stream_lua_ffi_socket_tcp_read_any
 local socket_tcp_get_read_result = C.ngx_stream_lua_ffi_socket_tcp_get_read_buf_result
+local socket_tcp_get_read_any_result = C.ngx_stream_lua_ffi_socket_tcp_get_read_any_result
 local socket_tcp_move = C.ngx_stream_lua_ffi_socket_tcp_send_from_socket
 local socket_tcp_get_move_result = C.ngx_stream_lua_ffi_socket_tcp_get_send_result
 local socket_tcp_reset_read_buf = C.ngx_stream_lua_ffi_socket_tcp_reset_read_buf
@@ -133,6 +145,47 @@ local function _read(cosocket, len, single_buf, eol)
 end
 
 
+local function _read_any(cosocket, len)
+    local r = get_request()
+    if not r then
+        error("no request found", 2)
+    end
+
+    local u = get_tcp_socket(cosocket)
+
+    local buf = res_buf
+    local len_buf = actual_len_buf
+
+    local errbuf = get_string_buf(ERR_BUF_SIZE)
+    local errbuf_size = get_size_ptr()
+    errbuf_size[0] = ERR_BUF_SIZE
+
+    local rc = socket_tcp_read_any(r, u, buf, len, len_buf, errbuf, errbuf_size)
+    if rc == FFI_DONE then
+        error(ffi_str(errbuf, errbuf_size[0]), 2)
+    end
+
+    while true do
+        if rc == FFI_ERROR then
+            return nil, ffi_str(errbuf, errbuf_size[0])
+        end
+
+        if rc >= 0 then
+            return res_buf[0], nil, tonumber(len_buf[0])
+        end
+
+        assert(rc == FFI_AGAIN)
+
+        co_yield()
+
+        errbuf = get_string_buf(ERR_BUF_SIZE)
+        errbuf_size = get_size_ptr()
+        errbuf_size[0] = ERR_BUF_SIZE
+        rc = socket_tcp_get_read_any_result(r, u, buf, len, len_buf, errbuf, errbuf_size)
+    end
+end
+
+
 -- read the given length of data to a buffer in C land and return the buffer address
 -- return error if the read data is less than given length
 --
@@ -169,6 +222,20 @@ local function read_line(cosocket, len)
     end
 
     return _read(cosocket, len, true, true)
+end
+
+
+-- read any available data up to the given length
+local function read_any(cosocket, len)
+    if len <= 0 then
+        error("bad length: length of data should be positive, got " .. len, 2)
+    end
+
+    if len > 4 * 1024 * 1024 then
+        error("bad length: length of data too big, got " .. len, 2)
+    end
+
+    return _read_any(cosocket, len)
 end
 
 
@@ -283,6 +350,7 @@ local function patch_methods(sk)
     copy.read = read
     copy.drain = drain
     copy.read_line = read_line
+    copy.read_any = read_any
     copy.move = move
     copy.reset_read_buf = reset_read_buf
     copy.has_pending_data = has_pending_data

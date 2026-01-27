@@ -55,6 +55,31 @@ timeout
 
 
 
+=== TEST 2b: read_any returns available bytes
+--- stream_server_config
+    content_by_lua_block {
+        local ffi = require("ffi")
+        local sk = require("resty.apisix.stream.xrpc.socket").downstream.socket()
+        sk:settimeout(5)
+
+        local p, err, len = sk:read_any(5)
+        if not p then
+            ngx.say("nil")
+            ngx.say(err)
+            return
+        end
+
+        local data = ffi.string(p, len)
+        ngx.say(len)
+        ngx.say(data)
+    }
+--- stream_request
+h
+--- stream_response
+1
+h
+
+
 === TEST 3: read over buffer
 --- stream_server_config
     content_by_lua_block {
