@@ -158,7 +158,7 @@ index 57f389d..6855e37 100644
  static ngx_int_t
  ngx_stream_lua_socket_tcp_read(ngx_stream_lua_request_t *r,
      ngx_stream_lua_socket_tcp_upstream_t *u)
-@@ -5971,6 +6031,955 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
+@@ -5971,6 +6031,963 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
  }
  
  
@@ -719,8 +719,10 @@ index 57f389d..6855e37 100644
 +
 +        } else {
 +            size_t           remain_space = u->buffer.end - u->buffer.pos;
++            size_t           remain_data = u->buffer.last - u->buffer.pos;
 +            size_t           buf_len;
-+            ngx_chain_t     *cl;
++            u_char          *pos;
++            ngx_chain_t     *cl, *tmp_cl;
 +
 +            if (remain_space < len) {
 +                buf_len = len > u->conf->buffer_size ? len : u->conf->buffer_size;
@@ -739,11 +741,17 @@ index 57f389d..6855e37 100644
 +                    return NGX_DONE;
 +                }
 +
-+                *cl->buf = *u->buf_in->buf;
-+                cl->next = u->buf_in->next;
-+                u->buf_in->next = cl;
++                for (tmp_cl = u->bufs_in; tmp_cl->next; tmp_cl = tmp_cl->next) {}
++                tmp_cl->next = cl;
 +                u->buf_in = cl;
-+                u->buffer = *u->buf_in->buf;
++
++                u->buffer.last = u->buffer.pos;
++                pos = u->buffer.pos;
++                u->buffer = *cl->buf;
++
++                if (remain_data > 0) {
++                    u->buffer.last = ngx_copy(u->buffer.last, pos, remain_data);
++                }
 +            }
 +        }
 +
