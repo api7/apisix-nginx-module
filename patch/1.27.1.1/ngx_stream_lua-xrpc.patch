@@ -382,6 +382,14 @@ index 57f389d..6855e37 100644
 +    }
 +
 +    if (u->ft_type) {
++        if (buf != NULL && u->buf_in && u->buf_in->buf
++            && u->buf_in->buf->last > u->buf_in->buf->pos)
++        {
++            ngx_stream_lua_ffi_socket_push_res_any(r, ctx, u, buf, len,
++                                                   actual_len);
++            return NGX_OK;
++        }
++
 +        ngx_stream_lua_ffi_socket_read_error_retval_handler(r, u, errbuf,
 +                                                            errbuf_size);
 +        return NGX_ERROR;
