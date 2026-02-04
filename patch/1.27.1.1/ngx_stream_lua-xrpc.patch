@@ -158,7 +158,7 @@ index 57f389d..6855e37 100644
  static ngx_int_t
  ngx_stream_lua_socket_tcp_read(ngx_stream_lua_request_t *r,
      ngx_stream_lua_socket_tcp_upstream_t *u)
-@@ -5971,6 +6031,984 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
+@@ -5971,6 +6031,1015 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
  }
  
  
@@ -919,6 +919,38 @@ index 57f389d..6855e37 100644
 +    }
 +
 +    return NGX_AGAIN;
++}
++
++
++int
++ngx_stream_lua_ffi_socket_tcp_shutdown_write(ngx_stream_lua_request_t *r,
++    ngx_stream_lua_socket_tcp_upstream_t *u, u_char *errbuf,
++    size_t *errbuf_size)
++{
++    ngx_connection_t    *c;
++
++    if (u == NULL || u->peer.connection == NULL || u->write_closed) {
++        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "closed") - errbuf;
++        return NGX_ERROR;
++    }
++
++    if (u->request != r) {
++        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "bad request")
++                       - errbuf;
++        return NGX_DONE;
++    }
++
++    c = u->peer.connection;
++    if (ngx_shutdown_socket(c->fd, NGX_WRITE_SHUTDOWN) == -1) {
++        ngx_connection_error(c, ngx_socket_errno,
++                             "stream lua tcp socket shutdown write failed");
++        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "shutdown failed")
++                       - errbuf;
++        return NGX_ERROR;
++    }
++
++    u->write_closed = 1;
++    return NGX_OK;
 +}
 +
 +
