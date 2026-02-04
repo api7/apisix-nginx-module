@@ -158,7 +158,7 @@ index 57f389d..6855e37 100644
  static ngx_int_t
  ngx_stream_lua_socket_tcp_read(ngx_stream_lua_request_t *r,
      ngx_stream_lua_socket_tcp_upstream_t *u)
-@@ -5971,6 +6031,1016 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
+@@ -5971,6 +6031,1020 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
  }
  
  
@@ -941,6 +941,10 @@ index 57f389d..6855e37 100644
 +    }
 +
 +    c = u->peer.connection;
++    if (c->fd == (ngx_socket_t) -1) {
++        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "closed") - errbuf;
++        return NGX_ERROR;
++    }
 +    if (ngx_shutdown_socket(c->fd, NGX_WRITE_SHUTDOWN) == -1) {
 +        ngx_connection_error(c, ngx_socket_errno,
 +                             "stream lua tcp socket shutdown write failed");
