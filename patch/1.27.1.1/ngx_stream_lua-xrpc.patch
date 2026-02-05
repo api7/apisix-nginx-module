@@ -158,7 +158,7 @@ index 57f389d..6855e37 100644
  static ngx_int_t
  ngx_stream_lua_socket_tcp_read(ngx_stream_lua_request_t *r,
      ngx_stream_lua_socket_tcp_upstream_t *u)
-@@ -5971,6 +6031,1070 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
+@@ -5971,6 +6031,1112 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
  }
  
  
@@ -1004,6 +1004,48 @@ index 57f389d..6855e37 100644
 +    }
 +
 +    u->write_closed = 1;
++    return NGX_OK;
++}
++
++
++int
++ngx_stream_lua_ffi_socket_tcp_set_linger(ngx_stream_lua_request_t *r,
++    ngx_stream_lua_socket_tcp_upstream_t *u, int onoff, int linger,
++    u_char *errbuf, size_t *errbuf_size)
++{
++    ngx_connection_t    *c;
++    struct linger        l;
++
++    if (u == NULL || u->peer.connection == NULL) {
++        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "closed") - errbuf;
++        return NGX_ERROR;
++    }
++
++    if (u->request != r) {
++        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "bad request")
++                       - errbuf;
++        return NGX_DONE;
++    }
++
++    c = u->peer.connection;
++    if (c->fd == (ngx_socket_t) -1) {
++        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "closed") - errbuf;
++        return NGX_ERROR;
++    }
++
++    l.l_onoff = onoff ? 1 : 0;
++    l.l_linger = linger;
++
++    if (setsockopt(c->fd, SOL_SOCKET, SO_LINGER, (const void *) &l,
++                   sizeof(l)) == -1)
++    {
++        ngx_connection_error(c, ngx_socket_errno,
++                             "stream lua tcp socket set linger failed");
++        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "set linger failed")
++                       - errbuf;
++        return NGX_ERROR;
++    }
++
 +    return NGX_OK;
 +}
 +

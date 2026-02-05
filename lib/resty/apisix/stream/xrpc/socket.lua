@@ -68,6 +68,11 @@ int
 ngx_stream_lua_ffi_socket_tcp_shutdown_write(ngx_stream_lua_request_t *r,
     ngx_stream_lua_socket_tcp_upstream_t *u, u_char *errbuf,
     size_t *errbuf_size);
+
+int
+ngx_stream_lua_ffi_socket_tcp_set_linger(ngx_stream_lua_request_t *r,
+    ngx_stream_lua_socket_tcp_upstream_t *u, int onoff, int linger,
+    u_char *errbuf, size_t *errbuf_size);
 ]]
 local socket_tcp_read = C.ngx_stream_lua_ffi_socket_tcp_read_buf
 local socket_tcp_read_any = C.ngx_stream_lua_ffi_socket_tcp_read_any
@@ -79,6 +84,7 @@ local socket_tcp_reset_read_buf = C.ngx_stream_lua_ffi_socket_tcp_reset_read_buf
 local socket_tcp_getsockname = C.ngx_stream_lua_ffi_socket_tcp_getsockname
 local socket_tcp_has_pending_data = C.ngx_stream_lua_ffi_socket_tcp_has_pending_data
 local socket_tcp_shutdown_write = C.ngx_stream_lua_ffi_socket_tcp_shutdown_write
+local socket_tcp_set_linger = C.ngx_stream_lua_ffi_socket_tcp_set_linger
 
 
 local ERR_BUF_SIZE = 256
@@ -407,6 +413,32 @@ local function shutdown_write(cosocket)
 end
 
 
+local function set_linger(cosocket, onoff, linger)
+    local r = get_request()
+    if not r then
+        error("no request found", 2)
+    end
+
+    local u = get_tcp_socket(cosocket)
+
+    local errbuf = get_string_buf(ERR_BUF_SIZE)
+    local errbuf_size = get_size_ptr()
+    errbuf_size[0] = ERR_BUF_SIZE
+
+    local rc = socket_tcp_set_linger(r, u, onoff and 1 or 0, linger or 0,
+                                     errbuf, errbuf_size)
+    if rc == FFI_DONE then
+        error(ffi_str(errbuf, errbuf_size[0]), 2)
+    end
+
+    if rc == FFI_ERROR then
+        return nil, ffi_str(errbuf, errbuf_size[0])
+    end
+
+    return true
+end
+
+
 local function patch_methods(sk)
     local methods = getmetatable(sk).__index
     local copy = tab_clone(methods)
@@ -423,6 +455,7 @@ local function patch_methods(sk)
     copy.reset_read_buf = reset_read_buf
     copy.has_pending_data = has_pending_data
     copy.shutdown_write = shutdown_write
+    copy.set_linger = set_linger
     copy.getsockname = getsockname
 
     return {__index = copy}
