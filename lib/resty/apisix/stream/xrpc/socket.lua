@@ -55,6 +55,11 @@ ngx_stream_lua_ffi_socket_tcp_reset_read_buf(ngx_stream_lua_request_t *r,
     ngx_stream_lua_socket_tcp_upstream_t *u);
 
 int
+ngx_stream_lua_ffi_socket_tcp_getsockname(ngx_stream_lua_request_t *r,
+    ngx_stream_lua_socket_tcp_upstream_t *u, u_char *buf, size_t *buf_len,
+    unsigned short *port, u_char *errbuf, size_t *errbuf_size);
+
+int
 ngx_stream_lua_ffi_socket_tcp_has_pending_data(ngx_stream_lua_request_t *r,
     ngx_stream_lua_socket_tcp_upstream_t *u,
     u_char *errbuf, size_t *errbuf_size);
@@ -71,14 +76,19 @@ local socket_tcp_get_read_any_result = C.ngx_stream_lua_ffi_socket_tcp_get_read_
 local socket_tcp_move = C.ngx_stream_lua_ffi_socket_tcp_send_from_socket
 local socket_tcp_get_move_result = C.ngx_stream_lua_ffi_socket_tcp_get_send_result
 local socket_tcp_reset_read_buf = C.ngx_stream_lua_ffi_socket_tcp_reset_read_buf
+local socket_tcp_getsockname = C.ngx_stream_lua_ffi_socket_tcp_getsockname
 local socket_tcp_has_pending_data = C.ngx_stream_lua_ffi_socket_tcp_has_pending_data
 local socket_tcp_shutdown_write = C.ngx_stream_lua_ffi_socket_tcp_shutdown_write
 
 
 local ERR_BUF_SIZE = 256
+local SOCKNAME_BUF_SIZE = 128
 local SOCKET_CTX_INDEX = 1
 local res_buf = ffi.new("u_char*[1]")
 local actual_len_buf = ffi.new("size_t[1]")
+local sockname_buf = ffi.new("u_char[?]", SOCKNAME_BUF_SIZE)
+local sockname_len_buf = ffi.new("size_t[1]")
+local sockname_port_buf = ffi.new("unsigned short[1]")
 local Downstream = {}
 local Upstream = {}
 local downstream_mt
@@ -92,6 +102,33 @@ local function get_tcp_socket(cosocket)
     end
 
     return tcp_socket
+end
+
+local function getsockname(cosocket)
+    local r = get_request()
+    if not r then
+        error("no request found", 2)
+    end
+
+    local u = get_tcp_socket(cosocket)
+    local errbuf = get_string_buf(ERR_BUF_SIZE)
+    local errbuf_size = get_size_ptr()
+    errbuf_size[0] = ERR_BUF_SIZE
+
+    sockname_len_buf[0] = SOCKNAME_BUF_SIZE
+    local rc = socket_tcp_getsockname(r, u, sockname_buf, sockname_len_buf,
+                                      sockname_port_buf, errbuf, errbuf_size)
+    if rc == FFI_DONE then
+        error(ffi_str(errbuf, errbuf_size[0]), 2)
+    end
+
+    if rc ~= 0 then
+        return nil, ffi_str(errbuf, errbuf_size[0])
+    end
+
+    local ip = ffi_str(sockname_buf, sockname_len_buf[0])
+    local port = tonumber(sockname_port_buf[0])
+    return ip, port
 end
 
 
@@ -386,6 +423,7 @@ local function patch_methods(sk)
     copy.reset_read_buf = reset_read_buf
     copy.has_pending_data = has_pending_data
     copy.shutdown_write = shutdown_write
+    copy.getsockname = getsockname
 
     return {__index = copy}
 end
