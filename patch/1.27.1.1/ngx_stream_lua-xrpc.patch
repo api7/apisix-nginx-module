@@ -84,7 +84,7 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 index 57f389d..6855e37 100644
 --- src/ngx_stream_lua_socket_tcp.c
 +++ src/ngx_stream_lua_socket_tcp.c
-@@ -237,6 +237,52 @@ enum {
+@@ -237,6 +237,41 @@ enum {
      }
  
  
@@ -114,12 +114,6 @@ index 57f389d..6855e37 100644
 +        *errbuf_size = ngx_snprintf((errbuf), *(errbuf_size),                \
 +                                    "socket busy writing")                   \
 +                       - (errbuf);                                           \
-+        ngx_log_error(NGX_LOG_WARN, (r)->connection->log, 0,                 \
-+                      "NGN_XRPC_DEBUG busy_writing hit write_waiting=1 "     \
-+                      "raw_downstream=%d buffered=%d u=%p",                  \
-+                      (int) ((u)->raw_downstream != 0),                      \
-+                      (int) ((r)->connection->buffered != 0),                \
-+                      (u));                                                  \
 +    }                                                                        \
 +    if ((u)->raw_downstream                                                  \
 +        && ((r)->connection->buffered))                                      \
@@ -127,11 +121,6 @@ index 57f389d..6855e37 100644
 +        *errbuf_size = ngx_snprintf((errbuf), *(errbuf_size),                \
 +                                    "socket busy writing")                   \
 +                       - (errbuf);                                           \
-+        ngx_log_error(NGX_LOG_WARN, (r)->connection->log, 0,                 \
-+                      "NGN_XRPC_DEBUG busy_writing hit downstream_buffered=1 "\
-+                      "write_waiting=%d u=%p",                               \
-+                      (int) ((u)->write_waiting != 0),                       \
-+                      (u));                                                  \
 +    }
 +
  
@@ -169,7 +158,7 @@ index 57f389d..6855e37 100644
  static ngx_int_t
  ngx_stream_lua_socket_tcp_read(ngx_stream_lua_request_t *r,
      ngx_stream_lua_socket_tcp_upstream_t *u)
-@@ -5971,6 +6031,1146 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
+@@ -5971,6 +6031,1112 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
  }
  
  
@@ -1122,18 +1111,6 @@ index 57f389d..6855e37 100644
 +    ngx_stream_lua_ffi_socket_check_busy_connecting(r, u, errbuf, errbuf_size);
 +    ngx_stream_lua_ffi_socket_check_busy_writing(r, u, errbuf, errbuf_size);
 +
-+    ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
-+                  "NGN_XRPC_DEBUG send_from_socket enter u=%p src=%p "
-+                  "write_waiting=%d read_waiting=%d raw_downstream=%d "
-+                  "src_bufs_in=%p src_buf_in=%p request_bufs=%p",
-+                  u, src,
-+                  (int) (u->write_waiting != 0),
-+                  (int) (u->read_waiting != 0),
-+                  (int) (u->raw_downstream != 0),
-+                  src ? src->bufs_in : NULL,
-+                  src ? src->buf_in : NULL,
-+                  u->request_bufs);
-+
 +    if (u->body_downstream) {
 +        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size,
 +                                    "attempt to write to request sockets")
@@ -1161,10 +1138,6 @@ index 57f389d..6855e37 100644
 +                   "lua tcp socket move total buf %p, len: %d",
 +                   src->bufs_in, len);
 +
-+    ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
-+                  "NGN_XRPC_DEBUG send_from_socket buffers len=%uz "
-+                  "src_bufs_in=%p src_buf_in=%p", len, src->bufs_in, src->buf_in);
-+
 +    if (len == 0) {
 +        return NGX_OK;
 +    }
@@ -1190,10 +1163,6 @@ index 57f389d..6855e37 100644
 +    }
 +
 +    ngx_stream_lua_ffi_socket_reset_buf(ctx, src);
-+
-+    ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
-+                  "NGN_XRPC_DEBUG send_from_socket after_reset "
-+                  "src_bufs_in=%p src_buf_in=%p", src->bufs_in, src->buf_in);
 +
 +    u->request_bufs = cl;
 +
@@ -1236,13 +1205,6 @@ index 57f389d..6855e37 100644
 +    ngx_stream_lua_probe_socket_tcp_send_start(r, u, b->pos, len);
 +
 +    rc = ngx_stream_lua_socket_send(r, u);
-+
-+    ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
-+                  "NGN_XRPC_DEBUG send_from_socket send_rc=%d "
-+                  "write_waiting=%d request_bufs=%p request_len=%uz",
-+                  (int) rc,
-+                  (int) (u->write_waiting != 0),
-+                  u->request_bufs, (size_t) u->request_len);
 +
 +    dd("socket send returned %d", (int) rc);
 +
@@ -1295,13 +1257,6 @@ index 57f389d..6855e37 100644
 +{
 +    ngx_log_debug0(NGX_LOG_DEBUG_STREAM, r->connection->log, 0,
 +                   "lua tcp socket get send result");
-+
-+    ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
-+                  "NGN_XRPC_DEBUG get_send_result enter u=%p "
-+                  "ft_type=%ui write_waiting=%d request_bufs=%p request_len=%uz",
-+                  u, (unsigned) u->ft_type,
-+                  (int) (u->write_waiting != 0),
-+                  u->request_bufs, (size_t) u->request_len);
 +
 +    if (u->ft_type) {
 +        ngx_stream_lua_ffi_socket_write_error_retval_handler(r, u, errbuf,
