@@ -65,6 +65,10 @@ ngx_stream_lua_ffi_socket_tcp_has_pending_data(ngx_stream_lua_request_t *r,
     u_char *errbuf, size_t *errbuf_size);
 
 int
+ngx_stream_lua_ffi_socket_tcp_wake_read(ngx_stream_lua_request_t *r,
+    ngx_stream_lua_socket_tcp_upstream_t *u);
+
+int
 ngx_stream_lua_ffi_socket_tcp_shutdown_write(ngx_stream_lua_request_t *r,
     ngx_stream_lua_socket_tcp_upstream_t *u, u_char *errbuf,
     size_t *errbuf_size);
@@ -83,6 +87,7 @@ local socket_tcp_get_move_result = C.ngx_stream_lua_ffi_socket_tcp_get_send_resu
 local socket_tcp_reset_read_buf = C.ngx_stream_lua_ffi_socket_tcp_reset_read_buf
 local socket_tcp_getsockname = C.ngx_stream_lua_ffi_socket_tcp_getsockname
 local socket_tcp_has_pending_data = C.ngx_stream_lua_ffi_socket_tcp_has_pending_data
+local socket_tcp_wake_read = C.ngx_stream_lua_ffi_socket_tcp_wake_read
 local socket_tcp_shutdown_write = C.ngx_stream_lua_ffi_socket_tcp_shutdown_write
 local socket_tcp_set_linger = C.ngx_stream_lua_ffi_socket_tcp_set_linger
 
@@ -323,6 +328,26 @@ local function has_pending_data(cosocket)
 end
 
 
+-- wake_read posts a read event on the socket's connection to unblock a
+-- read_any coroutine that is stuck waiting in EPOLLET mode.  This is only
+-- meaningful for raw_downstream SSL sockets in xRPC preread context where
+-- the read timer is unconditionally deleted by the stream framework.
+-- Returns true on success (or no-op), nil+err on error.
+local function wake_read(cosocket)
+    local r = get_request()
+    if not r then
+        error("no request found", 2)
+    end
+
+    local u = get_tcp_socket(cosocket)
+    local rc = socket_tcp_wake_read(r, u)
+    if rc < 0 then
+        return nil, "wake_read failed"
+    end
+    return true
+end
+
+
 -- move the buffers from src cosocket to dst cosocket. The buffers are from previous one or multiple
 -- read calls. It is equal to send multiple read buffer in the src cosocket to the dst cosocket.
 local function move(dst, src)
@@ -454,6 +479,7 @@ local function patch_methods(sk)
     copy.move = move
     copy.reset_read_buf = reset_read_buf
     copy.has_pending_data = has_pending_data
+    copy.wake_read = wake_read
     copy.shutdown_write = shutdown_write
     copy.set_linger = set_linger
     copy.getsockname = getsockname

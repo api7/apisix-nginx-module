@@ -92,11 +92,10 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
  static int
  ngx_stream_lua_socket_tcp(lua_State *L)
  {
-@@ -507,8 +511,43 @@
- 
+@@ -508,6 +512,41 @@
      *spool = sp;
  }
-+
+ 
 +#define ngx_stream_lua_ffi_socket_check_busy_connecting(r, u, errbuf,        \
 +                                                        errbuf_size)         \
 +    if ((u)->conn_waiting) {                                                 \
@@ -115,8 +114,8 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 +                       - (errbuf);                                           \
 +        return NGX_ERROR;                                                    \
 +    }
- 
- 
++
++
 +#define ngx_stream_lua_ffi_socket_check_busy_writing(r, u, errbuf,           \
 +                                                     errbuf_size)            \
 +    if ((u)->write_waiting) {                                                \
@@ -132,10 +131,9 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 +                       - (errbuf);                                           \
 +    }
 +
-+
+ 
  static int
  ngx_stream_lua_socket_tcp_connect_helper(lua_State *L,
-     ngx_stream_lua_socket_tcp_upstream_t *u, ngx_stream_lua_request_t *r,
 @@ -2591,6 +2630,31 @@
  
  
@@ -168,11 +166,10 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
  ngx_stream_lua_socket_tcp_read(ngx_stream_lua_request_t *r,
      ngx_stream_lua_socket_tcp_upstream_t *u)
  {
-@@ -3460,6 +3524,25 @@
- 
+@@ -3461,6 +3525,25 @@
      if (u->buffer.start != NULL) {
          (void) ngx_stream_lua_socket_tcp_read(r, u);
-+    }
+     }
 +
 +    /* Fix: suppress SSL + EPOLLET empty read loop.
 +     *
@@ -191,8 +188,9 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 +     */
 +    if (u->read_waiting && c->ssl && c->read->ready) {
 +        c->read->ready = 0;
-     }
++    }
  }
+ 
  
 @@ -3470,8 +3553,10 @@
  {
@@ -239,15 +237,10 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
      }
  }
  
-@@ -5989,9 +6100,1324 @@
+@@ -5994,6 +6105,1496 @@
  
-         dd("result buf after resuming data: %p: %.*s", cl,
-            (int) ngx_buf_size(b), b->pos);
-+    }
-+#endif
-+
-+    return NGX_OK;
-+}
+     return NGX_OK;
+ }
 +
 +
 +static void
@@ -836,6 +829,19 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 +}
 +
 +
++/* Preread-starvation wake interval (ms).
++ *
++ * When read_any yields on a raw_downstream SSL socket in xRPC preread
++ * context, the framework deletes c->read timers.  This timer fires
++ * independently via u->wake_ev, synthesizing a timeout so tcp_read
++ * can recover data stolen into r->connection->buffer by
++ * ngx_stream_preread(). */
++#define NGX_STREAM_LUA_XRPC_WAKE_INTERVAL_MS  50
++
++/* Forward declaration; definition follows has_pending_data */
++static void ngx_stream_lua_socket_tcp_wake_read_handler(ngx_event_t *ev);
++
++
 +int
 +ngx_stream_lua_ffi_socket_tcp_read_any(ngx_stream_lua_request_t *r,
 +    ngx_stream_lua_socket_tcp_upstream_t *u, u_char **buf, size_t len,
@@ -860,7 +866,7 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 +
 +        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "closed") - errbuf;
 +        return NGX_ERROR;
-     }
++    }
 +
 +    if (u->request != r) {
 +        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size, "bad request")
@@ -974,6 +980,14 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 +    u->read_waiting = 0;
 +    u->read_co_ctx = NULL;
 +
++    /* Cancel any pending wake timer from a previous read_any iteration.
++     * If we are re-entering after a wake-induced synthetic timeout, the
++     * timer has already fired, but if some other event (e.g. EPOLLET edge)
++     * woke us first, the timer may still be pending. */
++    if (u->wake_ev.timer_set) {
++        ngx_del_timer(&u->wake_ev);
++    }
++
 +    rc = ngx_stream_lua_socket_tcp_read(r, u);
 +
 +    ngx_log_debug1(NGX_LOG_DEBUG_STREAM, r->connection->log, 0,
@@ -1023,6 +1037,42 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 +        if (u->raw_downstream || u->body_downstream) {
 +            lctx->downstream = u;
 +        }
++
++        /* Auto-wake timer for raw_downstream SSL sockets.
++         *
++         * In xRPC preread context, ngx_stream_core_preread_phase
++         * unconditionally deletes c->read timers when the Lua handler
++         * yields.  Combined with EPOLLET, this means read_any can
++         * block indefinitely if the preread phase already consumed
++         * the SSL data into r->connection->buffer.
++         *
++         * Set a short timer on u->wake_ev so that if no other event
++         * wakes us within NGX_STREAM_LUA_XRPC_WAKE_INTERVAL_MS ms,
++         * the wake_read_handler fires a synthetic timeout, causing
++         * tcp_read to re-check r->connection->buffer for stolen
++         * preread data.
++         *
++         * This timer is independent of c->read (which the framework
++         * deletes) and only affects raw_downstream SSL connections
++         * where preread data theft is possible. */
++#if (NGX_STREAM_SSL)
++        if (u->raw_downstream && r->connection->ssl) {
++            u->wake_ev.handler =
++                ngx_stream_lua_socket_tcp_wake_read_handler;
++            u->wake_ev.data = u;
++            u->wake_ev.log = r->connection->log;
++
++            if (!u->wake_ev.timer_set) {
++                ngx_add_timer(&u->wake_ev,
++                              NGX_STREAM_LUA_XRPC_WAKE_INTERVAL_MS);
++
++                ngx_log_debug1(NGX_LOG_DEBUG_STREAM, r->connection->log, 0,
++                               "xrpc: armed wake timer %dms for "
++                               "raw_downstream SSL read_any",
++                               NGX_STREAM_LUA_XRPC_WAKE_INTERVAL_MS);
++            }
++        }
++#endif
 +
 +        ngx_log_debug1(NGX_LOG_DEBUG_STREAM, r->connection->log, 0,
 +                       "lua socket receive yield, u: %p", u);
@@ -1077,7 +1127,7 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 +                       (int) rev->active, (int) rev->ready,
 +                       (int) rev->timer_set);
 +        }
- #endif
++#endif
 +        r->read_event_handler = ngx_stream_lua_req_socket_rev_handler;
 +    }
 +
@@ -1108,6 +1158,99 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 +    }
 +
 +    return NGX_AGAIN;
++}
++
++
++/* Combined timer + posted-event handler for wake_read.
++ *
++ * This runs from the nginx event loop (not from any Lua coroutine's C
++ * stack), so it is safe to call handle_read_error which resumes the
++ * blocked read coroutine through r->write_event_handler(r).
++ *
++ * Works in two modes:
++ * - As a posted event (ngx_post_event): ev->timedout == 0
++ * - As a timer event (ngx_add_timer): ev->timedout == 1
++ * Both paths synthesize a FT_TIMEOUT to unblock read_any. */
++static void
++ngx_stream_lua_socket_tcp_wake_read_handler(ngx_event_t *ev)
++{
++    ngx_stream_lua_socket_tcp_upstream_t   *u;
++    ngx_stream_lua_request_t               *r;
++
++    u = ev->data;
++
++    if (u == NULL || u->peer.connection == NULL || !u->read_waiting) {
++        return;
++    }
++
++    r = u->request;
++
++    ngx_log_debug1(NGX_LOG_DEBUG_STREAM, u->peer.connection->log, 0,
++                   "xrpc: wake_read_handler firing synthetic timeout "
++                   "(timedout=%d)", (int) ev->timedout);
++
++    /* Clear timedout flag so it does not confuse subsequent timer
++     * re-arms (ngx_add_timer checks timedout in some code paths). */
++    ev->timedout = 0;
++
++    /* Synthesize a timeout to unblock the read_any coroutine.
++     * handle_read_error sets ft_type, clears read_waiting,
++     * and resumes the Lua coroutine via r->write_event_handler(r). */
++    ngx_stream_lua_socket_handle_read_error(r, u,
++                                        NGX_STREAM_LUA_SOCKET_FT_TIMEOUT);
++}
++
++
++/* Wake up a blocked read_any coroutine on a raw_downstream socket.
++ *
++ * In xRPC preread context, ngx_stream_core_preread_phase unconditionally
++ * deletes c->read timers when the Lua handler yields, and replaces
++ * c->read->handler with ngx_stream_session_handler.  This means:
++ *
++ *  1. The socket-level read timeout can never fire (timer deleted).
++ *  2. Posting c->read merely re-enters the preread state machine,
++ *     which may steal data into c->buffer instead of delivering it
++ *     to the socket read handler.
++ *
++ * Combined with EPOLLET mode (edge-triggered epoll), a downstream
++ * read_any call can block indefinitely if no new TCP segment arrives
++ * to produce a fresh edge notification.
++ *
++ * This function posts a custom event (u->wake_ev) whose handler runs
++ * outside any Lua coroutine context and safely synthesizes a timeout
++ * error, unblocking the read coroutine via handle_read_error. */
++int
++ngx_stream_lua_ffi_socket_tcp_wake_read(ngx_stream_lua_request_t *r,
++    ngx_stream_lua_socket_tcp_upstream_t *u)
++{
++    if (u == NULL || u->peer.connection == NULL) {
++        return NGX_ERROR;
++    }
++
++    if (!u->raw_downstream) {
++        return NGX_OK;
++    }
++
++    if (!u->read_waiting) {
++        return NGX_OK;
++    }
++
++    /* Avoid double-posting */
++    if (u->wake_ev.posted) {
++        return NGX_OK;
++    }
++
++    ngx_log_debug0(NGX_LOG_DEBUG_STREAM, u->peer.connection->log, 0,
++                   "xrpc: wake_read posting custom event for "
++                   "blocked downstream read_any");
++
++    u->wake_ev.handler = ngx_stream_lua_socket_tcp_wake_read_handler;
++    u->wake_ev.data = u;
++    u->wake_ev.log = u->peer.connection->log;
++
++    ngx_post_event(&u->wake_ev, &ngx_posted_events);
++
++    return NGX_OK;
 +}
 +
 +
@@ -1208,7 +1351,6 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 +    ngx_stream_lua_ffi_socket_prepare_error_retvals(r, u, ft_type,
 +                                                    errbuf, errbuf_size);
 +}
- 
 +
 +/* Composite SSL read handler for xRPC dual-coroutine model.
 + *
@@ -1512,6 +1654,32 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 +    }
 +
 +    if (rc == NGX_OK) {
++        /* After a successful SSL_write to raw_downstream, the OpenSSL layer
++         * may have consumed pending read-side TCP data internally (e.g.
++         * processing TLS alerts or key updates).  In EPOLLET mode this
++         * data arrival was notified exactly once; if the edge was already
++         * consumed, the read-side coroutine (to_upstream's read_any) will
++         * never be woken again—its timer was deleted by
++         * ngx_stream_core_preread_phase and no new edge will come until
++         * the client sends more data.
++         *
++         * Fix: if the same socket has a read-waiting coroutine, post the
++         * read event so the event loop re-enters the read handler and
++         * gives SSL_read a chance to return any buffered application data.
++         */
++        if (u->raw_downstream && u->read_waiting
++            && !u->wake_ev.posted)
++        {
++            ngx_log_debug0(NGX_LOG_DEBUG_STREAM, c->log, 0,
++                           "xrpc: posting wake_ev after SSL write to "
++                           "wake blocked read_any coroutine");
++            u->wake_ev.handler =
++                ngx_stream_lua_socket_tcp_wake_read_handler;
++            u->wake_ev.data = u;
++            u->wake_ev.log = c->log;
++            ngx_post_event(&u->wake_ev, &ngx_posted_events);
++        }
++
 +        return rc;
 +    }
 +
@@ -1561,9 +1729,11 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 +        return NGX_ERROR;
 +    }
 +
-     return NGX_OK;
- }
++    return NGX_OK;
++}
  
+ 
+ static ngx_int_t
 diff --git src/ngx_stream_lua_socket_tcp.h src/ngx_stream_lua_socket_tcp.h
 --- src/ngx_stream_lua_socket_tcp.h
 +++ src/ngx_stream_lua_socket_tcp.h
@@ -1575,3 +1745,9 @@ diff --git src/ngx_stream_lua_socket_tcp.h src/ngx_stream_lua_socket_tcp.h
  
  
  typedef struct ngx_stream_lua_socket_tcp_upstream_s
+@@ -142,6 +143,7 @@
+     unsigned                         read_consumed:1;
++    ngx_event_t                      wake_ev;
+ #if (NGX_STREAM_SSL)
+     unsigned                         ssl_verify:1;
+     unsigned                         ssl_session_reuse:1;
