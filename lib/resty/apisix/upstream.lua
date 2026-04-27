@@ -13,11 +13,18 @@ base.allows_subsystem("http")
 
 ffi.cdef([[
 typedef intptr_t        ngx_int_t;
+typedef long            off_t;
 ngx_int_t ngx_http_apisix_upstream_set_cert_and_key(ngx_http_request_t *r, void *cert, void *key);
 ngx_int_t ngx_http_apisix_upstream_set_ssl_trusted_store(ngx_http_request_t *r, void *store);
 int ngx_http_apisix_upstream_set_ssl_verify(ngx_http_request_t *r, int verify);
 
 ngx_int_t ngx_http_apisix_set_upstream_pass_trailers(ngx_http_request_t *r, int on);
+
+ngx_int_t ngx_http_apisix_push_upstream_state(ngx_http_request_t *r,
+    const unsigned char *addr, size_t addr_len, ngx_int_t status,
+    ngx_int_t connect_time_ms, ngx_int_t header_time_ms);
+ngx_int_t ngx_http_apisix_update_upstream_state(ngx_http_request_t *r,
+    ngx_int_t response_time_ms, off_t response_length);
 ]])
 local _M = {}
 
@@ -118,6 +125,46 @@ function _M.set_pass_trailers(on)
     local ret = C.ngx_http_apisix_set_upstream_pass_trailers(r, on and 1 or 0)
     if ret == NGX_ERROR then
         return nil, "error while setting upstream pass_trailers"
+    end
+
+    return true
+end
+
+
+function _M.push_upstream_state(opts)
+    local r = get_request()
+    if not r then
+        return nil, "no request found"
+    end
+
+    local addr = opts.addr
+    local addr_len = addr and #addr or 0
+    local ret = C.ngx_http_apisix_push_upstream_state(
+        r,
+        addr, addr_len,
+        opts.status or 0,
+        opts.connect_time or -1,
+        opts.header_time or -1)
+    if ret == NGX_ERROR then
+        return nil, "error while pushing upstream state"
+    end
+
+    return true
+end
+
+
+function _M.update_upstream_state(opts)
+    local r = get_request()
+    if not r then
+        return nil, "no request found"
+    end
+
+    local ret = C.ngx_http_apisix_update_upstream_state(
+        r,
+        opts.response_time or -1,
+        opts.response_length or -1)
+    if ret == NGX_ERROR then
+        return nil, "error while updating upstream state"
     end
 
     return true
