@@ -95,7 +95,7 @@ status: 502
 connect_time: -
 header_time: -
 response_time: -
-response_length: -
+response_length: 0
 
 
 
@@ -177,7 +177,7 @@ status: 200
 
 
 
-=== TEST 7: lua-var-nginx-module can read the pushed upstream state timings
+=== TEST 7: push and update upstream state verified via ngx.var (integration check)
 --- config
     location /t {
         content_by_lua_block {
@@ -190,16 +190,21 @@ status: 200
             })
             upstream.update_upstream_state({
                 response_time = 1500,
+                response_length = 8192,
             })
 
-            local var = require("resty.ngxvar")
-            local req = var.request()
-            ngx.say("response_time: ", var.fetch("upstream_response_time", req))
-            ngx.say("header_time: ", var.fetch("upstream_header_time", req))
-            ngx.say("connect_time: ", var.fetch("upstream_connect_time", req))
+            ngx.say("status: ", ngx.var.upstream_status)
+            ngx.say("addr: ", ngx.var.upstream_addr)
+            ngx.say("response_time: ", ngx.var.upstream_response_time)
+            ngx.say("header_time: ", ngx.var.upstream_header_time)
+            ngx.say("connect_time: ", ngx.var.upstream_connect_time)
+            ngx.say("response_length: ", ngx.var.upstream_response_length)
         }
     }
 --- response_body
-response_time: 1.5
-header_time: 0.12
-connect_time: 0.05
+status: 200
+addr: 10.0.0.1:443
+response_time: 1.500
+header_time: 0.120
+connect_time: 0.050
+response_length: 8192

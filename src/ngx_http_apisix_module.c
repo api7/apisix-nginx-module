@@ -1110,7 +1110,6 @@ ngx_http_apisix_push_upstream_state(ngx_http_request_t *r,
     state->response_time = (ngx_msec_t) -1;
     state->connect_time = (ngx_msec_t) -1;
     state->header_time = (ngx_msec_t) -1;
-    state->response_length = -1;
 
     if (addr != NULL && addr_len > 0) {
         peer = ngx_palloc(r->pool, sizeof(ngx_str_t));
