@@ -141,6 +141,9 @@ function _M.push_upstream_state(opts)
     end
 
     local addr = opts.addr
+    if addr ~= nil and type(addr) ~= "string" then
+        return nil, "addr must be a string"
+    end
     local addr_len = addr and #addr or 0
     local ret = C.ngx_http_apisix_push_upstream_state(
         r,
