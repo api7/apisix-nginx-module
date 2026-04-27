@@ -6,10 +6,8 @@ run_tests();
 
 __DATA__
 
-=== TEST 1: push upstream state - status and addr
+=== TEST 1: push upstream state - status and addr via ngx.var
 --- config
-    log_format upstream_test '$upstream_status $upstream_addr';
-    access_log logs/upstream_test.log upstream_test;
     location /t {
         content_by_lua_block {
             local upstream = require("resty.apisix.upstream")
@@ -21,20 +19,18 @@ __DATA__
                 ngx.say("push failed: ", err)
                 return
             end
-            ngx.say("ok")
+            ngx.say("status: ", ngx.var.upstream_status)
+            ngx.say("addr: ", ngx.var.upstream_addr)
         }
     }
 --- response_body
-ok
---- access_log eval
-qr/200 1\.2\.3\.4:8080/
---- log_file: upstream_test.log
+status: 200
+addr: 1.2.3.4:8080
 
 
-=== TEST 2: push upstream state - all timing fields
+
+=== TEST 2: push + update upstream state - all timing fields
 --- config
-    log_format upstream_timing '$upstream_status $upstream_connect_time $upstream_header_time $upstream_response_time $upstream_response_length';
-    access_log logs/upstream_timing.log upstream_timing;
     location /t {
         content_by_lua_block {
             local upstream = require("resty.apisix.upstream")
@@ -57,20 +53,25 @@ qr/200 1\.2\.3\.4:8080/
                 ngx.say("update failed: ", err)
                 return
             end
-            ngx.say("ok")
+
+            ngx.say("status: ", ngx.var.upstream_status)
+            ngx.say("connect_time: ", ngx.var.upstream_connect_time)
+            ngx.say("header_time: ", ngx.var.upstream_header_time)
+            ngx.say("response_time: ", ngx.var.upstream_response_time)
+            ngx.say("response_length: ", ngx.var.upstream_response_length)
         }
     }
 --- response_body
-ok
---- access_log eval
-qr/200 0\.050 0\.120 1\.500 4096/
---- log_file: upstream_timing.log
+status: 200
+connect_time: 0.050
+header_time: 0.120
+response_time: 1.500
+response_length: 4096
+
 
 
 === TEST 3: push upstream state - unset timings render as dash
 --- config
-    log_format upstream_dash '$upstream_status $upstream_connect_time $upstream_header_time $upstream_response_time $upstream_response_length';
-    access_log logs/upstream_dash.log upstream_dash;
     location /t {
         content_by_lua_block {
             local upstream = require("resty.apisix.upstream")
@@ -82,14 +83,20 @@ qr/200 0\.050 0\.120 1\.500 4096/
                 ngx.say("push failed: ", err)
                 return
             end
-            ngx.say("ok")
+            ngx.say("status: ", ngx.var.upstream_status)
+            ngx.say("connect_time: ", ngx.var.upstream_connect_time)
+            ngx.say("header_time: ", ngx.var.upstream_header_time)
+            ngx.say("response_time: ", ngx.var.upstream_response_time)
+            ngx.say("response_length: ", ngx.var.upstream_response_length)
         }
     }
 --- response_body
-ok
---- access_log eval
-qr/502 - - - -/
---- log_file: upstream_dash.log
+status: 502
+connect_time: -
+header_time: -
+response_time: -
+response_length: -
+
 
 
 === TEST 4: update upstream state without push fails
@@ -111,10 +118,9 @@ qr/502 - - - -/
 expected error: error while updating upstream state
 
 
+
 === TEST 5: multiple push calls (retry scenario)
 --- config
-    log_format upstream_retry '$upstream_status $upstream_addr';
-    access_log logs/upstream_retry.log upstream_retry;
     location /t {
         content_by_lua_block {
             local upstream = require("resty.apisix.upstream")
@@ -141,20 +147,18 @@ expected error: error while updating upstream state
                 response_length = 2048,
             })
 
-            ngx.say("ok")
+            ngx.say("status: ", ngx.var.upstream_status)
+            ngx.say("addr: ", ngx.var.upstream_addr)
         }
     }
 --- response_body
-ok
---- access_log eval
-qr/502, 200 10\.0\.0\.1:443, 10\.0\.0\.2:443/
---- log_file: upstream_retry.log
+status: 502, 200
+addr: 10.0.0.1:443, 10.0.0.2:443
+
 
 
 === TEST 6: push upstream state with no addr
 --- config
-    log_format upstream_noaddr '$upstream_status';
-    access_log logs/upstream_noaddr.log upstream_noaddr;
     location /t {
         content_by_lua_block {
             local upstream = require("resty.apisix.upstream")
@@ -165,14 +169,12 @@ qr/502, 200 10\.0\.0\.1:443, 10\.0\.0\.2:443/
                 ngx.say("push failed: ", err)
                 return
             end
-            ngx.say("ok")
+            ngx.say("status: ", ngx.var.upstream_status)
         }
     }
 --- response_body
-ok
---- access_log eval
-qr/200/
---- log_file: upstream_noaddr.log
+status: 200
+
 
 
 === TEST 7: lua-var-nginx-module can read the pushed upstream state timings
