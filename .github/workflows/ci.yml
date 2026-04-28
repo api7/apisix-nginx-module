@@ -9,20 +9,25 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
-        op_version:
-          - "1.25.3.1"
-          - "1.27.1.2"
+        runtime:
+          - name: apisix-runtime
+            script_url: "https://raw.githubusercontent.com/api7/apisix-build-tools/master/build-apisix-runtime.sh"
+            script_name: "build-apisix-runtime.sh"
+          - name: api7ee-runtime
+            script_url: "https://raw.githubusercontent.com/api7/apisix-build-tools/release/api7ee-runtime/build-api7ee-runtime.sh"
+            script_name: "build-api7ee-runtime.sh"
 
     runs-on: "ubuntu-latest"
+    name: build (${{ matrix.runtime.name }})
 
     env:
-      OPENRESTY_VERSION: ${{ matrix.op_version }}
       OPENRESTY_PREFIX: "/usr/local/openresty"
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up build environment
         run: |
@@ -43,11 +48,10 @@ jobs:
 
       - name: Install
         run: |
-          wget https://raw.githubusercontent.com/api7/apisix-build-tools/master/build-apisix-base.sh
-          chmod +x build-apisix-base.sh
-          OR_PREFIX=$OPENRESTY_PREFIX CC="gcc -fsanitize=address -fdiagnostics-color=always -Wno-unused-but-set-variable -Wno-unused-parameter" \
-              cc_opt="-Werror" ./build-apisix-base.sh latest
-
+          wget ${{ matrix.runtime.script_url }}
+          chmod +x ${{ matrix.runtime.script_name }}
+          OR_PREFIX=$OPENRESTY_PREFIX CC="gcc -fsanitize=address -fdiagnostics-color=always -Werror -Wno-unused-but-set-variable -Wno-unused-parameter" \
+              ./${{ matrix.runtime.script_name }} latest
 
       - name: Script
         run: |

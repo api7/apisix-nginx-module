@@ -208,3 +208,65 @@ response_time: 1.500
 header_time: 0.120
 connect_time: 0.050
 response_length: 8192
+
+
+
+=== TEST 8: access log with upstream state from cosocket request
+--- http_config
+    log_format upstream_log '$upstream_status $upstream_addr $upstream_response_time $upstream_header_time $upstream_connect_time $upstream_response_length';
+    server {
+        listen 10888;
+        location / {
+            content_by_lua_block {
+                ngx.say("hello from upstream")
+            }
+        }
+    }
+--- config
+    access_log logs/access.log upstream_log;
+    location /t {
+        content_by_lua_block {
+            local http = require("resty.http")
+            local httpc = http.new()
+
+            local t0 = ngx.now()
+            local ok, err = httpc:connect("127.0.0.1", 10888)
+            if not ok then
+                ngx.say("connect failed: ", err)
+                return
+            end
+            local connect_time = math.floor((ngx.now() - t0) * 1000)
+
+            local res, err = httpc:request({
+                method = "GET",
+                path = "/",
+            })
+            if not res then
+                ngx.say("request failed: ", err)
+                return
+            end
+            local header_time = math.floor((ngx.now() - t0) * 1000)
+
+            local body = res:read_body()
+            local response_time = math.floor((ngx.now() - t0) * 1000)
+
+            local upstream = require("resty.apisix.upstream")
+            upstream.push_upstream_state({
+                addr = "127.0.0.1:10888",
+                status = res.status,
+                connect_time = connect_time,
+                header_time = header_time,
+            })
+            upstream.update_upstream_state({
+                response_time = response_time,
+                response_length = #body,
+            })
+
+            httpc:set_keepalive()
+            ngx.say("done")
+        }
+    }
+--- response_body
+done
+--- access_log eval
+qr/200 127\.0\.0\.1:10888 \d+\.\d{3} \d+\.\d{3} \d+\.\d{3} 20\n/
