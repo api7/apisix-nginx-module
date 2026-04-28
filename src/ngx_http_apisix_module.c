@@ -1080,3 +1080,88 @@ ngx_http_apisix_is_upstream_pass_trailers(ngx_http_request_t *r)
 
     return 1;
 }
+
+
+ngx_int_t
+ngx_http_apisix_push_upstream_state(ngx_http_request_t *r,
+    const u_char *addr, size_t addr_len, ngx_int_t status,
+    ngx_msec_int_t connect_time_ms, ngx_msec_int_t header_time_ms)
+{
+    ngx_http_upstream_state_t  *state;
+    ngx_str_t                  *peer;
+    u_char                     *p;
+
+    if (r->upstream_states == NULL) {
+        r->upstream_states = ngx_array_create(r->pool, 1,
+                                              sizeof(ngx_http_upstream_state_t));
+        if (r->upstream_states == NULL) {
+            return NGX_ERROR;
+        }
+    }
+
+    state = ngx_array_push(r->upstream_states);
+    if (state == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_memzero(state, sizeof(ngx_http_upstream_state_t));
+
+    /* unset timings render as "-" in logs, not "0.000" */
+    state->response_time = (ngx_msec_t) -1;
+    state->connect_time = (ngx_msec_t) -1;
+    state->header_time = (ngx_msec_t) -1;
+
+    if (addr != NULL && addr_len > 0) {
+        peer = ngx_palloc(r->pool, sizeof(ngx_str_t));
+        if (peer == NULL) {
+            return NGX_ERROR;
+        }
+
+        p = ngx_pnalloc(r->pool, addr_len);
+        if (p == NULL) {
+            return NGX_ERROR;
+        }
+
+        ngx_memcpy(p, addr, addr_len);
+        peer->data = p;
+        peer->len = addr_len;
+        state->peer = peer;
+    }
+
+    state->status = status;
+
+    if (connect_time_ms >= 0) {
+        state->connect_time = (ngx_msec_t) connect_time_ms;
+    }
+
+    if (header_time_ms >= 0) {
+        state->header_time = (ngx_msec_t) header_time_ms;
+    }
+
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_http_apisix_update_upstream_state(ngx_http_request_t *r,
+    ngx_msec_int_t response_time_ms, off_t response_length)
+{
+    ngx_http_upstream_state_t  *state;
+
+    if (r->upstream_states == NULL || r->upstream_states->nelts == 0) {
+        return NGX_ERROR;
+    }
+
+    state = (ngx_http_upstream_state_t *) r->upstream_states->elts
+            + (r->upstream_states->nelts - 1);
+
+    if (response_time_ms >= 0) {
+        state->response_time = (ngx_msec_t) response_time_ms;
+    }
+
+    if (response_length >= 0) {
+        state->response_length = response_length;
+    }
+
+    return NGX_OK;
+}
