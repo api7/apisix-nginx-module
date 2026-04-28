@@ -15,9 +15,12 @@ jobs:
           - name: apisix-runtime
             script_url: "https://raw.githubusercontent.com/api7/apisix-build-tools/master/build-apisix-runtime.sh"
             script_name: "build-apisix-runtime.sh"
+            exclude_tests: ""
           - name: api7ee-runtime
             script_url: "https://raw.githubusercontent.com/api7/apisix-build-tools/release/api7ee-runtime/build-api7ee-runtime.sh"
             script_name: "build-api7ee-runtime.sh"
+            # Tests requiring nginx features not available in OR 1.21 (nginx 1.21)
+            exclude_tests: "t/pipe.t t/upstream_pass_trailers.t"
 
     runs-on: "ubuntu-latest"
     name: build (${{ matrix.runtime.name }})
@@ -58,4 +61,10 @@ jobs:
       - name: Script
         run: |
           export PATH=$OPENRESTY_PREFIX/nginx/sbin:$PATH
-          prove -I. -Itest-nginx/lib -r t/
+          TEST_FILES=$(find t/ -name '*.t' -type f | sort)
+          if [ -n "${{ matrix.runtime.exclude_tests }}" ]; then
+            for f in ${{ matrix.runtime.exclude_tests }}; do
+              TEST_FILES=$(echo "$TEST_FILES" | grep -v "^${f}$")
+            done
+          fi
+          echo "$TEST_FILES" | xargs prove -I. -Itest-nginx/lib
