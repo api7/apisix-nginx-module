@@ -50,6 +50,8 @@ jobs:
         run: |
           wget ${{ matrix.runtime.script_url }}
           chmod +x ${{ matrix.runtime.script_name }}
+          # Fix permission issue: EE script does rm without sudo after sudo make install
+          sed -i 's|rm -rf "$OPENSSL_PREFIX"/share|sudo rm -rf "$OPENSSL_PREFIX"/share|' ${{ matrix.runtime.script_name }}
           OR_PREFIX=$OPENRESTY_PREFIX CC="gcc -fsanitize=address -fdiagnostics-color=always -Werror -Wno-unused-but-set-variable -Wno-unused-parameter" \
               ./${{ matrix.runtime.script_name }} latest
 
