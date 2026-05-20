@@ -1,0 +1,52 @@
+diff --git auto/modules auto/modules
+index 300d07c..eb736eb 100644
+--- auto/modules
++++ auto/modules
+@@ -619,7 +619,7 @@ if [ $HTTP = YES ]; then
+ 
+         ngx_module_name=ngx_http_realip_module
+         ngx_module_incs=
+-        ngx_module_deps=
++        ngx_module_deps=src/http/modules/ngx_http_realip_module.h
+         ngx_module_srcs=src/http/modules/ngx_http_realip_module.c
+         ngx_module_libs=
+         ngx_module_link=$HTTP_REALIP
+diff --git src/http/modules/ngx_http_realip_module.c src/http/modules/ngx_http_realip_module.c
+index f6731e7..3646390 100644
+--- src/http/modules/ngx_http_realip_module.c
++++ src/http/modules/ngx_http_realip_module.c
+@@ -310,6 +310,15 @@ ngx_http_realip_cleanup(void *data)
+ }
+ 
+ 
++#if (NGX_HTTP_APISIX)
++ngx_int_t
++ngx_http_realip_set_real_addr(ngx_http_request_t *r, ngx_addr_t *addr)
++{
++    return ngx_http_realip_set_addr(r, addr);
++}
++#endif
++
++
+ static char *
+ ngx_http_realip_from(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+ {
+diff --git src/http/modules/ngx_http_realip_module.h src/http/modules/ngx_http_realip_module.h
+new file mode 100644
+index 0000000..8593c4b
+--- /dev/null
++++ src/http/modules/ngx_http_realip_module.h
+@@ -0,0 +1,13 @@
++#ifndef _NGX_HTTP_REALIP_H_INCLUDED_
++#define _NGX_HTTP_REALIP_H_INCLUDED_
++
++
++#include <ngx_config.h>
++#include <ngx_core.h>
++#include <ngx_http.h>
++
++
++ngx_int_t ngx_http_realip_set_real_addr(ngx_http_request_t *r, ngx_addr_t *addr);
++
++
++#endif /* _NGX_HTTP_REALIP_H_INCLUDED_ */

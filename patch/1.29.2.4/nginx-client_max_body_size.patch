@@ -1,0 +1,127 @@
+diff --git src/http/ngx_http_core_module.c src/http/ngx_http_core_module.c
+index 7845f8f..e1e1b77 100644
+--- src/http/ngx_http_core_module.c
++++ src/http/ngx_http_core_module.c
+@@ -8,6 +8,9 @@
+ #include <ngx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_http.h>
++#if (NGX_HTTP_APISIX)
++#include <ngx_http_apisix_module.h>
++#endif
+ 
+ 
+ typedef struct {
+@@ -992,7 +995,12 @@ ngx_http_core_find_config_phase(ngx_http_request_t *r,
+                    "http cl:%O max:%O",
+                    r->headers_in.content_length_n, clcf->client_max_body_size);
+ 
++#if (NGX_HTTP_APISIX)
++    if (!ngx_http_apisix_delay_client_max_body_check(r)
++        && r->headers_in.content_length_n != -1
++#else
+     if (r->headers_in.content_length_n != -1
++#endif
+         && !r->discard_body
+         && clcf->client_max_body_size
+         && clcf->client_max_body_size < r->headers_in.content_length_n)
+diff --git src/http/ngx_http_request_body.c src/http/ngx_http_request_body.c
+index afb0423..6faa09e 100644
+--- src/http/ngx_http_request_body.c
++++ src/http/ngx_http_request_body.c
+@@ -8,6 +8,9 @@
+ #include <ngx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_http.h>
++#if (NGX_HTTP_APISIX)
++#include <ngx_http_apisix_module.h>
++#endif
+ 
+ 
+ static void ngx_http_read_client_request_body_handler(ngx_http_request_t *r);
+@@ -48,6 +51,25 @@ ngx_http_read_client_request_body(ngx_http_request_t *r,
+         return NGX_OK;
+     }
+ 
++#if (NGX_HTTP_APISIX)
++    if (ngx_http_apisix_delay_client_max_body_check(r)) {
++        off_t max_body_size = ngx_http_apisix_client_max_body_size(r);
++
++        if (r->headers_in.content_length_n != -1
++            && max_body_size
++            && max_body_size < r->headers_in.content_length_n)
++        {
++            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
++                          "client intended to send too large body: %O bytes",
++                          r->headers_in.content_length_n);
++
++            r->expect_tested = 1;
++            rc = NGX_HTTP_REQUEST_ENTITY_TOO_LARGE;
++            goto done;
++        }
++    }
++#endif
++
+     if (ngx_http_test_expect(r) != NGX_OK) {
+         rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
+         goto done;
+@@ -1100,6 +1122,10 @@ ngx_http_request_body_chunked_filter(ngx_http_request_t *r, ngx_chain_t *in)
+     out = NULL;
+     ll = &out;
+ 
++#if (NGX_HTTP_APISIX)
++    off_t max_body_size = ngx_http_apisix_client_max_body_size(r);
++#endif
++
+     if (rb->rest == -1) {
+ 
+         ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+@@ -1139,8 +1165,15 @@ ngx_http_request_body_chunked_filter(ngx_http_request_t *r, ngx_chain_t *in)
+ 
+                 clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+ 
++#if (NGX_HTTP_APISIX)
++                (void) clcf; /* unused */
++
++                if (max_body_size
++                    && max_body_size
++#else
+                 if (clcf->client_max_body_size
+                     && clcf->client_max_body_size
++#endif
+                        - r->headers_in.content_length_n < rb->chunked->size)
+                 {
+                     ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+diff --git src/http/v2/ngx_http_v2.c src/http/v2/ngx_http_v2.c
+index 0f5bd3d..d343fe7 100644
+--- src/http/v2/ngx_http_v2.c
++++ src/http/v2/ngx_http_v2.c
+@@ -9,6 +9,9 @@
+ #include <ngx_core.h>
+ #include <ngx_http.h>
+ #include <ngx_http_v2_module.h>
++#if (NGX_HTTP_APISIX)
++#include <ngx_http_apisix_module.h>
++#endif
+ 
+ 
+ /* errors */
+@@ -4107,10 +4110,18 @@ ngx_http_v2_filter_request_body(ngx_http_request_t *r)
+             }
+ 
+         } else {
++#if (NGX_HTTP_APISIX)
++            off_t max_body_size = ngx_http_apisix_client_max_body_size(r);
++
++            (void) clcf; /* unused */
++
++            if (max_body_size && rb->received > max_body_size)
++#else
+             clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+ 
+             if (clcf->client_max_body_size
+                 && rb->received > clcf->client_max_body_size)
++#endif
+             {
+                 ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                               "client intended to send too large chunked body: "

@@ -1,0 +1,25 @@
+diff --git src/ngx_http_lua_headers.c src/ngx_http_lua_headers.c
+index 85836a1..346ad1a 100644
+--- src/ngx_http_lua_headers.c
++++ src/ngx_http_lua_headers.c
+@@ -15,6 +15,9 @@
+ #include "ngx_http_lua_headers_out.h"
+ #include "ngx_http_lua_headers_in.h"
+ #include "ngx_http_lua_util.h"
++#if (NGX_HTTP_APISIX)
++#include "ngx_http_apisix_module.h"
++#endif
+ 
+ 
+ static int ngx_http_lua_ngx_req_http_version(lua_State *L);
+@@ -1067,6 +1070,10 @@ ngx_http_lua_ffi_req_set_header(ngx_http_request_t *r, const u_char *key,
+     ngx_uint_t                   i;
+     ngx_str_t                    k, v;
+ 
++#if (NGX_HTTP_APISIX)
++    ngx_http_apisix_mark_request_header_set(r);
++#endif
++
+     if (r->connection->fd == (ngx_socket_t) -1) {  /* fake request */
+         return NGX_HTTP_LUA_FFI_BAD_CONTEXT;
+     }
