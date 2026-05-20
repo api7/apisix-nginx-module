@@ -231,10 +231,10 @@ index 57f389d..6855e37 100644
 +        len = u->length - u->rest;
 +        *buf = u->buffer.pos - len;
 +
-+        if ((*buf)[len - 1] == '\n') {
++        if (len > 0 && (*buf)[len - 1] == '\n') {
 +            len--;
 +        }
-+        if ((*buf)[len - 1] == '\r') {
++        if (len > 0 && (*buf)[len - 1] == '\r') {
 +            len--;
 +        }
 +        *actual_len = len;
@@ -713,8 +713,8 @@ index 57f389d..6855e37 100644
 +    }
 +
 +    if (!src->bufs_in->next) {
-+        cl->buf->pos = src->bufs_in->buf->pos;
-+        cl->buf->last = src->bufs_in->buf->last;
++        b = src->bufs_in->buf;
++        cl->buf->last = ngx_copy(cl->buf->last, b->pos, b->last - b->pos);
 +
 +    } else {
 +        /* TODO: avoid copying (it requires to modify the way cosocket sends data) */
