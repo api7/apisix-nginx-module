@@ -9,7 +9,7 @@ index 0680bcb..bcf7a65 100644
 -  <p>Sorry, the page you are looking for is currently unavailable. Please try again later.</p>
 -  <p>If you are the system administrator of this resource then you should check the <a href="http://nginx.org/r/error_log">error log</a> for details.</p>
 -  <p>Commercial support is available at <a href="https://openresty.com/">openresty.com</a>.</p>
-+  <p>You can report issue to <a href="https://github.com/apache/apisix/issues">APISIX</a></p>
++  <p>You can report an issue to <a href="https://github.com/apache/apisix/issues">APISIX</a>.</p>
 +  <p><em>Faithfully yours, <a href="https://apisix.apache.org/">APISIX</a>.</em></p>
  </section>
  <section class="social white-theme">

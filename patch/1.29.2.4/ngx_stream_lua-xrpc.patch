@@ -76,7 +76,7 @@ index e65d572..25175a5 100644
      ssize_t bytes, ngx_log_t *log);
  
 +ngx_int_t ngx_stream_lua_read_line_within_bytes(ngx_buf_t *src, ngx_chain_t *buf_in,
-+     size_t *max, ssize_t bytes, ngx_log_t *log);
++     size_t *rest, ssize_t bytes, ngx_log_t *log);
  
  #endif /* _NGX_STREAM_LUA_INPUT_FILTERS_H_INCLUDED_ */
  
@@ -84,7 +84,7 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 index 57f389d..6855e37 100644
 --- src/ngx_stream_lua_socket_tcp.c
 +++ src/ngx_stream_lua_socket_tcp.c
-@@ -237,6 +237,41 @@ enum {
+@@ -237,6 +237,43 @@ enum {
      }
  
  
@@ -114,6 +114,7 @@ index 57f389d..6855e37 100644
 +        *errbuf_size = ngx_snprintf((errbuf), *(errbuf_size),                \
 +                                    "socket busy writing")                   \
 +                       - (errbuf);                                           \
++        return NGX_ERROR;                                                    \
 +    }                                                                        \
 +    if ((u)->raw_downstream                                                  \
 +        && ((r)->connection->buffered))                                      \
@@ -121,6 +122,7 @@ index 57f389d..6855e37 100644
 +        *errbuf_size = ngx_snprintf((errbuf), *(errbuf_size),                \
 +                                    "socket busy writing")                   \
 +                       - (errbuf);                                           \
++        return NGX_ERROR;                                                    \
 +    }
 +
  

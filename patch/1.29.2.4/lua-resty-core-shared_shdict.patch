@@ -2,18 +2,18 @@ diff --git lib/resty/core/shdict.lua lib/resty/core/shdict.lua
 index 8d60d16..7537e7b 100644
 --- lib/resty/core/shdict.lua
 +++ lib/resty/core/shdict.lua
-@@ -28,7 +28,6 @@ local type = type
+@@ -28,7 +28,6 @@
  local error = error
  local getmetatable = getmetatable
  local FFI_DECLINED = base.FFI_DECLINED
 -local subsystem = ngx.config.subsystem
- 
- 
+
+
  local ngx_lua_ffi_shdict_get
-@@ -42,181 +41,60 @@ local ngx_lua_ffi_shdict_free_space
+@@ -42,296 +41,60 @@
  local ngx_lua_ffi_shdict_udata_to_zone
- 
- 
+
+
 -if subsystem == 'http' then
 -    ffi.cdef[[
 -int ngx_http_lua_ffi_shdict_get(void *zone, const unsigned char *key,
@@ -22,30 +22,30 @@ index 8d60d16..7537e7b 100644
      size_t key_len, int *value_type, unsigned char **str_value_buf,
      size_t *str_value_len, double *num_value, int *user_flags,
      int get_stale, int *is_stale, char **errmsg);
- 
+
 -int ngx_http_lua_ffi_shdict_incr(void *zone, const unsigned char *key,
 +int ngx_meta_lua_ffi_shdict_incr(void *zone, const unsigned char *key,
      size_t key_len, double *value, char **err, int has_init,
      double init, long init_ttl, int *forcible);
- 
+
 -int ngx_http_lua_ffi_shdict_store(void *zone, int op,
 +int ngx_meta_lua_ffi_shdict_store(void *zone, int op,
      const unsigned char *key, size_t key_len, int value_type,
      const unsigned char *str_value_buf, size_t str_value_len,
      double num_value, long exptime, int user_flags, char **errmsg,
      int *forcible);
- 
+
 -int ngx_http_lua_ffi_shdict_flush_all(void *zone);
 +int ngx_meta_lua_ffi_shdict_flush_all(void *zone);
- 
+
 -long ngx_http_lua_ffi_shdict_get_ttl(void *zone,
 +long ngx_meta_lua_ffi_shdict_get_ttl(void *zone,
      const unsigned char *key, size_t key_len);
- 
+
 -int ngx_http_lua_ffi_shdict_set_expire(void *zone,
 +int ngx_meta_lua_ffi_shdict_set_expire(void *zone,
      const unsigned char *key, size_t key_len, long exptime);
- 
+
 -size_t ngx_http_lua_ffi_shdict_capacity(void *zone);
 -
 -void *ngx_http_lua_ffi_shdict_udata_to_zone(void *zone_udata);
@@ -66,7 +66,7 @@ index 8d60d16..7537e7b 100644
 -                                       key_len, value, err, has_init,
 -                                       init, init_ttl, forcible)
 +size_t ngx_meta_lua_ffi_shdict_capacity(void *zone);
- 
+
 -        return C.ngx_http_lua_ffi_shdict_incr(zone, key,
 -                                              key_len, value, err, has_init,
 -                                              init, init_ttl, forcible)
@@ -108,7 +108,7 @@ index 8d60d16..7537e7b 100644
 -elseif subsystem == 'stream' then
 +void *ngx_meta_lua_ffi_shdict_udata_to_zone(void *zone_udata);
 +]]
- 
+
 +if not pcall(function ()
 +    return C.ngx_meta_lua_ffi_shdict_free_space
 +end)
@@ -199,7 +199,7 @@ index 8d60d16..7537e7b 100644
 -else
 -    error("unknown subsystem: " .. subsystem)
  end
- 
+
 +pcall(function ()
 +    ngx_lua_ffi_shdict_get = C.ngx_meta_lua_ffi_shdict_get
 +    ngx_lua_ffi_shdict_incr = C.ngx_meta_lua_ffi_shdict_incr
@@ -211,42 +211,60 @@ index 8d60d16..7537e7b 100644
 +    ngx_lua_ffi_shdict_free_space = C.ngx_meta_lua_ffi_shdict_free_space
 +    ngx_lua_ffi_shdict_udata_to_zone = C.ngx_meta_lua_ffi_shdict_udata_to_zone
 +end)
-+
- 
- local MACOS = jit and jit.os == "OSX"
- 
+
+-local MACOS = jit and jit.os == "OSX"
+
 -if MACOS and subsystem == 'http' then
-+if MACOS then
-     ffi.cdef[[
- typedef struct {
-     void                  *zone;
-@@ -230,7 +108,7 @@ typedef struct {
-     int                    get_stale;
-     int                   *is_stale;
-     char                 **errmsg;
+-    ffi.cdef[[
+-typedef struct {
+-    void                  *zone;
+-    const unsigned char   *key;
+-    size_t                 key_len;
+-    int                   *value_type;
+-    unsigned char        **str_value_buf;
+-    size_t                *str_value_len;
+-    double                *num_value;
+-    int                   *user_flags;
+-    int                    get_stale;
+-    int                   *is_stale;
+-    char                 **errmsg;
 -} ngx_http_lua_shdict_get_params_t;
-+} ngx_meta_lua_shdict_get_params_t;
- 
- typedef struct {
-     void                  *zone;
-@@ -257,134 +135,19 @@ typedef struct {
-     double                 init;
-     long                   init_ttl;
-     int                   *forcible;
+-
+-typedef struct {
+-    void                  *zone;
+-    int                    op;
+-    const unsigned char   *key;
+-    size_t                 key_len;
+-    int                    value_type;
+-    const unsigned char   *str_value_buf;
+-    size_t                 str_value_len;
+-    double                 num_value;
+-    long                   exptime;
+-    int                    user_flags;
+-    char                 **errmsg;
+-    int                   *forcible;
+-} ngx_http_lua_shdict_store_params_t;
+-
+-typedef struct {
+-    void                  *zone;
+-    const unsigned char   *key;
+-    size_t                 key_len;
+-    double                *num_value;
+-    char                 **errmsg;
+-    int                    has_init;
+-    double                 init;
+-    long                   init_ttl;
+-    int                   *forcible;
 -} ngx_http_lua_shdict_incr_params_t;
-+} ngx_meta_lua_shdict_incr_params_t;
- 
+-
 -int ngx_http_lua_ffi_shdict_get_macos(
-+int ngx_meta_lua_ffi_shdict_get_macos(
-         ngx_http_lua_shdict_get_params_t *p);
+-        ngx_http_lua_shdict_get_params_t *p);
 -int ngx_http_lua_ffi_shdict_store_macos(
-+int ngx_meta_lua_ffi_shdict_store_macos(
-         ngx_http_lua_shdict_store_params_t *p);
+-        ngx_http_lua_shdict_store_params_t *p);
 -int ngx_http_lua_ffi_shdict_incr_macos(
-+int ngx_meta_lua_ffi_shdict_incr_macos(
-         ngx_http_lua_shdict_incr_params_t *p);
-     ]]
- 
+-        ngx_http_lua_shdict_incr_params_t *p);
+-    ]]
+-
 -    local get_params = ffi_new("ngx_http_lua_shdict_get_params_t")
 -    local incr_params = ffi_new("ngx_http_lua_shdict_incr_params_t")
 -    local store_params = ffi_new("ngx_http_lua_shdict_store_params_t")
@@ -310,91 +328,85 @@ index 8d60d16..7537e7b 100644
 -        return C.ngx_http_lua_ffi_shdict_store_macos(store_params)
 -    end
 -end
--
++local MACOS = jit and jit.os == "OSX"
+
 -if MACOS and subsystem == 'stream' then
--    ffi.cdef[[
--typedef struct {
--    void                  *zone;
--    const unsigned char   *key;
--    size_t                 key_len;
--    int                   *value_type;
--    unsigned char        **str_value_buf;
--    size_t                *str_value_len;
--    double                *num_value;
--    int                   *user_flags;
--    int                    get_stale;
--    int                   *is_stale;
--    char                 **errmsg;
++if MACOS then
+     ffi.cdef[[
+ typedef struct {
+     void                  *zone;
+@@ -345,7 +108,7 @@
+     int                    get_stale;
+     int                   *is_stale;
+     char                 **errmsg;
 -} ngx_stream_lua_shdict_get_params_t;
--
--typedef struct {
--    void                  *zone;
--    int                    op;
--    const unsigned char   *key;
--    size_t                 key_len;
--    int                    value_type;
--    const unsigned char   *str_value_buf;
--    size_t                 str_value_len;
--    double                 num_value;
--    long                   exptime;
--    int                    user_flags;
--    char                 **errmsg;
--    int                   *forcible;
++} ngx_meta_lua_shdict_get_params_t;
+
+ typedef struct {
+     void                  *zone;
+@@ -360,7 +123,7 @@
+     int                    user_flags;
+     char                 **errmsg;
+     int                   *forcible;
 -} ngx_stream_lua_shdict_store_params_t;
--
--typedef struct {
--    void                  *zone;
--    const unsigned char   *key;
--    size_t                 key_len;
--    double                *num_value;
--    char                 **errmsg;
--    int                    has_init;
--    double                 init;
--    long                   init_ttl;
--    int                   *forcible;
++} ngx_meta_lua_shdict_store_params_t;
+
+ typedef struct {
+     void                  *zone;
+@@ -372,19 +135,19 @@
+     double                 init;
+     long                   init_ttl;
+     int                   *forcible;
 -} ngx_stream_lua_shdict_incr_params_t;
--
++} ngx_meta_lua_shdict_incr_params_t;
+
 -int ngx_stream_lua_ffi_shdict_get_macos(
 -        ngx_stream_lua_shdict_get_params_t *p);
 -int ngx_stream_lua_ffi_shdict_store_macos(
 -        ngx_stream_lua_shdict_store_params_t *p);
 -int ngx_stream_lua_ffi_shdict_incr_macos(
 -        ngx_stream_lua_shdict_incr_params_t *p);
--    ]]
--
++int ngx_meta_lua_ffi_shdict_get_macos(
++        ngx_meta_lua_shdict_get_params_t *p);
++int ngx_meta_lua_ffi_shdict_store_macos(
++        ngx_meta_lua_shdict_store_params_t *p);
++int ngx_meta_lua_ffi_shdict_incr_macos(
++        ngx_meta_lua_shdict_incr_params_t *p);
+     ]]
+
 -    local get_params = ffi_new("ngx_stream_lua_shdict_get_params_t")
 -    local store_params = ffi_new("ngx_stream_lua_shdict_store_params_t")
 -    local incr_params = ffi_new("ngx_stream_lua_shdict_incr_params_t")
 +    local get_params = ffi_new("ngx_meta_lua_shdict_get_params_t")
 +    local incr_params = ffi_new("ngx_meta_lua_shdict_incr_params_t")
 +    local store_params = ffi_new("ngx_meta_lua_shdict_store_params_t")
- 
+
      ngx_lua_ffi_shdict_get = function(zone, key, key_len, value_type,
                                        str_value_buf, value_len,
-@@ -403,7 +166,7 @@ int ngx_stream_lua_ffi_shdict_incr_macos(
+@@ -403,7 +166,7 @@
          get_params.is_stale = is_stale
          get_params.errmsg = errmsg
- 
+
 -        return C.ngx_stream_lua_ffi_shdict_get_macos(get_params)
 +        return C.ngx_meta_lua_ffi_shdict_get_macos(get_params)
      end
- 
+
      ngx_lua_ffi_shdict_incr = function(zone, key,
-@@ -420,7 +183,7 @@ int ngx_stream_lua_ffi_shdict_incr_macos(
+@@ -420,7 +183,7 @@
          incr_params.init_ttl = init_ttl
          incr_params.forcible = forcible
- 
+
 -        return C.ngx_stream_lua_ffi_shdict_incr_macos(incr_params)
 +        return C.ngx_meta_lua_ffi_shdict_incr_macos(incr_params)
      end
- 
+
      ngx_lua_ffi_shdict_store = function(zone, op,
-@@ -442,7 +205,7 @@ int ngx_stream_lua_ffi_shdict_incr_macos(
+@@ -442,7 +205,7 @@
          store_params.errmsg = errmsg
          store_params.forcible = forcible
- 
+
 -        return C.ngx_stream_lua_ffi_shdict_store_macos(store_params)
 +        return C.ngx_meta_lua_ffi_shdict_store_macos(store_params)
      end
  end
- 
+

@@ -180,7 +180,7 @@ index 0000000..b6e009c
 +
 +    if options.client_cert_path or options.client_cert then
 +        if options.client_cert_path and options.client_cert then
-+            error("client client_cert_path and client_cert both setting ", 2)
++            error("client_cert_path and client_cert cannot both be set", 2)
 +        end
 +
 +        if not options.client_priv_key_path and not options.client_priv_key then
@@ -199,7 +199,7 @@ index 0000000..b6e009c
 +            end
 +        else
 +            if type(options.client_cert_path) ~= "string" then
-+                error("bad client_cert option type", 2)
++                error("bad client_cert_path option type", 2)
 +            end
 +
 +            local txt, err = read_file(options.client_cert_path)
