@@ -37,7 +37,7 @@ index 18bdc2c..3a98f53 100644
  local DEFAULT_KEEPALIVE_IDLE_TIMEOUT = 60000
  local DEFAULT_KEEPALIVE_MAX_REQUESTS = 100
  
-@@ -143,27 +144,61 @@ local peer_state_names = {
+@@ -143,27 +144,68 @@ local peer_state_names = {
  local _M = { version = base.version }
  
  if subsystem == "http" then
@@ -63,9 +63,16 @@ index 18bdc2c..3a98f53 100644
 +                if type(pool) ~= "string" then
 +                    error("bad option 'pool' to 'set_current_peer' " ..
 +                          "(string expected, got " .. type(pool) .. ")", 2)
++                elseif pool == "" then
++                    error("bad option 'pool' to 'set_current_peer' " ..
++                          "(non-empty string expected)", 2)
 +                end
 +
 +                pool_crc32 = ngx_crc32_long(pool)
++                if pool_crc32 == 0 then
++                    error("bad option 'pool' to 'set_current_peer' " ..
++                          "(crc32 hash must not be 0)", 2)
++                end
 +            end
 +
 +            if pool_size then

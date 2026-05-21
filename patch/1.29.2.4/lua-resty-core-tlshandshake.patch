@@ -300,7 +300,7 @@ index 0000000..b6e009c
 +    send_status_req, ...)
 +
 +    local n = select("#", ...)
-+    if not self or n > 1 then
++    if not self or n > 0 then
 +        error("ngx.socket sslhandshake: expecting 1 ~ 5 arguments " ..
 +              "(including the object), but seen " .. (self and 5 + n or 0))
 +    end

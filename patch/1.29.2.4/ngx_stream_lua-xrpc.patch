@@ -56,7 +56,7 @@ index 159185c..83ff85f 100644
 +#if (NGX_DEBUG)
 +    ngx_log_debug2(NGX_LOG_DEBUG_STREAM, log, 0,
 +                   "stream lua read partial line data: %*s",
-+                   dst - begin, begin);
++                   src->pos - begin, begin);
 +#endif
 +
 +    buf_in->buf->last = dst;
