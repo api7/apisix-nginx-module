@@ -7,7 +7,7 @@ index dadf03f..68c74f4 100644
  sig_atomic_t  ngx_reconfigure;
  sig_atomic_t  ngx_reopen;
 +#if (NGX_HTTP_APISIX)
-+ngx_uint_t    ngx_last_reopen_msec;
++uint64_t      ngx_last_reopen_msec;
 +#endif
  
  sig_atomic_t  ngx_change_binary;
@@ -28,7 +28,7 @@ index dadf03f..68c74f4 100644
              ngx_reopen = 0;
 +#if (NGX_HTTP_APISIX)
 +            tp = ngx_timeofday();
-+            ngx_last_reopen_msec = tp->sec * 1000 + tp->msec;
++            ngx_last_reopen_msec = (uint64_t) tp->sec * 1000 + tp->msec;
 +#endif
              ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "reopening logs");
              ngx_reopen_files(cycle, (ngx_uid_t) -1);
@@ -49,7 +49,7 @@ index dadf03f..68c74f4 100644
              ngx_reopen = 0;
 +#if (NGX_HTTP_APISIX)
 +            tp = ngx_timeofday();
-+            ngx_last_reopen_msec = tp->sec * 1000 + tp->msec;
++            ngx_last_reopen_msec = (uint64_t) tp->sec * 1000 + tp->msec;
 +#endif
              ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "reopening logs");
              ngx_reopen_files(cycle, -1);
@@ -59,7 +59,7 @@ index dadf03f..68c74f4 100644
  
  
 +#if (NGX_HTTP_APISIX)
-+ngx_uint_t
++uint64_t
 +ngx_worker_process_get_last_reopen_ms()
 +{
 +    return ngx_last_reopen_msec;

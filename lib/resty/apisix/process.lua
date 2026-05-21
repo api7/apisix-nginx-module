@@ -4,8 +4,7 @@ local tonumber = tonumber
 
 
 ffi.cdef[[
-typedef uintptr_t       ngx_uint_t;
-ngx_uint_t
+uint64_t
 ngx_worker_process_get_last_reopen_ms();
 ]]
 local _M = {}

@@ -52,7 +52,7 @@ index 4f0bd0e..218668b 100644
      { ngx_string("nginx_version"), NULL, ngx_http_variable_nginx_version,
        0, 0, 0 },
  
-@@ -2347,6 +2357,43 @@ ngx_http_variable_connection_time(ngx_http_request_t *r,
+@@ -2347,6 +2357,47 @@ ngx_http_variable_connection_time(ngx_http_request_t *r,
  }
  
  
@@ -68,12 +68,16 @@ index 4f0bd0e..218668b 100644
 +
 +    socklen = sizeof(struct sockaddr_in);
 +
++    if (r->connection->sockaddr->sa_family != AF_INET) {
++        v->not_found = 1;
++        return NGX_OK;
++    }
++
 +    rn = getsockopt(r->connection->fd, SOL_IP, SO_ORIGINAL_DST, (void *) &dst,
 +                    &socklen);
 +    if (rn < 0) {
-+        ngx_log_error(NGX_LOG_CRIT, r->connection->log, ngx_socket_errno,
-+                      "getsockopt(SO_ORIGINAL_DST) failed");
-+        return NGX_ERROR;
++        v->not_found = 1;
++        return NGX_OK;
 +    }
 +
 +    p = ngx_pnalloc(r->pool, NGX_SOCKADDR_STRLEN);
