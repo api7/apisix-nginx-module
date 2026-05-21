@@ -130,7 +130,7 @@ index ae0f1380..a51532da 100644
          ngx_memzero(us, sizeof(ngx_http_upstream_server_t));
          ngx_memzero(&url, sizeof(ngx_url_t));
  
-+        /* just an invalid address as a place holder*/
++        /* just an invalid address as a placeholder */
          ngx_str_set(&url.url, "0.0.0.1");
          url.default_port = 80;
  
