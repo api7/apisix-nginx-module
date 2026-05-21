@@ -747,10 +747,20 @@ diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 diff --git src/ngx_stream_lua_socket_tcp.c src/ngx_stream_lua_socket_tcp.c
 --- src/ngx_stream_lua_socket_tcp.c
 +++ src/ngx_stream_lua_socket_tcp.c
-@@ -2316,6 +2316,139 @@
+@@ -2316,6 +2316,149 @@
      return 0;
  }
  
++void
++ngx_stream_lua_ffi_tls_free_session(ngx_ssl_session_t *sess)
++{
++    ngx_log_debug1(NGX_LOG_DEBUG_STREAM, ngx_cycle->log, 0,
++                   "stream lua tls free session: %p", sess);
++
++    ngx_ssl_free_session(sess);
++}
++
++
 +static int
 +ngx_stream_lua_socket_tcp_serversslhandshake(lua_State *L)
 +{
