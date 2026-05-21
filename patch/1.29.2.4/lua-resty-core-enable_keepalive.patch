@@ -19,13 +19,14 @@ index 18bdc2c..3a98f53 100644
  
  local subsystem = ngx.config.subsystem
  local ngx_lua_ffi_balancer_set_current_peer
-@@ -35,8 +36,7 @@ if subsystem == 'http' then
+@@ -35,8 +36,8 @@ if subsystem == 'http' then
      ffi.cdef[[
      int ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
          const unsigned char *addr, size_t addr_len, int port,
 -        const unsigned char *host, ssize_t host_len,
 -        char **err);
-+        unsigned int cpool_crc32, unsigned int cpool_size, char **err);
++        unsigned int cpool_crc32, int cpool_set, unsigned int cpool_size,
++        char **err);
  
      int ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
          unsigned long timeout, unsigned int max_requests, char **err);
@@ -37,7 +38,7 @@ index 18bdc2c..3a98f53 100644
  local DEFAULT_KEEPALIVE_IDLE_TIMEOUT = 60000
  local DEFAULT_KEEPALIVE_MAX_REQUESTS = 100
  
-@@ -143,27 +144,68 @@ local peer_state_names = {
+@@ -143,27 +144,67 @@ local peer_state_names = {
  local _M = { version = base.version }
  
  if subsystem == "http" then
@@ -49,6 +50,7 @@ index 18bdc2c..3a98f53 100644
          end
  
 +        local pool_crc32
++        local pool_set = 0
 +        local pool_size
 +        if opts then
 +            if type(opts) ~= "table" then
@@ -69,10 +71,7 @@ index 18bdc2c..3a98f53 100644
 +                end
 +
 +                pool_crc32 = ngx_crc32_long(pool)
-+                if pool_crc32 == 0 then
-+                    error("bad option 'pool' to 'set_current_peer' " ..
-+                          "(crc32 hash must not be 0)", 2)
-+                end
++                pool_set = 1
 +            end
 +
 +            if pool_size then
@@ -110,7 +109,8 @@ index 18bdc2c..3a98f53 100644
 +        end
 +
 +        local rc = ngx_lua_ffi_balancer_set_current_peer(r, addr, #addr, port,
-+                                                         pool_crc32, pool_size,
++                                                         pool_crc32, pool_set,
++                                                         pool_size,
                                                           errmsg)
          if rc == FFI_OK then
              return true

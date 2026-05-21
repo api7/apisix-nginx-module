@@ -2,7 +2,7 @@ diff --git src/ngx_http_lua_balancer.c src/ngx_http_lua_balancer.c
 index ae0f1380..a51532da 100644
 --- src/ngx_http_lua_balancer.c
 +++ src/ngx_http_lua_balancer.c
-@@ -31,10 +31,39 @@ typedef struct {
+@@ -31,10 +31,40 @@ typedef struct {
  } ngx_http_lua_balancer_ka_item_t; /*balancer keepalive item*/
  
  
@@ -38,6 +38,7 @@ index ae0f1380..a51532da 100644
 +    int                                 last_peer_state;
 +
 +    uint32_t                            cpool_crc32;
++    unsigned                            cpool_set:1;
 +
      void                               *data;
  
@@ -215,7 +216,7 @@ index ae0f1380..a51532da 100644
      ngx_http_lua_balancer_peer_data_t  *bp = data;
  
      ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0,
-@@ -425,9 +427,12 @@ ngx_http_lua_balancer_get_peer(ngx_peer_connection_t *pc, void *data)
+@@ -425,9 +427,13 @@ ngx_http_lua_balancer_get_peer(ngx_peer_connection_t *pc, void *data)
  
      ctx->context = NGX_HTTP_LUA_CONTEXT_BALANCER;
  
@@ -224,6 +225,7 @@ index ae0f1380..a51532da 100644
      bp->socklen = 0;
      bp->more_tries = 0;
 +    bp->cpool_crc32 = 0;
++    bp->cpool_set = 0;
 +    bp->cpool_size = 0;
      bp->keepalive_requests = 0;
      bp->keepalive_timeout = 0;
@@ -682,12 +684,12 @@ index ae0f1380..a51532da 100644
 -    const u_char *addr, size_t addr_len, int port,
 -    const u_char *host, size_t host_len,
 -    char **err)
-+    const u_char *addr, size_t addr_len, int port,  unsigned int cpool_crc32,
-+    unsigned int cpool_size, char **err)
++    const u_char *addr, size_t addr_len, int port, unsigned int cpool_crc32,
++    int cpool_set, unsigned int cpool_size, char **err)
  {
      ngx_url_t              url;
      ngx_http_lua_ctx_t    *ctx;
-@@ -920,32 +1050,15 @@ ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
+@@ -920,32 +1050,16 @@ ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
      if (url.addrs && url.addrs[0].sockaddr) {
          bp->sockaddr = url.addrs[0].sockaddr;
          bp->socklen = url.addrs[0].socklen;
@@ -719,11 +721,12 @@ index ae0f1380..a51532da 100644
 -        ngx_str_null(&bp->host);
 -    }
 +    bp->cpool_crc32 = (uint32_t) cpool_crc32;
++    bp->cpool_set = cpool_set ? 1 : 0;
 +    bp->cpool_size = (ngx_uint_t) cpool_size;
  
      return NGX_OK;
  }
-@@ -1050,11 +1163,15 @@ ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
+@@ -1050,11 +1163,16 @@ ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
  
      bp = (ngx_http_lua_balancer_peer_data_t *) u->peer.data;
  
@@ -733,8 +736,9 @@ index ae0f1380..a51532da 100644
          return NGX_ERROR;
      }
  
-+    if (!bp->cpool_crc32) {
++    if (!bp->cpool_set) {
 +        bp->cpool_crc32 = ngx_crc32_long(bp->host->data, bp->host->len);
++        bp->cpool_set = 1;
 +    }
 +
      bp->keepalive_timeout = (ngx_msec_t) timeout;
