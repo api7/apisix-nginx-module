@@ -1,0 +1,13 @@
+diff --git src/ngx_http_lua_coroutine.c src/ngx_http_lua_coroutine.c
+index 1580c5b2..d0bc045c 100644
+--- src/ngx_http_lua_coroutine.c
++++ src/ngx_http_lua_coroutine.c
+@@ -358,7 +358,7 @@ ngx_http_lua_inject_coroutine_api(ngx_log_t *log, lua_State *L)
+                         "local ctx = raw_ctx(r)\n"
+ #endif
+                         /* ignore header and body filters */
+-                        "if ctx ~= 0x020 and ctx ~= 0x040 then\n"
++                        "if ctx ~= 0x020 and ctx ~= 0x040 and ctx ~= 0x100 then\n"
+                             "return ours(...)\n"
+                         "end\n"
+                     "end\n"
