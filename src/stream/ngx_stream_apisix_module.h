@@ -6,6 +6,6 @@
 
 
 ngx_int_t ngx_stream_apisix_is_proxy_ssl_enabled(ngx_stream_session_t *s);
-
+ngx_flag_t ngx_stream_apisix_is_ntls_enabled(ngx_stream_session_t *s);
 
 #endif /* _NGX_STREAM_APISIX_H_INCLUDED_ */
