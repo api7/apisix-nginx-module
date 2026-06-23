@@ -8,9 +8,12 @@ no_long_string();
 # reworded in OpenResty 1.29.2.4. Detect the running version once and pick
 # the exact expected message, so a wrong-message regression is still caught.
 my $nginx_binary = $ENV{'TEST_NGINX_BINARY'} || 'nginx';
-my $version = eval { `$nginx_binary -V 2>&1` };
+my $version = eval { `$nginx_binary -V 2>&1` } // '';
 my ($major, $minor) = $version =~ m{openresty/(\d+)\.(\d+)};
-my $reworded = ($major > 1 or ($major == 1 and $minor >= 29));
+# If the version cannot be parsed, fall back to the pre-1.29 wording rather
+# than warning on an undef numeric compare.
+my $reworded = defined $major && defined $minor
+    && ($major > 1 || ($major == 1 && $minor >= 29));
 
 $::err_cert_both_set = $reworded
     ? "client_cert_path and client_cert cannot both be set"

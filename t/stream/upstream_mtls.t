@@ -86,6 +86,7 @@ __DATA__
 "GET / HTTP/1.0\r\nHost: admin.apisix.dev\r\n\r\n"
 --- error_log
 set_cert_and_key failed: both client certificate and private key should be given
+--- stream_response_like: No required SSL certificate was sent
 
 
 
