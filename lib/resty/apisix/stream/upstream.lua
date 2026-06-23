@@ -12,6 +12,8 @@ ffi.cdef([[
 typedef intptr_t        ngx_int_t;
 ngx_int_t
 ngx_stream_apisix_upstream_enable_tls(ngx_stream_lua_request_t *r);
+ngx_int_t
+ngx_stream_apisix_upstream_set_cert_and_key(ngx_stream_lua_request_t *r, void *cert, void *key);
 ]])
 local _M = {}
 
@@ -24,6 +26,21 @@ function _M.set_tls()
     local rc = C.ngx_stream_apisix_upstream_enable_tls(r)
     if rc == NGX_ERROR then
         return nil, "error while setting upstream tls"
+    end
+
+    return true
+end
+
+
+function _M.set_cert_and_key(cert, key)
+    if not cert or not key then
+        return nil, "both client certificate and private key should be given"
+    end
+
+    local r = get_request()
+    local ret = C.ngx_stream_apisix_upstream_set_cert_and_key(r, cert, key)
+    if ret == NGX_ERROR then
+        return nil, "error while setting upstream client cert and key"
     end
 
     return true
