@@ -4,6 +4,24 @@ log_level('debug');
 no_root_location();
 no_long_string();
 
+# Error messages emitted by our lua-resty-core-tlshandshake patch were
+# reworded in OpenResty 1.29.2.4. Detect the running version once and pick
+# the exact expected message, so a wrong-message regression is still caught.
+my $nginx_binary = $ENV{'TEST_NGINX_BINARY'} || 'nginx';
+my $version = eval { `$nginx_binary -V 2>&1` } // '';
+my ($major, $minor) = $version =~ m{openresty/(\d+)\.(\d+)};
+# If the version cannot be parsed, fall back to the pre-1.29 wording rather
+# than warning on an undef numeric compare.
+my $reworded = defined $major && defined $minor
+    && ($major > 1 || ($major == 1 && $minor >= 29));
+
+$::err_cert_both_set = $reworded
+    ? "client_cert_path and client_cert cannot both be set"
+    : "client client_cert_path and client_cert both setting";
+$::err_bad_cert_path_type = $reworded
+    ? "bad client_cert_path option type"
+    : "bad client_cert option type";
+
 add_block_preprocessor(sub {
     my ($block) = @_;
 
@@ -186,8 +204,8 @@ location /t {
     }
 }
 --- error_code: 500
---- error_log
-client client_cert_path and client_cert both setting
+--- error_log eval
+$::err_cert_both_set
 
 
 
@@ -275,5 +293,5 @@ location /t {
     }
 }
 --- error_code: 500
---- error_log
-bad client_cert option type
+--- error_log eval
+$::err_bad_cert_path_type
