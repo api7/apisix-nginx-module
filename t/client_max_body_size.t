@@ -254,3 +254,56 @@ client intended to send too large body
 --- request
 POST /t
 1234
+
+
+
+=== TEST 12: set client_max_body_size to 0 means no limitation, chunked
+--- config
+    location /t {
+        client_max_body_size 1;
+        access_by_lua_block {
+            local client = require("resty.apisix.client")
+            assert(client.set_client_max_body_size(0))
+        }
+        content_by_lua_block {
+            ngx.req.read_body()
+            ngx.exit(200)
+        }
+    }
+--- raw_request eval
+qq{POST /t HTTP/1.1\r
+Host: localhost\r
+Transfer-Encoding: chunked\r
+Connection: close\r
+\r
+5\r
+Hello\r
+0\r
+\r
+}
+
+
+
+=== TEST 13: set client_max_body_size to 0 means no limitation, http2 chunked
+--- config
+    location /t {
+        client_max_body_size 1;
+        access_by_lua_block {
+            local client = require("resty.apisix.client")
+            assert(client.set_client_max_body_size(0))
+        }
+        content_by_lua_block {
+            ngx.req.read_body()
+            ngx.exit(200)
+        }
+    }
+--- more_headers
+Transfer-Encoding: chunked
+--- request eval
+qq{POST /t
+11\r
+Hello World\r
+0\r
+\r
+}
+--- use_http2
