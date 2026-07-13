@@ -301,7 +301,7 @@ Hello\r
 Transfer-Encoding: chunked
 --- request eval
 qq{POST /t
-11\r
+b\r
 Hello World\r
 0\r
 \r
