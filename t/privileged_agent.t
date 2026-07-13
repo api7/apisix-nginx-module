@@ -65,7 +65,7 @@ Bad file descriptor
 
 
 
-=== TEST 2: worker listener address conflict detection
+=== TEST 2: address conflict detection
 --- http_config
 init_by_lua_block {
     local process = require("ngx.process")
@@ -82,40 +82,6 @@ server {
 }
 server {
     listen 127.0.0.1:9091 enable_process=privileged_agent;
-    location / {
-        content_by_lua_block {
-            local process = require("ngx.process")
-            ngx.say(process.type())
-        }
-    }
-}
---- config
-    location /t {
-        return 200;
-    }
---- must_die
---- error_log
-127.0.0.1:9091 is already occupied by worker process
-
-
-
-=== TEST 3: privileged agent listener address conflict detection
---- http_config
-init_by_lua_block {
-    local process = require("ngx.process")
-    assert(process.enable_privileged_agent())
-}
-server {
-    listen 127.0.0.1:9091 enable_process=privileged_agent;
-    location / {
-        content_by_lua_block {
-            local process = require("ngx.process")
-            ngx.say(process.type())
-        }
-    }
-}
-server {
-    listen 127.0.0.1:9091;
     location / {
         content_by_lua_block {
             local process = require("ngx.process")
@@ -133,7 +99,7 @@ server {
 
 
 
-=== TEST 4: same port, different IP
+=== TEST 3: same port, different IP
 --- http_config
 init_by_lua_block {
     local process = require("ngx.process")

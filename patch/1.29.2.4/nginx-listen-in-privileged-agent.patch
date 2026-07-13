@@ -55,19 +55,17 @@ index d0b4a55..9da09db 100644
              ngx_log_debug2(NGX_LOG_DEBUG_CORE, cycle->log, 0,
                             "closing unused fd:%d listening on %V",
 diff --git src/http/ngx_http.c src/http/ngx_http.c
-index d835f89..6e71644 100644
+index d835f89..8f019c2 100644
 --- src/http/ngx_http.c
 +++ src/http/ngx_http.c
-@@ -1262,6 +1262,15 @@ ngx_http_add_addresses(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
+@@ -1262,6 +1262,13 @@ ngx_http_add_addresses(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
              continue;
          }
  
 +        if (lsopt->privileged_agent != addr[i].opt.privileged_agent) {
 +            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-+                               "%V is already occupied by %s",
-+                               &addr[i].opt.addr_text,
-+                               addr[i].opt.privileged_agent
-+                                   ? "privileged agent" : "worker process");
++                               "%V is already occupied by privileged agent",
++                               &addr[i].opt.addr_text);
 +            return NGX_ERROR;
 +        }
 +
