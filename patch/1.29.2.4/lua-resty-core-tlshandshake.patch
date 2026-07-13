@@ -338,3 +338,16 @@ index 0000000..b6e009c
 +return {
 +    version = base.version
 +}
+diff --git lib/resty/core/socket.lua lib/resty/core/socket.lua
+index ea973b7..a039ac5 100644
+--- lib/resty/core/socket.lua
++++ lib/resty/core/socket.lua
+@@ -73 +73,4 @@ ngx_http_lua_ffi_ssl_free_session(void *sess);
+-
++
++void
++ngx_http_lua_ffi_tls_free_session(void *sess);
++
+@@ -493 +496 @@ local function getsslsession(cosocket)
+-    return ffi_gc(session_ptr[0], C.ngx_http_lua_ffi_ssl_free_session)
++    return ffi_gc(session_ptr[0], C.ngx_http_lua_ffi_tls_free_session)
