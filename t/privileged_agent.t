@@ -59,6 +59,9 @@ server {
             end
         }
     }
+--- no_error_log
+[emerg]
+Bad file descriptor
 
 
 
