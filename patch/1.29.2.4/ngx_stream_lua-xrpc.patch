@@ -160,7 +160,7 @@ index 57f389d..6855e37 100644
  static ngx_int_t
  ngx_stream_lua_socket_tcp_read(ngx_stream_lua_request_t *r,
      ngx_stream_lua_socket_tcp_upstream_t *u)
-@@ -5971,6 +6031,672 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
+@@ -5971,6 +6031,691 @@ static ngx_int_t ngx_stream_lua_socket_insert_buffer(
  }
  
  
@@ -168,19 +168,27 @@ index 57f389d..6855e37 100644
 +ngx_stream_lua_ffi_socket_reset_buf(ngx_stream_lua_ctx_t *ctx,
 +    ngx_stream_lua_socket_tcp_upstream_t *u)
 +{
-+    ngx_chain_t             *cl = u->bufs_in;
-+    ngx_chain_t            **ll = NULL;
++    ngx_chain_t             *cl;
 +
-+    if (cl == NULL) {
++    if (u->bufs_in == NULL) {
 +        return;
 +    }
 +
-+    if (cl->next) {
-+        ll = &cl->next;
-+    }
++    if (u->bufs_in != u->buf_in) {
 +
-+    if (ll) {
-+        *ll = ctx->free_recv_bufs;
++        /*
++         * recycle every node before the current buf_in: link the whole
++         * [bufs_in, predecessor of buf_in] segment onto free_recv_bufs
++         * instead of only the head node, otherwise the nodes in between
++         * become unreachable and a new chain link is allocated from the
++         * request pool on every following read
++         */
++
++        for (cl = u->bufs_in; cl->next != u->buf_in; cl = cl->next) {
++            /* void */
++        }
++
++        cl->next = ctx->free_recv_bufs;
 +        ctx->free_recv_bufs = u->bufs_in;
 +        u->bufs_in = u->buf_in;
 +    }
@@ -197,14 +205,21 @@ index 57f389d..6855e37 100644
 +}
 +
 +
-+void
++int
 +ngx_stream_lua_ffi_socket_tcp_reset_read_buf(ngx_stream_lua_request_t *r,
-+    ngx_stream_lua_socket_tcp_upstream_t *u)
++    ngx_stream_lua_socket_tcp_upstream_t *u,
++    u_char *errbuf, size_t *errbuf_size)
 +{
 +    ngx_stream_lua_ctx_t    *ctx;
 +
++    /* resetting the buffers under a pending read would corrupt the data
++     * being read into them */
++    ngx_stream_lua_ffi_socket_check_busy_reading(r, u, errbuf, errbuf_size);
++
 +    ctx = ngx_stream_lua_get_module_ctx(r, ngx_stream_lua_module);
 +    ngx_stream_lua_ffi_socket_reset_buf(ctx, u);
++
++    return NGX_OK;
 +}
 +
 +
@@ -672,6 +687,10 @@ index 57f389d..6855e37 100644
 +
 +    ngx_stream_lua_ffi_socket_check_busy_connecting(r, u, errbuf, errbuf_size);
 +    ngx_stream_lua_ffi_socket_check_busy_writing(r, u, errbuf, errbuf_size);
++
++    /* the source buffers are consumed and reset below; a pending read on
++     * the source socket would have its data corrupted */
++    ngx_stream_lua_ffi_socket_check_busy_reading(r, src, errbuf, errbuf_size);
 +
 +    if (u->body_downstream) {
 +        *errbuf_size = ngx_snprintf(errbuf, *errbuf_size,
