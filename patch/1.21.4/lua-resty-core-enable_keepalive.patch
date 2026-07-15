@@ -1,5 +1,5 @@
 diff --git lib/ngx/balancer.lua lib/ngx/balancer.lua
-index 7d64d63..70a7610 100644
+index 7d64d63..0c77876 100644
 --- lib/ngx/balancer.lua
 +++ lib/ngx/balancer.lua
 @@ -19,6 +19,7 @@ local tonumber = tonumber
@@ -77,7 +77,7 @@ index 7d64d63..70a7610 100644
 +                pool = opts.pool
 +                pool_size = opts.pool_size
 +
-+                if pool then
++                if pool ~= nil then
 +                    if type(pool) ~= "string" then
 +                        error("bad option 'pool' to 'set_current_peer' " ..
 +                              "(string expected, got " ..
@@ -88,7 +88,7 @@ index 7d64d63..70a7610 100644
 +                    end
 +                end
 +
-+                if pool_size then
++                if pool_size ~= nil then
 +                    if type(pool_size) ~= "number" then
 +                        error("bad option 'pool_size' to " ..
 +                              "'set_current_peer' (number expected, got " ..

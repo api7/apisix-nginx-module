@@ -1,5 +1,5 @@
 diff --git lib/ngx/balancer.lua lib/ngx/balancer.lua
-index 18bdc2c..d43c354 100644
+index 18bdc2c..cd87245 100644
 --- lib/ngx/balancer.lua
 +++ lib/ngx/balancer.lua
 @@ -4,7 +4,6 @@
@@ -56,7 +56,7 @@ index 18bdc2c..d43c354 100644
 +                pool = opts.pool
 +                pool_size = opts.pool_size
 +
-+                if pool then
++                if pool ~= nil then
 +                    if type(pool) ~= "string" then
 +                        error("bad option 'pool' to 'set_current_peer' " ..
 +                              "(string expected, got " ..
@@ -67,7 +67,7 @@ index 18bdc2c..d43c354 100644
 +                    end
 +                end
 +
-+                if pool_size then
++                if pool_size ~= nil then
 +                    if type(pool_size) ~= "number" then
 +                        error("bad option 'pool_size' to " ..
 +                              "'set_current_peer' (number expected, got " ..

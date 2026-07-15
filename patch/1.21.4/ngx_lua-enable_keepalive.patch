@@ -1,5 +1,5 @@
 diff --git src/ngx_http_lua_balancer.c src/ngx_http_lua_balancer.c
-index af4da73..0175ee3 100644
+index af4da73..7b8dc5b 100644
 --- src/ngx_http_lua_balancer.c
 +++ src/ngx_http_lua_balancer.c
 @@ -16,46 +16,116 @@
@@ -1194,7 +1194,7 @@ index af4da73..0175ee3 100644
  
      if (r->upstream_states && r->upstream_states->nelts > 1) {
          state = r->upstream_states->elts;
-@@ -809,4 +1376,122 @@ ngx_http_lua_ffi_balancer_recreate_request(ngx_http_request_t *r,
+@@ -809,4 +1376,128 @@ ngx_http_lua_ffi_balancer_recreate_request(ngx_http_request_t *r,
  }
  
  
@@ -1268,27 +1268,30 @@ index af4da73..0175ee3 100644
 +     * different properties could be reused
 +     */
 +
-+    if (bp->host.len) {
-+        ssl_name = bp->host;
-+    }
-+
 +#if (NGX_HTTP_SSL)
 +    if (u->ssl) {
 +        tls = 1;
 +
-+        if (ssl_name.len == 0) {
-+            if (ngx_http_lua_upstream_get_ssl_name(r, u) != NGX_OK) {
-+                return NGX_ERROR;
-+            }
-+
-+            ssl_name = u->ssl_name;
++        /*
++         * the name actually used for the TLS handshake is derived from
++         * the upstream ssl_name configuration at connect time, not from
++         * the set_current_peer host argument, so the identity must use
++         * the same derivation; the host argument stays a separate
++         * identity component below to preserve its documented
++         * pool-partitioning semantics
++         */
++        if (ngx_http_lua_upstream_get_ssl_name(r, u) != NGX_OK) {
++            return NGX_ERROR;
 +        }
++
++        ssl_name = u->ssl_name;
 +    }
 +#endif
 +
 +    len = bp->addr_text->len + 1
 +          + (pc->local ? pc->local->name.len : 0) + 1
 +          + 1 /* tls flag */ + 1
++          + bp->host.len + 1
 +          + ssl_name.len;
 +
 +    p = ngx_pnalloc(r->pool, len);
@@ -1307,6 +1310,9 @@ index af4da73..0175ee3 100644
 +
 +    *p++ = '|';
 +    *p++ = tls ? '1' : '0';
++    *p++ = '|';
++
++    p = ngx_copy(p, bp->host.data, bp->host.len);
 +    *p++ = '|';
 +
 +    p = ngx_copy(p, ssl_name.data, ssl_name.len);
