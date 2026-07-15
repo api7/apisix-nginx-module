@@ -198,3 +198,50 @@ index 230679f..106bd76 100644
  {
      ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
                     "lua ssl free session: %p", sess);
+@@ -2207,6 +2207,46 @@ ngx_http_lua_ffi_tls_free_session(ngx_ssl_session_t *sess)
+ 
+     ngx_ssl_free_session(sess);
+ }
++
++
++/*
++ * The following functions keep the original FFI symbol names so that
++ * consumers built against the stock lua-resty-core (e.g. the shared
++ * cosocket metatable used by both ngx.socket.tcp() and
++ * ngx.socket.stream() objects) keep working.
++ */
++
++int
++ngx_http_lua_ffi_socket_tcp_sslhandshake(ngx_http_request_t *r,
++    ngx_http_lua_socket_tcp_upstream_t *u, ngx_ssl_session_t *sess,
++    int enable_session_reuse, ngx_str_t *server_name, int verify,
++    int ocsp_status_req, STACK_OF(X509) *chain, EVP_PKEY *pkey,
++    const char **errmsg)
++{
++    return ngx_http_lua_ffi_socket_tcp_tlshandshake(r, u, sess,
++                                                    enable_session_reuse,
++                                                    server_name, verify,
++                                                    ocsp_status_req, chain,
++                                                    pkey, errmsg);
++}
++
++
++int
++ngx_http_lua_ffi_socket_tcp_get_sslhandshake_result(ngx_http_request_t *r,
++    ngx_http_lua_socket_tcp_upstream_t *u, ngx_ssl_session_t **sess,
++    const char **errmsg, int *openssl_error_code)
++{
++    return ngx_http_lua_ffi_socket_tcp_get_tlshandshake_result(
++                                            r, u, sess, errmsg,
++                                            openssl_error_code);
++}
++
++
++void
++ngx_http_lua_ffi_ssl_free_session(ngx_ssl_session_t *sess)
++{
++    ngx_http_lua_ffi_tls_free_session(sess);
++}
+ 
+ 
+ int
