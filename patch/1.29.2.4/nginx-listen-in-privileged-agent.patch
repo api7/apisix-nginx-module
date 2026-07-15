@@ -1,18 +1,3 @@
-diff --git src/core/ngx_connection.c src/core/ngx_connection.c
-index b7c0fe2..2e3e3c2 100644
---- src/core/ngx_connection.c
-+++ src/core/ngx_connection.c
-@@ -434,6 +434,10 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
-                 continue;
-             }
- 
-+            if (ngx_is_privileged_agent != ls[i].privileged_agent) {
-+                continue;
-+            }
-+
- #if (NGX_HAVE_REUSEPORT)
- 
-             if (ls[i].add_reuseport) {
 diff --git src/core/ngx_connection.h src/core/ngx_connection.h
 index 84dd804..d3d6930 100644
 --- src/core/ngx_connection.h
@@ -119,23 +104,63 @@ index 765e7ff..302a14b 100644
      int                        backlog;
      int                        rcvbuf;
 diff --git src/os/unix/ngx_process_cycle.c src/os/unix/ngx_process_cycle.c
-index dadf03f..6794b34 100644
+index b4e140d..2a837bf 100644
 --- src/os/unix/ngx_process_cycle.c
 +++ src/os/unix/ngx_process_cycle.c
-@@ -1227,7 +1227,11 @@ ngx_privileged_agent_process_cycle(ngx_cycle_t *cycle, void *data)
+@@ -443,12 +443,36 @@ ngx_start_cache_manager_processes(ngx_cycle_t *cycle, ngx_uint_t respawn)
+ static void
+ ngx_start_privileged_agent_processes(ngx_cycle_t *cycle, ngx_uint_t respawn)
+ {
++    ngx_uint_t             i;
++    ngx_listening_t       *ls;
+     ngx_core_conf_t       *ccf;
+ 
+     ccf = (ngx_core_conf_t *) ngx_get_conf(cycle->conf_ctx,
+                                            ngx_core_module);
+ 
+     if (!ccf->privileged_agent) {
++        /*
++         * no process will accept on the privileged agent listeners:
++         * close them in the master so that clients get "connection
++         * refused" instead of hanging in the accept backlog
++         */
++        ls = cycle->listening.elts;
++        for (i = 0; i < cycle->listening.nelts; i++) {
++            if (!ls[i].privileged_agent
++                || ls[i].fd == (ngx_socket_t) -1)
++            {
++                continue;
++            }
++
++            if (ngx_close_socket(ls[i].fd) == -1) {
++                ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_socket_errno,
++                              ngx_close_socket_n " %V failed",
++                              &ls[i].addr_text);
++            }
++
++            ls[i].fd = (ngx_socket_t) -1;
++        }
++
+         return;
+     }
+ 
+@@ -1253,7 +1277,14 @@ ngx_privileged_agent_process_cycle(ngx_cycle_t *cycle, void *data)
      ngx_process = NGX_PROCESS_HELPER;
      ngx_is_privileged_agent = 1;
  
 -    ngx_close_listening_sockets(cycle);
-+    if (ngx_open_listening_sockets(cycle) != NGX_OK) {
-+        ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
-+                      "failed to init privileged agent listeners");
-+        exit(2);
-+    }
++    /*
++     * the master process opens and owns every listening socket,
++     * including the privileged agent ones, so that bind failures abort
++     * startup/reload and the fds survive helper generations and role
++     * changes across reloads; this process keeps the inherited
++     * privileged agent fds and ngx_event_process_init() closes the
++     * listeners belonging to the other process roles
++     */
  
      /* Set a moderate number of connections for a helper process. */
      cycle->connection_n = ccf->privileged_agent_connections;
-@@ -1242,6 +1246,7 @@ ngx_privileged_agent_process_cycle(ngx_cycle_t *cycle, void *data)
+@@ -1268,6 +1299,7 @@ ngx_privileged_agent_process_cycle(ngx_cycle_t *cycle, void *data)
  
          if (ngx_terminate || ngx_quit) {
              ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "exiting");
