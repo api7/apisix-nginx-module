@@ -1,32 +1,24 @@
 diff --git lib/ngx/balancer.lua lib/ngx/balancer.lua
-index 18bdc2c..3a98f53 100644
+index 18bdc2c..cd87245 100644
 --- lib/ngx/balancer.lua
 +++ lib/ngx/balancer.lua
-@@ -3,7 +3,7 @@
- 
+@@ -4,7 +4,6 @@
  local base = require "resty.core.base"
  base.allows_subsystem('http', 'stream')
--
-+require "resty.core.hash"
  
+-
  local ffi = require "ffi"
  local C = ffi.C
-@@ -20,6 +20,7 @@ local error = error
- local type = type
- local tonumber = tonumber
- local max = math.max
-+local ngx_crc32_long = ngx.crc32_long
- 
- local subsystem = ngx.config.subsystem
- local ngx_lua_ffi_balancer_set_current_peer
-@@ -35,8 +36,8 @@ if subsystem == 'http' then
+ local ffi_str = ffi.string
+@@ -35,8 +34,9 @@ if subsystem == 'http' then
      ffi.cdef[[
      int ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
          const unsigned char *addr, size_t addr_len, int port,
 -        const unsigned char *host, ssize_t host_len,
 -        char **err);
-+        unsigned int cpool_crc32, int cpool_set, unsigned int cpool_size,
-+        char **err);
++        const unsigned char *host, size_t host_len,
++        const unsigned char *cpool_name, size_t cpool_name_len,
++        unsigned int cpool_size, char **err);
  
      int ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
          unsigned long timeout, unsigned int max_requests, char **err);
@@ -38,7 +30,7 @@ index 18bdc2c..3a98f53 100644
  local DEFAULT_KEEPALIVE_IDLE_TIMEOUT = 60000
  local DEFAULT_KEEPALIVE_MAX_REQUESTS = 100
  
-@@ -143,27 +144,67 @@ local peer_state_names = {
+@@ -143,27 +144,73 @@ local peer_state_names = {
  local _M = { version = base.version }
  
  if subsystem == "http" then
@@ -49,40 +41,47 @@ index 18bdc2c..3a98f53 100644
              error("no request found")
          end
  
-+        local pool_crc32
-+        local pool_set = 0
++        local host
++        local pool
 +        local pool_size
-+        if opts then
-+            if type(opts) ~= "table" then
++
++        if opts ~= nil then
++            local typ = type(opts)
++
++            if typ == "string" then
++                -- the documented set_current_peer(addr, port, host) form
++                host = opts
++
++            elseif typ == "table" then
++                pool = opts.pool
++                pool_size = opts.pool_size
++
++                if pool ~= nil then
++                    if type(pool) ~= "string" then
++                        error("bad option 'pool' to 'set_current_peer' " ..
++                              "(string expected, got " ..
++                              type(pool) .. ")", 2)
++                    elseif pool == "" then
++                        error("bad option 'pool' to 'set_current_peer' " ..
++                              "(non-empty string expected)", 2)
++                    end
++                end
++
++                if pool_size ~= nil then
++                    if type(pool_size) ~= "number" then
++                        error("bad option 'pool_size' to " ..
++                              "'set_current_peer' (number expected, got " ..
++                              type(pool_size) .. ")", 2)
++
++                    elseif pool_size < 1 then
++                        error("bad option 'pool_size' to " ..
++                              "'set_current_peer' (expected > 0)", 2)
++                    end
++                end
++
++            else
 +                error("bad argument #3 to 'set_current_peer' " ..
-+                      "(table expected, got " .. type(opts) .. ")", 2)
-+            end
-+
-+            local pool = opts.pool
-+            pool_size = opts.pool_size
-+
-+            if pool then
-+                if type(pool) ~= "string" then
-+                    error("bad option 'pool' to 'set_current_peer' " ..
-+                          "(string expected, got " .. type(pool) .. ")", 2)
-+                elseif pool == "" then
-+                    error("bad option 'pool' to 'set_current_peer' " ..
-+                          "(non-empty string expected)", 2)
-+                end
-+
-+                pool_crc32 = ngx_crc32_long(pool)
-+                pool_set = 1
-+            end
-+
-+            if pool_size then
-+                if type(pool_size) ~= "number" then
-+                    error("bad option 'pool_size' to 'set_current_peer' " ..
-+                          "(number expected, got " .. type(pool_size) .. ")", 2)
-+
-+                elseif pool_size < 1 then
-+                    error("bad option 'pool_size' to 'set_current_peer' " ..
-+                          "(expected > 0)", 2)
-+                end
++                      "(string or table expected, got " .. typ .. ")", 2)
 +            end
 +        end
 +
@@ -96,25 +95,22 @@ index 18bdc2c..3a98f53 100644
 -        if host ~= nil and type(host) ~= "string" then
 -            error("bad argument #3 to 'set_current_peer' "
 -                  .. "(string expected, got " .. type(host) .. ")")
-+        if not pool_crc32 then
-+            pool_crc32 = 0
++        if not pool_size then
++            pool_size = DEFAULT_KEEPALIVE_POOL_SIZE
          end
  
 -        local rc = ngx_lua_ffi_balancer_set_current_peer(r, addr, #addr,
 -                                                         port,
--                                                         host,
--                                                         host and #host or 0,
-+        if not pool_size then
-+            pool_size = DEFAULT_KEEPALIVE_POOL_SIZE
-+        end
-+
 +        local rc = ngx_lua_ffi_balancer_set_current_peer(r, addr, #addr, port,
-+                                                         pool_crc32, pool_set,
+                                                          host,
+                                                          host and #host or 0,
++                                                         pool,
++                                                         pool and #pool or 0,
 +                                                         pool_size,
                                                           errmsg)
          if rc == FFI_OK then
              return true
-@@ -172,26 +207,26 @@ if subsystem == "http" then
+@@ -172,26 +219,26 @@ if subsystem == "http" then
          return nil, ffi_str(errmsg[0])
      end
  else

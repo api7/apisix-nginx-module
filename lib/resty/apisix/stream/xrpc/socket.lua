@@ -40,15 +40,35 @@ ngx_stream_lua_ffi_socket_tcp_get_send_result(ngx_stream_lua_request_t *r,
     ngx_stream_lua_socket_tcp_upstream_t *u, u_char *errbuf,
     size_t *errbuf_size);
 
-void
-ngx_stream_lua_ffi_socket_tcp_reset_read_buf(ngx_stream_lua_request_t *r,
-    ngx_stream_lua_socket_tcp_upstream_t *u);
-
 int
 ngx_stream_lua_ffi_socket_tcp_has_pending_data(ngx_stream_lua_request_t *r,
     ngx_stream_lua_socket_tcp_upstream_t *u,
     u_char *errbuf, size_t *errbuf_size);
 ]]
+
+-- the 1.29.2.4 and 1.21.4.x patches turned reset_read_buf into a
+-- fallible operation (it rejects a socket with a pending read); the
+-- other historical runtime patches keep the void signature until the
+-- fix is backported (nginx 1021004 identifies the OpenResty 1.21.4.x
+-- generation, whose patch directories are both fixed)
+local nginx_version = ngx.config.nginx_version
+local reset_read_buf_can_fail = nginx_version >= 1029000
+                                or nginx_version == 1021004
+
+if reset_read_buf_can_fail then
+    ffi.cdef[[
+    int
+    ngx_stream_lua_ffi_socket_tcp_reset_read_buf(ngx_stream_lua_request_t *r,
+        ngx_stream_lua_socket_tcp_upstream_t *u,
+        u_char *errbuf, size_t *errbuf_size);
+    ]]
+else
+    ffi.cdef[[
+    void
+    ngx_stream_lua_ffi_socket_tcp_reset_read_buf(ngx_stream_lua_request_t *r,
+        ngx_stream_lua_socket_tcp_upstream_t *u);
+    ]]
+end
 local socket_tcp_read = C.ngx_stream_lua_ffi_socket_tcp_read_buf
 local socket_tcp_get_read_result = C.ngx_stream_lua_ffi_socket_tcp_get_read_buf_result
 local socket_tcp_move = C.ngx_stream_lua_ffi_socket_tcp_send_from_socket
@@ -268,7 +288,22 @@ local function reset_read_buf(cosocket)
     end
 
     local u = get_tcp_socket(cosocket)
-    socket_tcp_reset_read_buf(r, u)
+
+    if not reset_read_buf_can_fail then
+        socket_tcp_reset_read_buf(r, u)
+        return true
+    end
+
+    local errbuf = get_string_buf(ERR_BUF_SIZE)
+    local errbuf_size = get_size_ptr()
+    errbuf_size[0] = ERR_BUF_SIZE
+
+    local rc = socket_tcp_reset_read_buf(r, u, errbuf, errbuf_size)
+    if rc == FFI_ERROR then
+        return nil, ffi_str(errbuf, errbuf_size[0])
+    end
+
+    return true
 end
 
 

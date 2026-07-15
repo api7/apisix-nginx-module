@@ -32,7 +32,7 @@ new file mode 100644
 index 0000000..f66f51f
 --- /dev/null
 +++ lib/resty/core/socket/tcp.lua
-@@ -0,0 +1,305 @@
+@@ -0,0 +1,317 @@
 +-- Copyright (C) by OpenResty Inc.
 +
 +
@@ -193,8 +193,14 @@ index 0000000..f66f51f
 +                    "client_priv_key and client_priv_key_path", 2)
 +        end
 +
-+        if options.client_cert then
-+            if type(options.client_cert) ~= "string" then
++        -- keep the loaded file content in locals instead of writing it
++        -- back into the caller's options table: the table is usually a
++        -- shared, long-lived config and mutating it makes the *_path
++        -- variant fail on the next call with the "both set" validation
++        -- error above
++        local cert_pem = options.client_cert
++        if cert_pem then
++            if type(cert_pem) ~= "string" then
 +                error("bad client_cert option type", 2)
 +            end
 +        else
@@ -207,11 +213,12 @@ index 0000000..f66f51f
 +                return nil, err
 +            end
 +
-+            options.client_cert = txt
++            cert_pem = txt
 +        end
 +
-+        if options.client_priv_key then
-+            if type(options.client_priv_key) ~= "string" then
++        local pkey_pem = options.client_priv_key
++        if pkey_pem then
++            if type(pkey_pem) ~= "string" then
 +                error("bad client_priv_key option type", 2)
 +            end
 +        else
@@ -224,16 +231,16 @@ index 0000000..f66f51f
 +                return nil, err
 +            end
 +
-+            options.client_priv_key = txt
++            pkey_pem = txt
 +        end
 +
-+        local cert, err = ssl.parse_pem_cert(options.client_cert)
++        local cert, err = ssl.parse_pem_cert(cert_pem)
 +        if not cert then
 +            return nil, err
 +        end
 +        client_cert = cert
 +
-+        local pkey, err = ssl.parse_pem_priv_key(options.client_priv_key)
++        local pkey, err = ssl.parse_pem_priv_key(pkey_pem)
 +        if not pkey then
 +            return nil, err
 +        end
@@ -321,7 +328,7 @@ index 0000000..f66f51f
 +do
 +    local old_socket_tcp = ngx.socket.tcp
 +
-+    function ngx.socket.tcp()
++    local function socket_tcp()
 +        local ok, sock = pcall(old_socket_tcp)
 +        if not ok then
 +            error(sock, 2)
@@ -332,6 +339,11 @@ index 0000000..f66f51f
 +
 +        return sock
 +    end
++
++    -- ngx.socket.stream is an alias of ngx.socket.tcp sharing the same
++    -- cosocket metatable, so it must get the same wrapper
++    ngx.socket.tcp = socket_tcp
++    ngx.socket.stream = socket_tcp
 +end
 +
 +
