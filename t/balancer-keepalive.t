@@ -21,6 +21,10 @@ our $UpstreamSrvConfig = <<_EOC_;
             return 200 'SNI=\$ssl_server_name\\n';
         }
 
+        location = /echo_addrs {
+            return 200 'server=\$server_addr client=\$remote_addr\\n';
+        }
+
         location = /echo_ssl_client_s_dn_and_protocol {
             return 200 'ssl_client_s_dn=\$ssl_client_s_dn ssl_protocol=\$ssl_protocol\\n';
         }
@@ -111,7 +115,7 @@ SNI=one
 
 
 
-=== TEST 2: enable_keepalive: sanity (default pool)
+=== TEST 2: enable_keepalive: default pool identity covers connect-time properties (addr, TLS server name)
 --- http_upstream
     upstream test_upstream {
         server 0.0.0.1;
@@ -147,28 +151,30 @@ SNI=one
 "
 --- response_body
 SNI=one
-SNI=one
 SNI=two
 SNI=two
 SNI=three
+SNI=three
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \d+, size: 30
+qr/^lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|\|1\|\|one, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
-lua balancer: keepalive reusing connection \S+, requests: 1, cpool: \S+
-lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
-lua balancer: keepalive create pool, crc32: \d+, size: 30
+lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|\|1\|\|two, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
-lua balancer: keepalive reusing connection \S+, requests: 1, cpool: \S+
+lua balancer: keepalive create pool, name: 127\.0\.0\.2:23456\|\|1\|\|two, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
-lua balancer: keepalive create pool, crc32: \d+, size: 30
+lua balancer: keepalive create pool, name: 127\.0\.0\.2:23456\|\|1\|\|three, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
+lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
+lua balancer: keepalive create pool, name: 127\.0\.0\.2:23457\|\|1\|\|three, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 
 
 
-=== TEST 3: enable_keepalive: sanity (default pool is "<host>:<port>")
+=== TEST 3: enable_keepalive: explicit pool is independent from the default pool identity
 --- http_upstream
     upstream test_upstream {
         server 0.0.0.1;
@@ -208,16 +214,18 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
     }
 --- response_body
 SNI=one
-SNI=one
-SNI=one
+SNI=two
+SNI=three
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \d+, size: 30
+qr/^lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|\|1\|\|one, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
-lua balancer: keepalive reusing connection \S+, requests: 1, cpool: \S+
+lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|\|1\|\|two, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
 lua balancer: keepalive custom cpool: 127\.0\.0\.1:23456
-lua balancer: keepalive reusing connection \S+, requests: 2, cpool: \S+
+lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 
 
@@ -265,7 +273,7 @@ SNI=one
 SNI=one
 SNI=one
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \d+, size: 30
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
 lua balancer: keepalive reusing connection \S+, requests: 1, cpool: \S+
@@ -311,10 +319,10 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 SNI=one
 SNI=two
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \d+, size: 30
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
-lua balancer: keepalive create pool, crc32: \d+, size: 30
+lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 
@@ -458,16 +466,16 @@ ssl_client_s_dn=.*?CN=test\.com.*? ssl_protocol=TLSv1\.3
 ssl_client_s_dn=.*?CN=test2\.com.*? ssl_protocol=TLSv1\.2
 ssl_client_s_dn=.*?CN=test2\.com.*? ssl_protocol=TLSv1\.3
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \d+, size: 30
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
-lua balancer: keepalive create pool, crc32: \d+, size: 30
+lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
-lua balancer: keepalive create pool, crc32: \d+, size: 30
+lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
-lua balancer: keepalive create pool, crc32: \d+, size: 30
+lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 
@@ -490,8 +498,8 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
         }
     }
 --- response_body
-bad argument #3 to 'set_current_peer' (table expected, got boolean)
-bad argument #3 to 'set_current_peer' (table expected, got number)
+bad argument #3 to 'set_current_peer' (string or table expected, got boolean)
+bad argument #3 to 'set_current_peer' (string or table expected, got number)
 --- grep_error_log_out
 
 
@@ -502,7 +510,7 @@ bad argument #3 to 'set_current_peer' (table expected, got number)
         content_by_lua_block {
             local b = require "ngx.balancer"
 
-            local values = { true, 0, -1 }
+            local values = { false, true, 0, -1 }
 
             for _, val in ipairs(values) do
                 local pok, perr = pcall(b.set_current_peer, "127.0.0.1", 80, {
@@ -516,6 +524,7 @@ bad argument #3 to 'set_current_peer' (table expected, got number)
     }
 --- response_body
 bad option 'pool' to 'set_current_peer' (string expected, got boolean)
+bad option 'pool' to 'set_current_peer' (string expected, got boolean)
 bad option 'pool' to 'set_current_peer' (string expected, got number)
 bad option 'pool' to 'set_current_peer' (string expected, got number)
 --- grep_error_log_out
@@ -528,7 +537,7 @@ bad option 'pool' to 'set_current_peer' (string expected, got number)
         content_by_lua_block {
             local b = require "ngx.balancer"
 
-            local values = { true, 0, -1 }
+            local values = { false, true, 0, -1 }
 
             for _, val in ipairs(values) do
                 local pok, perr = pcall(b.set_current_peer, "127.0.0.1", 80, {
@@ -542,6 +551,7 @@ bad option 'pool' to 'set_current_peer' (string expected, got number)
         }
     }
 --- response_body
+bad option 'pool_size' to 'set_current_peer' (number expected, got boolean)
 bad option 'pool_size' to 'set_current_peer' (number expected, got boolean)
 bad option 'pool_size' to 'set_current_peer' (expected > 0)
 bad option 'pool_size' to 'set_current_peer' (expected > 0)
@@ -702,15 +712,15 @@ bad argument #2 to 'enable_keepalive' (expected >= 0)
 --- response_body
 --- wait: 0.15
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \S+, size: 30
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
 lua balancer: keepalive reusing connection \S+, requests: 1, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
 lua balancer: keepalive reusing connection \S+, requests: 2, cpool: \S+
 lua balancer: keepalive not saving connection \S+, cpool: \S+, connections: 0
-lua balancer: keepalive free pool \S+, crc32: \d+
-lua balancer: keepalive create pool, crc32: \S+, size: 30
+lua balancer: keepalive free pool \S+, name: \S+
+lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 
@@ -748,9 +758,9 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 --- response_body
 --- grep_error_log eval: qr/lua balancer: keepalive (?:reusing connection \S+, requests: 99|create pool|free pool).*/
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \S+, size: 30
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive reusing connection \S+, requests: 99, cpool: \S+
-lua balancer: keepalive free pool \S+, crc32: \d+$/
+lua balancer: keepalive free pool \S+, name: \S+$/
 
 
 
@@ -819,16 +829,16 @@ lua balancer: keepalive free pool \S+, crc32: \d+$/
 --- response_body
 --- wait: 0.2
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \d+, size: 30
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
 lua balancer: keepalive closing connection \S+, cpool: \S+, connections: 0
-lua balancer: keepalive free pool \S+, crc32: \d+
-lua balancer: keepalive create pool, crc32: \d+, size: 30
+lua balancer: keepalive free pool \S+, name: \S+
+lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
 lua balancer: keepalive closing connection \S+, cpool: \S+, connections: 0
-lua balancer: keepalive free pool \S+, crc32: \d+$/
+lua balancer: keepalive free pool \S+, name: \S+$/
 
 
 
@@ -867,7 +877,7 @@ lua balancer: keepalive free pool \S+, crc32: \d+$/
     }
 --- response_body
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \d+, size: 2
+qr/^lua balancer: keepalive create pool, name: \S+, size: 2
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive no free connection, cpool: \S+
@@ -914,14 +924,14 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 2$/
 --- wait: 0.15
 --- response_body
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \d+, size: 30
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 2
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 2
 lua balancer: keepalive closing connection \S+, cpool: \S+, connections: 1
 lua balancer: keepalive closing connection \S+, cpool: \S+, connections: 0
-lua balancer: keepalive free pool \S+, crc32: \d+$/
+lua balancer: keepalive free pool \S+, name: \S+$/
 
 
 
@@ -953,14 +963,14 @@ lua balancer: keepalive free pool \S+, crc32: \d+$/
     }
 --- response_body
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \d+, size: 30
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive not saving connection \S+, cpool: \S+, connections: 0
-lua balancer: keepalive free pool \S+, crc32: \d+
-lua balancer: keepalive create pool, crc32: \d+, size: 30
+lua balancer: keepalive free pool \S+, name: \S+
+lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive not saving connection \S+, cpool: \S+, connections: 0
-lua balancer: keepalive free pool \S+, crc32: \d+$/
+lua balancer: keepalive free pool \S+, name: \S+$/
 
 
 
@@ -994,10 +1004,10 @@ lua balancer: keepalive free pool \S+, crc32: \d+$/
 --- error_log eval
 qr/connect\(\) failed \(\d+: Connection refused\) while connecting to upstream/
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \d+, size: 30
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive not saving connection \S+, cpool: \S+, connections: 0
-lua balancer: keepalive free pool \S+, crc32: \d+$/
+lua balancer: keepalive free pool \S+, name: \S+$/
 
 
 
@@ -1037,10 +1047,10 @@ lua balancer: keepalive free pool \S+, crc32: \d+$/
 --- error_log
 upstream timed out
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \S+, size: 30
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive not saving connection \S+, cpool: \S+, connections: 0
-lua balancer: keepalive free pool \S+, crc32: \d+$/
+lua balancer: keepalive free pool \S+, name: \S+$/
 
 
 
@@ -1098,11 +1108,11 @@ lua balancer: keepalive free pool \S+, crc32: \d+$/
 --- no_error_log
 [crit]
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \d+, size: 1
+qr/^lua balancer: keepalive create pool, name: \S+, size: 1
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive not saving connection \S+, cpool: \S+, connections: 0
-lua balancer: keepalive free pool \S+, crc32: \d+
-lua balancer: keepalive create pool, crc32: \d+, size: 2
+lua balancer: keepalive free pool \S+, name: \S+
+lua balancer: keepalive create pool, name: \S+, size: 2
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 
@@ -1162,11 +1172,11 @@ SNI=two
 --- no_error_log
 [crit]
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \d+, size: 30
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive not saving connection \S+, cpool: \S+, connections: 0
-lua balancer: keepalive free pool \S+, crc32: \d+
-lua balancer: keepalive create pool, crc32: \d+, size: 30
+lua balancer: keepalive free pool \S+, name: \S+
+lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 
@@ -1206,10 +1216,10 @@ SNI=one
 SNI=two
 --- grep_error_log eval: qr/(?:lua balancer: keepalive .*|(?:get|free) keepalive peer)/
 --- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, crc32: \S+, size: 30
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
-lua balancer: keepalive create pool, crc32: \d+, size: 30
+lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 
@@ -1251,17 +1261,150 @@ SNI=one
 --- grep_error_log eval: qr/(?:lua balancer: keepalive .*|(?:get|free) keepalive peer)/
 --- grep_error_log_out eval
 qr/^get keepalive peer
-lua balancer: keepalive create pool, crc32: \d+, size: 30
+lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 free keepalive peer
 free keepalive peer
 lua balancer: keepalive not saving connection \d+, cpool: \S+, connections: 0
-lua balancer: keepalive free pool \S+, crc32: \d+
+lua balancer: keepalive free pool \S+, name: \S+
 get keepalive peer
-lua balancer: keepalive create pool, crc32: \d+, size: 30
+lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 get keepalive peer
 free keepalive peer
 free keepalive peer
 lua balancer: keepalive not saving connection \d+, cpool: \S+, connections: 0
-lua balancer: keepalive free pool \S+, crc32: \d+$/
+lua balancer: keepalive free pool \S+, name: \S+$/
+
+
+=== TEST 29: distinct pool names with the same CRC32 stay isolated
+The two pool names below share the same crc32 value; the registry must
+key pools by the full name, not a 32-bit digest of it.
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local first = ngx.var.arg_backend == "first"
+            local ip = first and "127.0.0.1" or "127.0.0.2"
+            local pool = first
+                and "http#w7910hay2abs.example#80"
+                or "http#dwxjcw7qq3bb.example#80"
+
+            assert(b.set_current_peer(ip, $TEST_NGINX_SERVER_SSL_PORT, {
+                pool = pool,
+            }))
+            assert(b.enable_keepalive())
+        }
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_addrs' -q 'backend=first';
+        echo_subrequest GET '/proxy/echo_addrs' -q 'backend=second';
+    }
+--- response_body_like
+^server=127\.0\.0\.1 client=\S+
+server=127\.0\.0\.2 client=\S+$
+--- grep_error_log_out eval
+qr/^lua balancer: keepalive create pool, name: http#w7910hay2abs\.example#80, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
+lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
+lua balancer: keepalive create pool, name: http#dwxjcw7qq3bb\.example#80, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
+lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
+
+
+
+=== TEST 30: default pool identity covers the local bind address
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            assert(b.set_current_peer("127.0.0.1",
+                                      $TEST_NGINX_SERVER_SSL_PORT))
+            assert(b.enable_keepalive())
+        }
+    }
+--- config
+    location ~ ^/proxyb/(?<upstream_uri>.*) {
+        proxy_ssl_verify      off;
+        proxy_ssl_server_name on;
+        proxy_ssl_name        '$arg_sni';
+        proxy_bind            $arg_local_addr;
+
+        proxy_http_version    1.1;
+        proxy_set_header      Connection '';
+        proxy_pass            https://test_upstream/$upstream_uri;
+    }
+
+    location = /t {
+        echo_subrequest GET '/proxyb/echo_addrs' -q 'local_addr=127.0.0.2';
+        echo_subrequest GET '/proxyb/echo_addrs' -q 'local_addr=127.0.0.3';
+    }
+--- response_body_like
+^server=127\.0\.0\.1 client=127\.0\.0\.2
+server=127\.0\.0\.1 client=127\.0\.0\.3$
+--- grep_error_log_out eval
+qr/^lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|127\.0\.0\.2\|1\|\|, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
+lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
+lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|127\.0\.0\.3\|1\|\|, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
+lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
+
+
+
+=== TEST 31: set_current_peer accepts the documented host argument
+The third argument may be the plain host string from the documented
+OpenResty API; it takes part in the default pool identity as its own
+component, while the TLS component always uses the server name derived
+from the upstream ssl_name configuration (the name actually used at
+handshake time), so a varying configured SNI partitions pools even with
+a fixed host argument.
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            assert(b.set_current_peer("127.0.0.1",
+                                      $TEST_NGINX_SERVER_SSL_PORT,
+                                      "host-" .. ngx.var.arg_h))
+            assert(b.enable_keepalive())
+        }
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_addrs' -q 'h=a';
+        echo_subrequest GET '/proxy/echo_addrs' -q 'h=a';
+        echo_subrequest GET '/proxy/echo_addrs' -q 'h=b';
+        echo_subrequest GET '/proxy/echo_sni' -q 'h=c&sni=x';
+        echo_subrequest GET '/proxy/echo_sni' -q 'h=c&sni=y';
+    }
+--- response_body_like
+^server=127\.0\.0\.1 client=\S+
+server=127\.0\.0\.1 client=\S+
+server=127\.0\.0\.1 client=\S+
+SNI=x
+SNI=y$
+--- grep_error_log_out eval
+qr/^lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|\|1\|host-a\|, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
+lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
+lua balancer: keepalive reusing connection \S+, requests: 1, cpool: \S+
+lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
+lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|\|1\|host-b\|, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
+lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
+lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|\|1\|host-c\|x, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
+lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
+lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|\|1\|host-c\|y, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
+lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/

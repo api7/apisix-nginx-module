@@ -1,8 +1,8 @@
 diff --git src/ngx_http_lua_balancer.c src/ngx_http_lua_balancer.c
-index ae0f1380..a51532da 100644
+index aa26a4a..3948881 100644
 --- src/ngx_http_lua_balancer.c
 +++ src/ngx_http_lua_balancer.c
-@@ -31,10 +31,40 @@ typedef struct {
+@@ -31,10 +31,43 @@ typedef struct {
  } ngx_http_lua_balancer_ka_item_t; /*balancer keepalive item*/
  
  
@@ -10,7 +10,10 @@ index ae0f1380..a51532da 100644
 +    ngx_uint_t                               size;
 +    ngx_uint_t                               connections;
 +
-+    uint32_t                                 crc32;
++    /* the full pool name is the pool identity; a 32-bit digest such as
++     * crc32 must not be used here: colliding names would silently share
++     * connections across unrelated upstream pools */
++    ngx_str_t                                cpool_name;
 +
 +    lua_State                               *lua_vm;
 +
@@ -37,13 +40,13 @@ index ae0f1380..a51532da 100644
 +
 +    int                                 last_peer_state;
 +
-+    uint32_t                            cpool_crc32;
++    ngx_str_t                           cpool_name;
 +    unsigned                            cpool_set:1;
 +
      void                               *data;
  
      ngx_event_get_peer_pt               original_get_peer;
-@@ -45,20 +74,21 @@ struct ngx_http_lua_balancer_peer_data_s {
+@@ -45,20 +78,21 @@ struct ngx_http_lua_balancer_peer_data_s {
      ngx_event_save_peer_session_pt      original_save_session;
  #endif
  
@@ -58,7 +61,7 @@ index ae0f1380..a51532da 100644
  
 -    struct sockaddr                    *sockaddr;
 -    socklen_t                           socklen;
-+    ngx_str_t                          *host;
++    ngx_str_t                           host;
 +
      ngx_addr_t                         *local;
  
@@ -73,7 +76,7 @@ index ae0f1380..a51532da 100644
  
  #if !(HAVE_NGX_UPSTREAM_TIMEOUT_FIELDS)
      unsigned                            cloned_upstream_conf:1;
-@@ -73,10 +103,8 @@ static ngx_int_t ngx_http_lua_balancer_set_session(ngx_peer_connection_t *pc,
+@@ -73,10 +107,8 @@ static ngx_int_t ngx_http_lua_balancer_set_session(ngx_peer_connection_t *pc,
      void *data);
  static void ngx_http_lua_balancer_save_session(ngx_peer_connection_t *pc,
      void *data);
@@ -85,15 +88,22 @@ index ae0f1380..a51532da 100644
  static ngx_int_t ngx_http_lua_balancer_init(ngx_conf_t *cf,
      ngx_http_upstream_srv_conf_t *us);
  static ngx_int_t ngx_http_lua_balancer_init_peer(ngx_http_request_t *r,
-@@ -87,17 +115,28 @@ static ngx_int_t ngx_http_lua_balancer_by_chunk(lua_State *L,
+@@ -87,17 +119,35 @@ static ngx_int_t ngx_http_lua_balancer_by_chunk(lua_State *L,
      ngx_http_request_t *r);
  static void ngx_http_lua_balancer_free_peer(ngx_peer_connection_t *pc,
      void *data, ngx_uint_t state);
 +static ngx_int_t ngx_http_lua_balancer_create_keepalive_pool(lua_State *L,
-+    ngx_log_t *log, uint32_t cpool_crc32, ngx_uint_t cpool_size,
++    ngx_log_t *log, ngx_str_t *cpool_name, ngx_uint_t cpool_size,
 +    ngx_http_lua_balancer_keepalive_pool_t **cpool);
 +static void ngx_http_lua_balancer_get_keepalive_pool(lua_State *L,
-+    uint32_t cpool_crc32, ngx_http_lua_balancer_keepalive_pool_t **cpool);
++    ngx_str_t *cpool_name, ngx_http_lua_balancer_keepalive_pool_t **cpool);
++static ngx_int_t ngx_http_lua_balancer_build_default_pool_name(
++    ngx_http_request_t *r, ngx_http_upstream_t *u, ngx_peer_connection_t *pc,
++    ngx_http_lua_balancer_peer_data_t *bp);
++#if (NGX_HTTP_SSL)
++static ngx_int_t ngx_http_lua_upstream_get_ssl_name(ngx_http_request_t *r,
++    ngx_http_upstream_t *u);
++#endif
 +static void ngx_http_lua_balancer_free_keepalive_pool(ngx_log_t *log,
 +    ngx_http_lua_balancer_keepalive_pool_t *cpool);
  static void ngx_http_lua_balancer_notify_peer(ngx_peer_connection_t *pc,
@@ -118,7 +128,7 @@ index ae0f1380..a51532da 100644
  static struct sockaddr  *ngx_http_lua_balancer_default_server_sockaddr;
  
  
-@@ -181,7 +220,7 @@ ngx_http_lua_balancer_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
+@@ -181,7 +231,7 @@ ngx_http_lua_balancer_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
  
      dd("enter");
  
@@ -127,7 +137,7 @@ index ae0f1380..a51532da 100644
      if (cmd->post == NULL) {
          return NGX_CONF_ERROR;
      }
-@@ -246,6 +285,7 @@ ngx_http_lua_balancer_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
+@@ -246,6 +296,7 @@ ngx_http_lua_balancer_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
          ngx_memzero(us, sizeof(ngx_http_upstream_server_t));
          ngx_memzero(&url, sizeof(ngx_url_t));
  
@@ -135,7 +145,7 @@ index ae0f1380..a51532da 100644
          ngx_str_set(&url.url, "0.0.0.1");
          url.default_port = 80;
  
-@@ -261,8 +301,6 @@ ngx_http_lua_balancer_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
+@@ -261,8 +312,6 @@ ngx_http_lua_balancer_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
      }
  
      if (uscf->peer.init_upstream) {
@@ -144,7 +154,7 @@ index ae0f1380..a51532da 100644
  
          lscf->balancer.original_init_upstream = uscf->peer.init_upstream;
  
-@@ -286,16 +324,10 @@ ngx_http_lua_balancer_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
+@@ -286,16 +335,10 @@ ngx_http_lua_balancer_by_lua(ngx_conf_t *cf, ngx_command_t *cmd,
  static ngx_int_t
  ngx_http_lua_balancer_init(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
  {
@@ -161,7 +171,7 @@ index ae0f1380..a51532da 100644
      if (lscf->balancer.original_init_upstream(cf, us) != NGX_OK) {
          return NGX_ERROR;
      }
-@@ -304,38 +336,6 @@ ngx_http_lua_balancer_init(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
+@@ -304,38 +347,6 @@ ngx_http_lua_balancer_init(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
  
      us->peer.init = ngx_http_lua_balancer_init_peer;
  
@@ -200,23 +210,32 @@ index ae0f1380..a51532da 100644
      return NGX_OK;
  }
  
-@@ -387,6 +387,7 @@ ngx_http_lua_balancer_get_peer(ngx_peer_connection_t *pc, void *data)
+@@ -387,22 +398,20 @@ ngx_http_lua_balancer_get_peer(ngx_peer_connection_t *pc, void *data)
      void                               *pdata;
      lua_State                          *L;
      ngx_int_t                           rc;
 +    ngx_queue_t                        *q;
      ngx_connection_t                   *c;
      ngx_http_request_t                 *r;
- #if (NGX_HTTP_SSL)
-@@ -394,6 +395,7 @@ ngx_http_lua_balancer_get_peer(ngx_peer_connection_t *pc, void *data)
- #endif
+-#if (NGX_HTTP_SSL)
+     ngx_http_upstream_t                *u;
+-#endif
      ngx_http_lua_ctx_t                 *ctx;
      ngx_http_lua_srv_conf_t            *lscf;
 +    ngx_http_lua_balancer_keepalive_item_t *item;
      ngx_http_lua_balancer_peer_data_t  *bp = data;
  
      ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0,
-@@ -425,9 +427,13 @@ ngx_http_lua_balancer_get_peer(ngx_peer_connection_t *pc, void *data)
+                    "lua balancer: get peer, tries: %ui", pc->tries);
+ 
+     r = bp->request;
+-#if (NGX_HTTP_SSL)
+     u = r->upstream;
+-#endif
+     lscf = bp->conf;
+ 
+     ngx_http_lua_assert(lscf->balancer.handler && r);
+@@ -425,9 +434,14 @@ ngx_http_lua_balancer_get_peer(ngx_peer_connection_t *pc, void *data)
  
      ctx->context = NGX_HTTP_LUA_CONTEXT_BALANCER;
  
@@ -224,13 +243,14 @@ index ae0f1380..a51532da 100644
      bp->sockaddr = NULL;
      bp->socklen = 0;
      bp->more_tries = 0;
-+    bp->cpool_crc32 = 0;
++    ngx_str_null(&bp->cpool_name);
 +    bp->cpool_set = 0;
 +    bp->cpool_size = 0;
++    ngx_str_null(&bp->host);
      bp->keepalive_requests = 0;
      bp->keepalive_timeout = 0;
      bp->keepalive = 0;
-@@ -465,10 +470,10 @@ ngx_http_lua_balancer_get_peer(ngx_peer_connection_t *pc, void *data)
+@@ -465,10 +479,10 @@ ngx_http_lua_balancer_get_peer(ngx_peer_connection_t *pc, void *data)
          pc->local = bp->local;
      }
  
@@ -239,11 +259,11 @@ index ae0f1380..a51532da 100644
          pc->sockaddr = bp->sockaddr;
          pc->socklen = bp->socklen;
 -        pc->name = bp->addr_text;
-+        pc->name = bp->host;
++        pc->name = bp->host.len ? &bp->host : bp->addr_text;
          pc->cached = 0;
          pc->connection = NULL;
  
-@@ -476,27 +481,59 @@ ngx_http_lua_balancer_get_peer(ngx_peer_connection_t *pc, void *data)
+@@ -476,27 +490,66 @@ ngx_http_lua_balancer_get_peer(ngx_peer_connection_t *pc, void *data)
              r->upstream->peer.tries += bp->more_tries;
          }
  
@@ -253,14 +273,8 @@ index ae0f1380..a51532da 100644
 -                ngx_http_lua_upstream_get_ssl_name(r, u);
 -                bp->host = u->ssl_name;
 +        if (ngx_http_lua_balancer_keepalive_is_enabled(bp)) {
-+            ngx_http_lua_balancer_get_keepalive_pool(L, bp->cpool_crc32,
-+                                                     &bp->cpool);
-+
-+            if (bp->cpool == NULL
-+                && ngx_http_lua_balancer_create_keepalive_pool(L, pc->log,
-+                                                               bp->cpool_crc32,
-+                                                               bp->cpool_size,
-+                                                               &bp->cpool)
++            if (!bp->cpool_set
++                && ngx_http_lua_balancer_build_default_pool_name(r, u, pc, bp)
 +                   != NGX_OK)
 +            {
 +                return NGX_ERROR;
@@ -268,6 +282,19 @@ index ae0f1380..a51532da 100644
 -#endif
  
 -            c = ngx_http_lua_balancer_get_cached_item(lscf, pc, &bp->host);
++            ngx_http_lua_balancer_get_keepalive_pool(L, &bp->cpool_name,
++                                                     &bp->cpool);
++
++            if (bp->cpool == NULL
++                && ngx_http_lua_balancer_create_keepalive_pool(L, pc->log,
++                                                               &bp->cpool_name,
++                                                               bp->cpool_size,
++                                                               &bp->cpool)
++                   != NGX_OK)
++            {
++                return NGX_ERROR;
++            }
++
 +            ngx_http_lua_assert(bp->cpool);
 +
 +            if (!ngx_queue_empty(&bp->cpool->cache)) {
@@ -316,7 +343,7 @@ index ae0f1380..a51532da 100644
          }
  
          return NGX_OK;
-@@ -577,14 +614,12 @@ static void
+@@ -577,14 +630,12 @@ static void
  ngx_http_lua_balancer_free_peer(ngx_peer_connection_t *pc, void *data,
      ngx_uint_t state)
  {
@@ -333,7 +360,7 @@ index ae0f1380..a51532da 100644
  
      ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0,
                     "lua balancer: free peer, tries: %ui", pc->tries);
-@@ -592,14 +627,16 @@ ngx_http_lua_balancer_free_peer(ngx_peer_connection_t *pc, void *data,
+@@ -592,14 +643,16 @@ ngx_http_lua_balancer_free_peer(ngx_peer_connection_t *pc, void *data,
      u = bp->request->upstream;
      c = pc->connection;
  
@@ -352,7 +379,7 @@ index ae0f1380..a51532da 100644
              if (state & NGX_PEER_FAILED
                  || c == NULL
                  || c->read->eof
-@@ -633,42 +670,41 @@ ngx_http_lua_balancer_free_peer(ngx_peer_connection_t *pc, void *data,
+@@ -633,42 +686,41 @@ ngx_http_lua_balancer_free_peer(ngx_peer_connection_t *pc, void *data,
                  goto invalid;
              }
  
@@ -414,7 +441,7 @@ index ae0f1380..a51532da 100644
  
              if (c->write->timer_set) {
                  ngx_del_timer(c->write);
-@@ -684,42 +720,6 @@ ngx_http_lua_balancer_free_peer(ngx_peer_connection_t *pc, void *data,
+@@ -684,42 +736,6 @@ ngx_http_lua_balancer_free_peer(ngx_peer_connection_t *pc, void *data,
              c->write->log = ngx_cycle->log;
              c->pool->log = ngx_cycle->log;
  
@@ -457,7 +484,7 @@ index ae0f1380..a51532da 100644
              if (c->read->ready) {
                  ngx_http_lua_balancer_close_handler(c->read);
              }
-@@ -728,9 +728,16 @@ ngx_http_lua_balancer_free_peer(ngx_peer_connection_t *pc, void *data,
+@@ -728,9 +744,16 @@ ngx_http_lua_balancer_free_peer(ngx_peer_connection_t *pc, void *data,
  
  invalid:
  
@@ -477,13 +504,13 @@ index ae0f1380..a51532da 100644
          }
  
          return;
-@@ -740,6 +747,123 @@ invalid:
+@@ -740,6 +763,136 @@ invalid:
  }
  
  
 +static ngx_int_t
 +ngx_http_lua_balancer_create_keepalive_pool(lua_State *L, ngx_log_t *log,
-+    uint32_t cpool_crc32, ngx_uint_t cpool_size,
++    ngx_str_t *cpool_name, ngx_uint_t cpool_size,
 +    ngx_http_lua_balancer_keepalive_pool_t **cpool)
 +{
 +    size_t                                       size;
@@ -499,29 +526,38 @@ index ae0f1380..a51532da 100644
 +    ngx_http_lua_assert(lua_istable(L, -1));
 +
 +    size = sizeof(ngx_http_lua_balancer_keepalive_pool_t)
-+           + sizeof(ngx_http_lua_balancer_keepalive_item_t) * cpool_size;
++           + sizeof(ngx_http_lua_balancer_keepalive_item_t) * cpool_size
++           + cpool_name->len;
 +
-+    upool = lua_newuserdata(L, size); /* pools upool */
++    lua_pushlstring(L, (const char *) cpool_name->data, cpool_name->len);
++    /* pools name */
++
++    upool = lua_newuserdata(L, size); /* pools name upool */
 +    if (upool == NULL) {
 +        return NGX_ERROR;
 +    }
 +
 +    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, log, 0,
-+                   "lua balancer: keepalive create pool, crc32: %ui, "
-+                   "size: %ui", cpool_crc32, cpool_size);
++                   "lua balancer: keepalive create pool, name: %V, "
++                   "size: %ui", cpool_name, cpool_size);
 +
 +    upool->lua_vm = L;
-+    upool->crc32 = cpool_crc32;
 +    upool->size = cpool_size;
 +    upool->connections = 0;
++
++    items = (ngx_http_lua_balancer_keepalive_item_t *) (&upool->free + 1);
++
++    /* store a copy of the pool name in the same userdata allocation so
++     * that the pool can be removed from the registry table on free */
++    upool->cpool_name.data = (u_char *) (items + cpool_size);
++    upool->cpool_name.len = cpool_name->len;
++    ngx_memcpy(upool->cpool_name.data, cpool_name->data, cpool_name->len);
 +
 +    ngx_queue_init(&upool->cache);
 +    ngx_queue_init(&upool->free);
 +
-+    lua_rawseti(L, -2, cpool_crc32); /* pools */
++    lua_rawset(L, -3); /* pools */
 +    lua_pop(L, 1); /* orig stack */
-+
-+    items = (ngx_http_lua_balancer_keepalive_item_t *) (&upool->free + 1);
 +
 +    for (i = 0; i < cpool_size; i++) {
 +        ngx_queue_insert_head(&upool->free, &items[i].queue);
@@ -535,7 +571,7 @@ index ae0f1380..a51532da 100644
 +
 +
 +static void
-+ngx_http_lua_balancer_get_keepalive_pool(lua_State *L, uint32_t cpool_crc32,
++ngx_http_lua_balancer_get_keepalive_pool(lua_State *L, ngx_str_t *cpool_name,
 +    ngx_http_lua_balancer_keepalive_pool_t **cpool)
 +{
 +    ngx_http_lua_balancer_keepalive_pool_t      *upool;
@@ -558,7 +594,9 @@ index ae0f1380..a51532da 100644
 +
 +    ngx_http_lua_assert(lua_istable(L, -1));
 +
-+    lua_rawgeti(L, -1, cpool_crc32); /* pools upool? */
++    lua_pushlstring(L, (const char *) cpool_name->data, cpool_name->len);
++    /* pools name */
++    lua_rawget(L, -2); /* pools upool? */
 +    upool = lua_touserdata(L, -1);
 +    lua_pop(L, 2); /* orig stack */
 +
@@ -573,8 +611,8 @@ index ae0f1380..a51532da 100644
 +    lua_State                             *L;
 +
 +    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, log, 0,
-+                   "lua balancer: keepalive free pool %p, crc32: %ui",
-+                   cpool, cpool->crc32);
++                   "lua balancer: keepalive free pool %p, name: %V",
++                   cpool, &cpool->cpool_name);
 +
 +    ngx_http_lua_assert(cpool->connections == 0);
 +
@@ -592,8 +630,10 @@ index ae0f1380..a51532da 100644
 +
 +    ngx_http_lua_assert(lua_istable(L, -1));
 +
-+    lua_pushnil(L); /* pools nil */
-+    lua_rawseti(L, -2, cpool->crc32); /* pools */
++    lua_pushlstring(L, (const char *) cpool->cpool_name.data,
++                    cpool->cpool_name.len); /* pools name */
++    lua_pushnil(L); /* pools name nil */
++    lua_rawset(L, -3); /* pools */
 +    lua_pop(L, 1); /* orig stack */
 +}
 +
@@ -601,7 +641,7 @@ index ae0f1380..a51532da 100644
  static void
  ngx_http_lua_balancer_notify_peer(ngx_peer_connection_t *pc, void *data,
      ngx_uint_t type)
-@@ -755,6 +879,10 @@ ngx_http_lua_balancer_notify_peer(ngx_peer_connection_t *pc, void *data,
+@@ -755,6 +908,10 @@ ngx_http_lua_balancer_notify_peer(ngx_peer_connection_t *pc, void *data,
  static void
  ngx_http_lua_balancer_close(ngx_connection_t *c)
  {
@@ -612,7 +652,7 @@ index ae0f1380..a51532da 100644
  #if (NGX_HTTP_SSL)
      if (c->ssl) {
          c->ssl->no_wait_shutdown = 1;
-@@ -762,9 +890,6 @@ ngx_http_lua_balancer_close(ngx_connection_t *c)
+@@ -762,9 +919,6 @@ ngx_http_lua_balancer_close(ngx_connection_t *c)
  
          if (ngx_ssl_shutdown(c) == NGX_AGAIN) {
              c->ssl->handler = ngx_http_lua_balancer_close;
@@ -622,7 +662,7 @@ index ae0f1380..a51532da 100644
              return;
          }
      }
-@@ -773,8 +898,12 @@ ngx_http_lua_balancer_close(ngx_connection_t *c)
+@@ -773,8 +927,12 @@ ngx_http_lua_balancer_close(ngx_connection_t *c)
      ngx_destroy_pool(c->pool);
      ngx_close_connection(c);
  
@@ -637,7 +677,7 @@ index ae0f1380..a51532da 100644
  }
  
  
-@@ -789,7 +918,7 @@ ngx_http_lua_balancer_dummy_handler(ngx_event_t *ev)
+@@ -789,7 +947,7 @@ ngx_http_lua_balancer_dummy_handler(ngx_event_t *ev)
  static void
  ngx_http_lua_balancer_close_handler(ngx_event_t *ev)
  {
@@ -646,7 +686,7 @@ index ae0f1380..a51532da 100644
  
      int                n;
      char               buf[1];
-@@ -820,8 +949,10 @@ close:
+@@ -820,8 +978,10 @@ close:
      ngx_http_lua_balancer_close(c);
  
      ngx_queue_remove(&item->queue);
@@ -659,7 +699,7 @@ index ae0f1380..a51532da 100644
  }
  
  
-@@ -832,7 +963,7 @@ ngx_http_lua_balancer_set_session(ngx_peer_connection_t *pc, void *data)
+@@ -832,7 +992,7 @@ ngx_http_lua_balancer_set_session(ngx_peer_connection_t *pc, void *data)
  {
      ngx_http_lua_balancer_peer_data_t  *bp = data;
  
@@ -668,7 +708,7 @@ index ae0f1380..a51532da 100644
          /* TODO */
          return NGX_OK;
      }
-@@ -846,7 +977,7 @@ ngx_http_lua_balancer_save_session(ngx_peer_connection_t *pc, void *data)
+@@ -846,7 +1006,7 @@ ngx_http_lua_balancer_save_session(ngx_peer_connection_t *pc, void *data)
  {
      ngx_http_lua_balancer_peer_data_t  *bp = data;
  
@@ -677,56 +717,42 @@ index ae0f1380..a51532da 100644
          /* TODO */
          return;
      }
-@@ -859,9 +990,8 @@ ngx_http_lua_balancer_save_session(ngx_peer_connection_t *pc, void *data)
- 
- int
+@@ -861,7 +1021,8 @@ int
  ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
--    const u_char *addr, size_t addr_len, int port,
--    const u_char *host, size_t host_len,
+     const u_char *addr, size_t addr_len, int port,
+     const u_char *host, size_t host_len,
 -    char **err)
-+    const u_char *addr, size_t addr_len, int port, unsigned int cpool_crc32,
-+    int cpool_set, unsigned int cpool_size, char **err)
++    const u_char *cpool_name, size_t cpool_name_len,
++    unsigned int cpool_size, char **err)
  {
      ngx_url_t              url;
      ngx_http_lua_ctx_t    *ctx;
-@@ -920,32 +1050,16 @@ ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
-     if (url.addrs && url.addrs[0].sockaddr) {
-         bp->sockaddr = url.addrs[0].sockaddr;
-         bp->socklen = url.addrs[0].socklen;
--        bp->addr_text = &url.addrs[0].name;
-+        bp->host = &url.addrs[0].name;
- 
-     } else {
-         *err = "no host allowed";
-         return NGX_ERROR;
+@@ -947,6 +1108,24 @@ ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
+         ngx_str_null(&bp->host);
      }
  
--    if (host && host_len) {
--        bp->host.data = ngx_palloc(r->pool, host_len);
--        if (bp->host.data == NULL) {
--            *err = "no memory";
--            return NGX_ERROR;
--        }
--
--        ngx_memcpy(bp->host.data, host, host_len);
--        bp->host.len = host_len;
--
--#if (NGX_HTTP_SSL)
--        if (u->ssl) {
--            u->ssl_name = bp->host;
--        }
--#endif
--
--    } else {
--        ngx_str_null(&bp->host);
--    }
-+    bp->cpool_crc32 = (uint32_t) cpool_crc32;
-+    bp->cpool_set = cpool_set ? 1 : 0;
++    if (cpool_name && cpool_name_len) {
++        bp->cpool_name.data = ngx_palloc(r->pool, cpool_name_len);
++        if (bp->cpool_name.data == NULL) {
++            *err = "no memory";
++            return NGX_ERROR;
++        }
++
++        ngx_memcpy(bp->cpool_name.data, cpool_name, cpool_name_len);
++        bp->cpool_name.len = cpool_name_len;
++        bp->cpool_set = 1;
++
++    } else {
++        ngx_str_null(&bp->cpool_name);
++        bp->cpool_set = 0;
++    }
++
 +    bp->cpool_size = (ngx_uint_t) cpool_size;
- 
++
      return NGX_OK;
  }
-@@ -1050,11 +1163,16 @@ ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
+ 
+@@ -1050,11 +1229,15 @@ ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
  
      bp = (ngx_http_lua_balancer_peer_data_t *) u->peer.data;
  
@@ -736,87 +762,76 @@ index ae0f1380..a51532da 100644
          return NGX_ERROR;
      }
  
-+    if (!bp->cpool_set) {
-+        bp->cpool_crc32 = ngx_crc32_long(bp->host->data, bp->host->len);
-+        bp->cpool_set = 1;
-+    }
++    /* when no explicit pool was given, the default pool identity is
++     * derived in ngx_http_lua_balancer_get_peer, where the local bind
++     * address and the TLS server name are finally known */
 +
      bp->keepalive_timeout = (ngx_msec_t) timeout;
      bp->keepalive_requests = (ngx_uint_t) max_requests;
      bp->keepalive = 1;
-@@ -1375,138 +1492,4 @@ ngx_http_lua_balancer_keepalive(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
-     return NGX_CONF_OK;
- }
+@@ -1428,85 +1611,76 @@ done:
+ #endif
  
--
--#if (NGX_HTTP_SSL)
--static ngx_int_t
--ngx_http_lua_upstream_get_ssl_name(ngx_http_request_t *r,
--    ngx_http_upstream_t *u)
--{
--    u_char     *p, *last;
--    ngx_str_t   name;
--
--    if (u->conf->ssl_name) {
--        if (ngx_http_complex_value(r, u->conf->ssl_name, &name) != NGX_OK) {
--            return NGX_ERROR;
--        }
--
--    } else {
--        name = u->ssl_name;
--    }
--
--    if (name.len == 0) {
--        goto done;
--    }
--
--    /*
--     * ssl name here may contain port, notably if derived from $proxy_host
--     * or $http_host; we have to strip it. eg: www.example.com:443
--     */
--
--    p = name.data;
--    last = name.data + name.len;
--
--    if (*p == '[') {
--        p = ngx_strlchr(p, last, ']');
--
--        if (p == NULL) {
--            p = name.data;
--        }
--    }
--
--    p = ngx_strlchr(p, last, ':');
--
--    if (p != NULL) {
--        name.len = p - name.data;
--    }
--
--done:
--
--    u->ssl_name = name;
--
--    return NGX_OK;
--}
--#endif
--
--
+ 
 -static ngx_uint_t
 -ngx_http_lua_balancer_calc_hash(ngx_str_t *name,
 -    struct sockaddr *sockaddr, socklen_t socklen, ngx_addr_t *local)
--{
++static ngx_int_t
++ngx_http_lua_balancer_build_default_pool_name(ngx_http_request_t *r,
++    ngx_http_upstream_t *u, ngx_peer_connection_t *pc,
++    ngx_http_lua_balancer_peer_data_t *bp)
+ {
 -    ngx_uint_t hash;
--
++    size_t      len;
++    u_char     *p;
++    unsigned    tls = 0;
++    ngx_str_t   ssl_name = ngx_null_string;
+ 
 -    hash = ngx_hash_key_lc(name->data, name->len);
 -    hash ^= ngx_hash_key((u_char *) sockaddr, socklen);
 -    if (local != NULL) {
 -        hash ^= ngx_hash_key((u_char *) local->sockaddr, local->socklen);
--    }
--
++    /*
++     * the default pool identity must cover every property that is only
++     * applied when the connection is established: the remote address,
++     * the local bind address, the host given to set_current_peer and the
++     * TLS server name; otherwise an idle connection created with
++     * different properties could be reused
++     */
++
++#if (NGX_HTTP_SSL)
++    if (u->ssl) {
++        tls = 1;
++
++        /*
++         * the name actually used for the TLS handshake is derived from
++         * the upstream ssl_name configuration at connect time, not from
++         * the set_current_peer host argument, so the identity must use
++         * the same derivation; the host argument stays a separate
++         * identity component below to preserve its documented
++         * pool-partitioning semantics
++         */
++        if (ngx_http_lua_upstream_get_ssl_name(r, u) != NGX_OK) {
++            return NGX_ERROR;
++        }
++
++        ssl_name = u->ssl_name;
+     }
++#endif
+ 
 -    return hash;
 -}
--
--
++    len = bp->addr_text->len + 1
++          + (pc->local ? pc->local->name.len : 0) + 1
++          + 1 /* tls flag */ + 1
++          + bp->host.len + 1
++          + ssl_name.len;
+ 
++    p = ngx_pnalloc(r->pool, len);
++    if (p == NULL) {
++        return NGX_ERROR;
++    }
+ 
 -static ngx_connection_t *
 -ngx_http_lua_balancer_get_cached_item(ngx_http_lua_srv_conf_t *lscf,
 -    ngx_peer_connection_t *pc, ngx_str_t *name)
@@ -846,7 +861,8 @@ index ae0f1380..a51532da 100644
 -        if (item->hash != hash) {
 -            continue;
 -        }
--
++    bp->cpool_name.data = p;
+ 
 -        if (name->len == item->host.len
 -            && ngx_memn2cmp((u_char *) &item->sockaddr,
 -                            (u_char *) sockaddr,
@@ -872,16 +888,32 @@ index ae0f1380..a51532da 100644
 -            if (c->read->timer_set) {
 -                ngx_del_timer(c->read);
 -            }
--
++    p = ngx_copy(p, bp->addr_text->data, bp->addr_text->len);
++    *p++ = '|';
+ 
 -            pc->cached = 1;
 -            pc->connection = c;
 -            return c;
 -        }
--    }
--
++    if (pc->local) {
++        p = ngx_copy(p, pc->local->name.data, pc->local->name.len);
+     }
+ 
 -    return NULL;
--}
--
++    *p++ = '|';
++    *p++ = tls ? '1' : '0';
++    *p++ = '|';
++
++    p = ngx_copy(p, bp->host.data, bp->host.len);
++    *p++ = '|';
++
++    p = ngx_copy(p, ssl_name.data, ssl_name.len);
++
++    bp->cpool_name.len = p - bp->cpool_name.data;
++
++    return NGX_OK;
+ }
+ 
  /* vi:set ft=c ts=4 sw=4 et fdm=marker: */
 diff --git src/ngx_http_lua_common.h src/ngx_http_lua_common.h
 index cc2d36a3..edbd9166 100644
