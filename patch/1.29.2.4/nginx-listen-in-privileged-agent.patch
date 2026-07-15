@@ -43,13 +43,17 @@ diff --git src/http/ngx_http.c src/http/ngx_http.c
 index d835f89..8f019c2 100644
 --- src/http/ngx_http.c
 +++ src/http/ngx_http.c
-@@ -1262,6 +1262,13 @@ ngx_http_add_addresses(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
+@@ -1262,6 +1262,17 @@ ngx_http_add_addresses(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
              continue;
          }
  
 +        if (lsopt->privileged_agent != addr[i].opt.privileged_agent) {
++            /* report the role of the listener that actually occupies the
++             * address, not unconditionally the privileged agent */
 +            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-+                               "%V is already occupied by privileged agent",
++                               addr[i].opt.privileged_agent
++                               ? "%V is already occupied by privileged agent"
++                               : "%V is already occupied by worker process",
 +                               &addr[i].opt.addr_text);
 +            return NGX_ERROR;
 +        }
