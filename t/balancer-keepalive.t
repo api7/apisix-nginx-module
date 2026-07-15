@@ -1,25 +1,5 @@
 # Origin: https://github.com/openresty/lua-resty-core/pull/276/files
-
-# The balancer keepalive pool identity fix (full pool-name keying,
-# connect-time properties in the default pool identity, set_current_peer
-# host compatibility) currently only lands in the 1.29.2.4 patches; older
-# runtime patches keep the previous behavior until the fix is backported.
-our $SkipReason;
-
-BEGIN {
-    my $nginx_binary = $ENV{'TEST_NGINX_BINARY'} || 'nginx';
-    my $version = eval { `$nginx_binary -V 2>&1` } // '';
-    my ($major, $minor) = $version =~ m{openresty/(\d+)\.(\d+)};
-
-    if (!defined $major || !defined $minor
-        || ($major < 1 || ($major == 1 && $minor < 29))) {
-        $SkipReason = "requires OpenResty 1.29 or later";
-    }
-}
-
-use t::APISIX_NGINX $SkipReason
-    ? (skip_all => $SkipReason)
-    : ('no_plan');
+use t::APISIX_NGINX 'no_plan';
 
 $ENV{TEST_NGINX_SERVER_SSL_PORT_2} = $ENV{TEST_NGINX_SERVER_SSL_PORT} + 1;
 
@@ -1345,14 +1325,24 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 
             assert(b.set_current_peer("127.0.0.1",
                                       $TEST_NGINX_SERVER_SSL_PORT))
-            assert(b.bind_to_local_addr(ngx.var.arg_local_addr))
             assert(b.enable_keepalive())
         }
     }
 --- config
+    location ~ ^/proxyb/(?<upstream_uri>.*) {
+        proxy_ssl_verify      off;
+        proxy_ssl_server_name on;
+        proxy_ssl_name        '$arg_sni';
+        proxy_bind            $arg_local_addr;
+
+        proxy_http_version    1.1;
+        proxy_set_header      Connection '';
+        proxy_pass            https://test_upstream/$upstream_uri;
+    }
+
     location = /t {
-        echo_subrequest GET '/proxy/echo_addrs' -q 'local_addr=127.0.0.2';
-        echo_subrequest GET '/proxy/echo_addrs' -q 'local_addr=127.0.0.3';
+        echo_subrequest GET '/proxyb/echo_addrs' -q 'local_addr=127.0.0.2';
+        echo_subrequest GET '/proxyb/echo_addrs' -q 'local_addr=127.0.0.3';
     }
 --- response_body_like
 ^server=127\.0\.0\.1 client=127\.0\.0\.2
