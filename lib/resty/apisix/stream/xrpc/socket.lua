@@ -46,10 +46,14 @@ ngx_stream_lua_ffi_socket_tcp_has_pending_data(ngx_stream_lua_request_t *r,
     u_char *errbuf, size_t *errbuf_size);
 ]]
 
--- the 1.29.2.4 patches turned reset_read_buf into a fallible operation
--- (it rejects a socket with a pending read); older runtime patches keep
--- the void signature until the fix is backported
-local reset_read_buf_can_fail = ngx.config.nginx_version >= 1029000
+-- the 1.29.2.4 and 1.21.4.x patches turned reset_read_buf into a
+-- fallible operation (it rejects a socket with a pending read); the
+-- other historical runtime patches keep the void signature until the
+-- fix is backported (nginx 1021004 identifies the OpenResty 1.21.4.x
+-- generation, whose patch directories are both fixed)
+local nginx_version = ngx.config.nginx_version
+local reset_read_buf_can_fail = nginx_version >= 1029000
+                                or nginx_version == 1021004
 
 if reset_read_buf_can_fail then
     ffi.cdef[[

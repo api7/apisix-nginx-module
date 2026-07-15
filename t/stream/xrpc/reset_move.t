@@ -1,19 +1,4 @@
-our $SkipReason;
-
-BEGIN {
-    my $nginx_binary = $ENV{'TEST_NGINX_BINARY'} || 'nginx';
-    my $version = eval { `$nginx_binary -V 2>&1` } // '';
-    my ($major, $minor) = $version =~ m{openresty/(\d+)\.(\d+)};
-
-    if (!defined $major || !defined $minor
-        || ($major < 1 || ($major == 1 && $minor < 29))) {
-        $SkipReason = "requires OpenResty 1.29 or later";
-    }
-}
-
-use t::APISIX_NGINX $SkipReason
-    ? (skip_all => $SkipReason)
-    : ('no_plan');
+use t::APISIX_NGINX 'no_plan';
 
 run_tests();
 
