@@ -135,3 +135,138 @@ dump: nil err: stream metrics zone is not configured
 --- stream_response_like: hello
 --- error_log
 reason: closed
+
+
+
+=== TEST 7: counters move while the session is still open
+This is the point of keeping the counters in nginx: a long-lived connection
+must not stay invisible until it ends.
+--- stream_config
+apisix_stream_metrics_zone 1m;
+--- stream_server_config
+    proxy_pass 127.0.0.1:1994;
+--- config
+    location /probe {
+        content_by_lua_block {
+            local metrics = require("resty.apisix.stream.metrics")
+
+            local sock = ngx.socket.tcp()
+            local ok, err = sock:connect("127.0.0.1", $TEST_NGINX_SERVER_PORT + 1)
+            if not ok then
+                ngx.say("connect: ", err)
+                return
+            end
+
+            -- a partial request, so the upstream keeps the session open
+            sock:send("GET / HTTP/1.0\r\n")
+
+            -- outlive one flush interval without closing anything
+            ngx.sleep(1.5)
+
+            for _, e in ipairs(metrics.dump()) do
+                if e.downstream_ingress > 0 then
+                    ngx.say("live active=", e.active,
+                            " di=", e.downstream_ingress,
+                            " ue=", e.upstream_egress)
+                end
+            end
+
+            sock:close()
+        }
+    }
+--- request
+GET /probe
+--- response_body
+live active=1 di=16 ue=16
+
+
+
+=== TEST 8: UDP sessions are accounted for and report a reason
+--- stream_config
+apisix_stream_metrics_zone 1m;
+
+server {
+    listen 127.0.0.1:1988 udp;
+    return "pong";
+}
+
+server {
+    listen 127.0.0.1:1987 udp;
+    proxy_responses 1;
+    proxy_pass 127.0.0.1:1988;
+    log_by_lua_block {
+        ngx.log(ngx.WARN, "udp reason: ", ngx.var.stream_session_reason,
+                ", listen: ", ngx.var.stream_listen_addr)
+    }
+}
+--- stream_server_config
+    proxy_pass 127.0.0.1:1994;
+--- config
+    location /probe {
+        content_by_lua_block {
+            local metrics = require("resty.apisix.stream.metrics")
+
+            local sock = ngx.socket.udp()
+            sock:setpeername("127.0.0.1", 1987)
+            sock:send("ping")
+            local data = sock:receive()
+            sock:close()
+
+            ngx.sleep(0.2)
+
+            for _, e in ipairs(metrics.dump()) do
+                if e.listen_addr == "127.0.0.1:1987" then
+                    ngx.say("udp ", e.listen_addr,
+                            " di=", e.downstream_ingress,
+                            " de=", e.downstream_egress,
+                            " ue=", e.upstream_egress,
+                            " ui=", e.upstream_ingress)
+                end
+            end
+        }
+    }
+--- request
+GET /probe
+--- response_body
+udp 127.0.0.1:1987 di=4 de=4 ue=4 ui=4
+--- error_log
+udp reason: closed, listen: 127.0.0.1:1987
+
+
+
+=== TEST 9: the internal unix socket of a stream block is not accounted for
+--- stream_config
+apisix_stream_metrics_zone 1m;
+
+server {
+    listen unix:$TEST_NGINX_HTML_DIR/stream_internal.sock;
+    return "internal";
+}
+--- stream_server_config
+    proxy_pass 127.0.0.1:1994;
+--- config
+    location /probe {
+        content_by_lua_block {
+            local metrics = require("resty.apisix.stream.metrics")
+
+            local sock = ngx.socket.tcp()
+            local ok, err = sock:connect("unix:$TEST_NGINX_HTML_DIR/stream_internal.sock")
+            if not ok then
+                ngx.say("connect: ", err)
+                return
+            end
+            sock:receive("*a")
+            sock:close()
+
+            for _, e in ipairs(metrics.dump()) do
+                if e.listen_addr:find("unix:", 1, true) then
+                    ngx.say("leaked ", e.listen_addr)
+                end
+            end
+            ngx.say("done")
+        }
+    }
+--- request
+GET /probe
+--- response_body
+done

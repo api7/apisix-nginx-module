@@ -45,7 +45,19 @@ diff --git src/stream/ngx_stream_proxy_module.c src/stream/ngx_stream_proxy_modu
          ngx_stream_proxy_next_upstream(s);
          return;
      }
-@@ -1756,6 +1772,10 @@
+@@ -1618,6 +1634,11 @@
+ 
+         c->log->handler = handler;
+ 
++#if (NGX_STREAM_APISIX)
++        ngx_stream_apisix_set_session_reason(s,
++                                            NGX_STREAM_APISIX_REASON_SHUTDOWN);
++#endif
++
+         ngx_stream_proxy_finalize(s, NGX_STREAM_OK);
+         return;
+     }
+@@ -1756,6 +1777,10 @@
  
      c->log->action = "proxying connection";
  
@@ -56,7 +68,7 @@ diff --git src/stream/ngx_stream_proxy_module.c src/stream/ngx_stream_proxy_modu
      if (ngx_stream_proxy_test_finalize(s, from_upstream) == NGX_OK) {
          return;
      }
-@@ -1965,6 +1985,10 @@
+@@ -1965,6 +1990,10 @@
      ngx_log_debug1(NGX_LOG_DEBUG_STREAM, s->connection->log, 0,
                     "finalize stream proxy: %i", rc);
  

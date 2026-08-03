@@ -1,11 +1,11 @@
 local ffi = require("ffi")
-local base = require("resty.core.base")
 local C = ffi.C
 local ffi_str = ffi.string
 local tonumber = tonumber
 
 
-base.allows_subsystem("stream")
+-- No allows_subsystem() guard: the zone is process global and the reader
+-- touches neither a session nor any stream context, so http can read it too.
 
 
 ffi.cdef([[
@@ -18,8 +18,10 @@ typedef struct {
     uint64_t        bytes[4];
 } ngx_stream_apisix_metrics_entry_t;
 
+typedef uintptr_t       ngx_uint_t;
+
 ngx_int_t
-ngx_stream_apisix_metrics_dump(ngx_stream_apisix_metrics_entry_t *entries, size_t max);
+ngx_stream_apisix_metrics_dump(ngx_stream_apisix_metrics_entry_t *entries, ngx_uint_t max);
 ]])
 
 

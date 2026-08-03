@@ -74,7 +74,7 @@ static ngx_command_t  ngx_stream_apisix_metrics_cmds[] = {
     { ngx_string("apisix_stream_metrics_zone"),
       NGX_STREAM_MAIN_CONF|NGX_CONF_TAKE1,
       ngx_stream_apisix_metrics_zone,
-      0,
+      NGX_STREAM_MAIN_CONF_OFFSET,
       0,
       NULL },
 
@@ -144,8 +144,9 @@ static ngx_str_t  ngx_stream_apisix_reasons[] = {
 
 
 /*
- * Set once the zone is created, so that the FFI reader does not depend on a
- * session or on the stream configuration being reachable.
+ * Rebound per cycle by ngx_stream_apisix_metrics_bind_zone(), so that the FFI
+ * reader does not depend on a session, and so that a reload dropping the zone
+ * cannot leave this pointing into unmapped shared memory.
  */
 static ngx_stream_apisix_metrics_sh_t  *ngx_stream_apisix_metrics_sh = NULL;
 
@@ -218,7 +219,6 @@ ngx_stream_apisix_metrics_init_zone(ngx_shm_zone_t *shm_zone, void *data)
 
     if (osh) {
         /* reused on reload, the accumulated counters must survive */
-        ngx_stream_apisix_metrics_sh = osh;
         shm_zone->data = osh;
         return NGX_OK;
     }
@@ -226,7 +226,6 @@ ngx_stream_apisix_metrics_init_zone(ngx_shm_zone_t *shm_zone, void *data)
     shpool = (ngx_slab_pool_t *) shm_zone->shm.addr;
 
     if (shm_zone->shm.exists) {
-        ngx_stream_apisix_metrics_sh = shpool->data;
         shm_zone->data = shpool->data;
         return NGX_OK;
     }
@@ -259,9 +258,30 @@ ngx_stream_apisix_metrics_init_zone(ngx_shm_zone_t *shm_zone, void *data)
 
     shpool->data = sh;
     shm_zone->data = sh;
-    ngx_stream_apisix_metrics_sh = sh;
 
     return NGX_OK;
+}
+
+
+/*
+ * Resolved per cycle rather than cached when the zone is created: a reload
+ * that drops the directive (or the whole stream block) leaves no zone in the
+ * new cycle, and ngx_init_cycle then unmaps the old one. A pointer kept from
+ * the previous cycle would dangle into freed shared memory.
+ */
+static void
+ngx_stream_apisix_metrics_bind_zone(ngx_cycle_t *cycle)
+{
+    ngx_stream_apisix_metrics_main_conf_t  *mcf;
+
+    ngx_stream_apisix_metrics_sh = NULL;
+
+    mcf = ngx_stream_cycle_get_module_main_conf(cycle,
+                                            ngx_stream_apisix_metrics_module);
+
+    if (mcf != NULL && mcf->shm_zone != NULL) {
+        ngx_stream_apisix_metrics_sh = mcf->shm_zone->data;
+    }
 }
 
 
@@ -314,6 +334,8 @@ ngx_stream_apisix_metrics_init_module(ngx_cycle_t *cycle)
     ngx_uint_t         i;
     ngx_listening_t   *ls;
 
+    ngx_stream_apisix_metrics_bind_zone(cycle);
+
     if (ngx_stream_apisix_metrics_sh == NULL) {
         return NGX_OK;
     }
@@ -325,9 +347,27 @@ ngx_stream_apisix_metrics_init_module(ngx_cycle_t *cycle)
             continue;
         }
 
+        /*
+         * Unix sockets inside stream{} are internal plumbing, not proxy
+         * ports: APISIX puts its worker event channel there, and counting it
+         * would report gateway control traffic as proxied bytes and leave a
+         * permanent floor of worker connections in the active gauge.
+         */
+        if (ls[i].sockaddr->sa_family == AF_UNIX) {
+            continue;
+        }
+
         addr = ls[i].addr_text;
 
-        if (addr.len == 0 || addr.len > NGX_STREAM_APISIX_METRICS_ADDR_LEN) {
+        if (addr.len == 0) {
+            continue;
+        }
+
+        if (addr.len > NGX_STREAM_APISIX_METRICS_ADDR_LEN) {
+            ngx_log_error(NGX_LOG_WARN, cycle->log, 0,
+                          "apisix stream metrics: listening address \"%V\" is "
+                          "longer than %d bytes and is not accounted for",
+                          &addr, NGX_STREAM_APISIX_METRICS_ADDR_LEN);
             continue;
         }
 
@@ -351,6 +391,8 @@ ngx_stream_apisix_metrics_init_process(ngx_cycle_t *cycle)
     ngx_stream_apisix_metrics_map = NULL;
     ngx_stream_apisix_metrics_ls = NULL;
     ngx_stream_apisix_metrics_nls = 0;
+
+    ngx_stream_apisix_metrics_bind_zone(cycle);
 
     if (ngx_stream_apisix_metrics_sh == NULL || cycle->listening.nelts == 0) {
         return NGX_OK;
@@ -445,7 +487,7 @@ ngx_stream_apisix_metrics_flush(ngx_stream_session_t *s,
 {
     off_t                              current[NGX_STREAM_APISIX_METRICS_DIRECTIONS];
     off_t                              delta;
-    ngx_uint_t                         i;
+    ngx_uint_t                         i, flushed;
     ngx_connection_t                  *pc;
     ngx_stream_upstream_t             *u;
     ngx_stream_apisix_metrics_slot_t  *slot;
@@ -469,18 +511,38 @@ ngx_stream_apisix_metrics_flush(ngx_stream_session_t *s,
     current[NGX_STREAM_APISIX_METRICS_UPSTREAM_EGRESS] = pc ? pc->sent : 0;
     current[NGX_STREAM_APISIX_METRICS_UPSTREAM_INGRESS] = u ? u->received : 0;
 
+    flushed = 0;
+
     for (i = 0; i < NGX_STREAM_APISIX_METRICS_DIRECTIONS; i++) {
         delta = current[i] - ctx->flushed[i];
 
-        if (delta <= 0) {
+        /*
+         * proxy_next_upstream replaces the peer connection, so pc->sent
+         * restarts from zero while the flushed mark still holds the previous
+         * peer's total. Treat any decrease as a restart and count what the
+         * new counter holds, otherwise the retried bytes are lost.
+         */
+        if (delta < 0) {
+            delta = current[i];
+        }
+
+        if (delta == 0) {
             continue;
         }
 
         (void) ngx_atomic_fetch_add(&slot->bytes[i], (ngx_atomic_int_t) delta);
         ctx->flushed[i] = current[i];
+        flushed = 1;
     }
 
-    ctx->flush_time = ngx_time();
+    /*
+     * Only an actual write starts the interval. The proxy module calls in
+     * once before any data has moved, and stamping the clock there would
+     * hide the first bytes of the session for a whole second.
+     */
+    if (flushed) {
+        ctx->flush_time = ngx_time();
+    }
 }
 
 
@@ -626,6 +688,17 @@ ngx_stream_apisix_metrics_finalize(ngx_stream_session_t *s, ngx_uint_t rc)
 
     if (ctx->reason == NGX_STREAM_APISIX_REASON_UNSET) {
         ctx->reason = ngx_stream_apisix_derive_reason(s, ctx, rc);
+    }
+
+    /*
+     * A UDP session has no FIN to observe: ngx_udp_shared_recv never sets
+     * read->eof, so a session that simply ran to completion would otherwise
+     * report no reason at all.
+     */
+    if (ctx->reason == NGX_STREAM_APISIX_REASON_UNSET
+        && rc == NGX_STREAM_OK)
+    {
+        ctx->reason = NGX_STREAM_APISIX_REASON_CLOSED;
     }
 }
 
