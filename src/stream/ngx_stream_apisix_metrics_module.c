@@ -316,6 +316,13 @@ ngx_stream_apisix_metrics_lookup(ngx_str_t *addr, ngx_uint_t create)
     slot->addr_len = (uint32_t) addr->len;
     ngx_memcpy(slot->addr, addr->data, addr->len);
 
+    /*
+     * A reload reuses the zone, so the master appends here while the previous
+     * generation of workers is still reading. Publish the contents before the
+     * count that exposes them.
+     */
+    ngx_memory_barrier();
+
     sh->nused++;
 
     return slot;
@@ -323,9 +330,10 @@ ngx_stream_apisix_metrics_lookup(ngx_str_t *addr, ngx_uint_t create)
 
 
 /*
- * Claiming happens in the master before the workers are forked, so the slot
- * array needs no locking: it is append only and every reader afterwards only
- * touches the per-slot atomics.
+ * Only the master ever claims, and only by appending, so no lock is needed:
+ * readers either see a slot fully or do not see it at all. On a reload the
+ * previous generation of workers is still reading, which is what the barrier
+ * in the lookup above is for.
  */
 static ngx_int_t
 ngx_stream_apisix_metrics_init_module(ngx_cycle_t *cycle)
@@ -353,9 +361,11 @@ ngx_stream_apisix_metrics_init_module(ngx_cycle_t *cycle)
          * would report gateway control traffic as proxied bytes and leave a
          * permanent floor of worker connections in the active gauge.
          */
+#if (NGX_HAVE_UNIX_DOMAIN)
         if (ls[i].sockaddr->sa_family == AF_UNIX) {
             continue;
         }
+#endif
 
         addr = ls[i].addr_text;
 
@@ -557,6 +567,28 @@ ngx_stream_apisix_metrics_update(ngx_stream_session_t *s)
     }
 
     ngx_stream_apisix_metrics_flush(s, ctx, 0);
+}
+
+
+/*
+ * proxy_next_upstream is about to drop the peer, taking pc->sent with it.
+ * Bank what it sent and reset the mark, otherwise the next peer starts from
+ * zero below the old mark and the retried bytes are only recovered if that
+ * counter happens to overtake it before the next sample.
+ */
+void
+ngx_stream_apisix_metrics_peer_closing(ngx_stream_session_t *s)
+{
+    ngx_stream_apisix_metrics_ctx_t  *ctx;
+
+    ctx = ngx_stream_apisix_metrics_get_ctx(s);
+    if (ctx == NULL) {
+        return;
+    }
+
+    ngx_stream_apisix_metrics_flush(s, ctx, 1);
+
+    ctx->flushed[NGX_STREAM_APISIX_METRICS_UPSTREAM_EGRESS] = 0;
 }
 
 
@@ -800,8 +832,9 @@ ngx_stream_apisix_metrics_dump(ngx_stream_apisix_metrics_entry_t *entries,
     for (i = 0; i < n; i++) {
         slot = &sh->slots[i];
 
-        entries[i].addr_len = slot->addr_len;
-        ngx_memcpy(entries[i].addr, slot->addr, slot->addr_len);
+        entries[i].addr_len = ngx_min(slot->addr_len,
+                                      NGX_STREAM_APISIX_METRICS_ADDR_LEN);
+        ngx_memcpy(entries[i].addr, slot->addr, entries[i].addr_len);
 
         entries[i].active = (uint64_t) slot->active;
 

@@ -34,6 +34,12 @@ local UPSTREAM_INGRESS = 3
 
 local entries = ffi.new("ngx_stream_apisix_metrics_entry_t[?]", MAX_ENTRIES)
 
+-- the stream module is a separate addon, so a build can lack it entirely;
+-- resolve the symbol once rather than letting every call throw
+local has_dump = pcall(function()
+    return C.ngx_stream_apisix_metrics_dump
+end)
+
 local _M = {}
 
 
@@ -43,6 +49,10 @@ local _M = {}
 --     upstream_ingress = 34, upstream_egress = 12 }
 -- The byte counters are monotonic totals since the zone was created.
 function _M.dump()
+    if not has_dump then
+        return nil, "this runtime has no stream metrics support"
+    end
+
     local n = C.ngx_stream_apisix_metrics_dump(entries, MAX_ENTRIES)
     n = tonumber(n)
     if n < 0 then

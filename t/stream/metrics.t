@@ -240,7 +240,7 @@ apisix_stream_metrics_zone 1m;
 
 server {
     listen unix:$TEST_NGINX_HTML_DIR/stream_internal.sock;
-    return "internal";
+    proxy_pass 127.0.0.1:1994;
 }
 --- stream_server_config
     proxy_pass 127.0.0.1:1994;
@@ -255,18 +255,21 @@ server {
                 ngx.say("connect: ", err)
                 return
             end
+            sock:send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
             sock:receive("*a")
             sock:close()
 
-            for _, e in ipairs(metrics.dump()) do
-                if e.listen_addr:find("unix:", 1, true) then
-                    ngx.say("leaked ", e.listen_addr)
-                end
+            -- the tcp listener must be the only slot: proving the unix one was
+            -- skipped for being a unix socket, not for having a long address
+            local res = metrics.dump()
+            for _, e in ipairs(res) do
+                ngx.say("slot ", e.listen_addr)
             end
-            ngx.say("done")
+            ngx.say("slots=", #res)
         }
     }
 --- request
 GET /probe
 --- response_body
-done
+slot 0.0.0.0:1985
+slots=1

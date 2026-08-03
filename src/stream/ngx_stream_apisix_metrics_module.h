@@ -56,6 +56,7 @@ void ngx_stream_apisix_set_session_reason(ngx_stream_session_t *s,
 void ngx_stream_apisix_set_session_timeout_reason(ngx_stream_session_t *s);
 void ngx_stream_apisix_set_connect_timeout(ngx_stream_session_t *s);
 void ngx_stream_apisix_metrics_update(ngx_stream_session_t *s);
+void ngx_stream_apisix_metrics_peer_closing(ngx_stream_session_t *s);
 void ngx_stream_apisix_metrics_finalize(ngx_stream_session_t *s,
     ngx_uint_t rc);
 

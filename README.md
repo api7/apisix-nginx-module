@@ -42,18 +42,22 @@ event channel there) rather than proxy ports.
 Things worth knowing before building alerts on this:
 
 - The byte counters are monotonic from the moment the zone is created. They
-  restart at zero when the process restarts, or when the configured zone size
-  changes, because nginx only reuses a zone whose size is unchanged.
+  restart at zero when the process restarts, when the configured zone size
+  changes (nginx only reuses a zone whose size is unchanged), and when a
+  reload removes the directive or the whole `stream{}` block, since the zone
+  is then released.
+- Slots are only ever added. A listening address removed by a reload keeps its
+  slot, and its accumulated totals, until the process restarts.
 - A counter is written at most once per second per session, and again when the
   session ends, so the totals are exact but can lag by up to a second.
 - `active` is decremented in the log phase, which nginx runs for every session
   it finalizes, including on a graceful shutdown. A worker that dies without
   running it (a crash, or `SIGKILL`) leaks its in-flight sessions into the
   count, and nothing rebases the zone until the process restarts.
-- With `proxy_next_upstream`, the upstream byte counters sum every attempt.
-  They therefore agree with `$upstream_bytes_sent` / `$upstream_bytes_received`
-  for a session that reached its upstream on the first try, and are more
-  accurate than those variables when it did not.
+- With `proxy_next_upstream`, the upstream byte counters sum every attempt,
+  including what was sent to a peer that then failed. They agree with
+  `$upstream_bytes_sent` / `$upstream_bytes_received` for a session that
+  reached its upstream on the first try.
 
 Read the counters from Lua with `resty.apisix.stream.metrics`:
 
@@ -88,6 +92,10 @@ tells a graceful close apart from a timeout or a reset:
 | `upstream_timeout` | a UDP upstream never answered |
 | `shutdown` | the worker was shutting down |
 | `-` | not applicable, for example a session rejected before `proxy_pass` |
+
+A UDP session has no close to observe, so one that ends normally -- including
+one that ends on `proxy_timeout` with the expected responses received --
+reports `closed`. `closed` therefore does not distinguish the two for UDP.
 
 Available whether or not `apisix_stream_metrics_zone` is configured.
 
