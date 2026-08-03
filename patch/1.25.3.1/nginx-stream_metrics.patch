@@ -1,0 +1,69 @@
+diff --git src/stream/ngx_stream_proxy_module.c src/stream/ngx_stream_proxy_module.c
+--- src/stream/ngx_stream_proxy_module.c
++++ src/stream/ngx_stream_proxy_module.c
+@@ -1416,6 +1416,10 @@
+ 
+     if (c->close) {
+         ngx_log_error(NGX_LOG_INFO, c->log, 0, "shutdown timeout");
++#if (NGX_STREAM_APISIX)
++        ngx_stream_apisix_set_session_reason(s,
++                                            NGX_STREAM_APISIX_REASON_SHUTDOWN);
++#endif
+         ngx_stream_proxy_finalize(s, NGX_STREAM_OK);
+         return;
+     }
+@@ -1479,6 +1483,11 @@
+ 
+                 pc->read->error = 1;
+ 
++#if (NGX_STREAM_APISIX)
++                ngx_stream_apisix_set_session_reason(s,
++                                    NGX_STREAM_APISIX_REASON_UPSTREAM_TIMEOUT);
++#endif
++
+                 ngx_stream_proxy_finalize(s, NGX_STREAM_BAD_GATEWAY);
+ 
+                 return;
+@@ -1486,6 +1495,10 @@
+ 
+             ngx_connection_error(c, NGX_ETIMEDOUT, "connection timed out");
+ 
++#if (NGX_STREAM_APISIX)
++            ngx_stream_apisix_set_session_timeout_reason(s);
++#endif
++
+             ngx_stream_proxy_finalize(s, NGX_STREAM_OK);
+ 
+             return;
+@@ -1522,6 +1535,9 @@
+ 
+     if (ev->timedout) {
+         ngx_log_error(NGX_LOG_ERR, c->log, NGX_ETIMEDOUT, "upstream timed out");
++#if (NGX_STREAM_APISIX)
++        ngx_stream_apisix_set_connect_timeout(s);
++#endif
+         ngx_stream_proxy_next_upstream(s);
+         return;
+     }
+@@ -1756,6 +1772,10 @@
+ 
+     c->log->action = "proxying connection";
+ 
++#if (NGX_STREAM_APISIX)
++    ngx_stream_apisix_metrics_update(s);
++#endif
++
+     if (ngx_stream_proxy_test_finalize(s, from_upstream) == NGX_OK) {
+         return;
+     }
+@@ -1965,6 +1985,10 @@
+     ngx_log_debug1(NGX_LOG_DEBUG_STREAM, s->connection->log, 0,
+                    "finalize stream proxy: %i", rc);
+ 
++#if (NGX_STREAM_APISIX)
++    ngx_stream_apisix_metrics_finalize(s, rc);
++#endif
++
+     u = s->upstream;
+ 
+     if (u == NULL) {

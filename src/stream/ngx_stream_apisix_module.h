@@ -4,6 +4,12 @@
 
 #include <ngx_stream.h>
 
+/*
+ * This header is the single entry point the ngx_stream_proxy_module patches
+ * include, so everything they call has to be reachable from here.
+ */
+#include <ngx_stream_apisix_metrics_module.h>
+
 
 ngx_int_t ngx_stream_apisix_is_proxy_ssl_enabled(ngx_stream_session_t *s);
 
