@@ -35,9 +35,11 @@ stream {
 }
 ```
 
-Only TCP and UDP listening addresses are accounted for. Unix sockets inside
-`stream{}` are skipped: they are internal plumbing (APISIX puts its worker
-event channel there) rather than proxy ports.
+Only TCP and UDP listening addresses are accounted for. **Every** unix socket
+inside `stream{}` is skipped, including one you configured yourself to proxy
+on: the filter is on the address family, not on which server owns it. This is
+what keeps APISIX's own worker event channel, which lives on a unix socket in
+the same block, from being reported as proxied traffic.
 
 Things worth knowing before building alerts on this:
 
@@ -55,9 +57,11 @@ Things worth knowing before building alerts on this:
   running it (a crash, or `SIGKILL`) leaks its in-flight sessions into the
   count, and nothing rebases the zone until the process restarts.
 - With `proxy_next_upstream`, the upstream byte counters sum every attempt,
-  including what was sent to a peer that then failed. They agree with
-  `$upstream_bytes_sent` / `$upstream_bytes_received` for a session that
-  reached its upstream on the first try.
+  including what was sent to a peer that then failed. `$upstream_bytes_sent`
+  and `$upstream_bytes_received` instead report one value per attempt, comma
+  separated, so comparing them against these counters means summing them
+  first. For a session that reached its upstream on the first try the two
+  agree directly.
 
 Read the counters from Lua with `resty.apisix.stream.metrics`:
 

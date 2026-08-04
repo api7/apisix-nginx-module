@@ -142,6 +142,9 @@ static ngx_str_t  ngx_stream_apisix_reasons[] = {
     ngx_string("shutdown")
 };
 
+#define NGX_STREAM_APISIX_REASONS_N                                          \
+    (sizeof(ngx_stream_apisix_reasons) / sizeof(ngx_stream_apisix_reasons[0]))
+
 
 /*
  * Rebound per cycle by ngx_stream_apisix_metrics_bind_zone(), so that the FFI
@@ -597,6 +600,15 @@ ngx_stream_apisix_set_session_reason(ngx_stream_session_t *s,
     ngx_uint_t reason)
 {
     ngx_stream_apisix_metrics_ctx_t  *ctx;
+
+    /*
+     * The callers live in the ngx_stream_proxy_module patches, which are
+     * separate files that can drift from this enum. The value indexes the
+     * reason table, so refuse anything out of range rather than read past it.
+     */
+    if (reason >= NGX_STREAM_APISIX_REASONS_N) {
+        return;
+    }
 
     ctx = ngx_stream_apisix_metrics_get_ctx(s);
     if (ctx == NULL) {
