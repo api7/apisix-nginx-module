@@ -292,6 +292,7 @@ static ngx_stream_apisix_metrics_slot_t *
 ngx_stream_apisix_metrics_lookup(ngx_str_t *addr, ngx_uint_t create)
 {
     ngx_uint_t                         i;
+    ngx_uint_t                         nused;
     ngx_stream_apisix_metrics_sh_t    *sh;
     ngx_stream_apisix_metrics_slot_t  *slot;
 
@@ -300,7 +301,14 @@ ngx_stream_apisix_metrics_lookup(ngx_str_t *addr, ngx_uint_t create)
         return NULL;
     }
 
-    for (i = 0; i < sh->nused; i++) {
+    /*
+     * Pair with the barrier the writer takes before publishing the count: the
+     * slot contents must not be read before the count that exposes them.
+     */
+    nused = sh->nused;
+    ngx_memory_barrier();
+
+    for (i = 0; i < nused; i++) {
         slot = &sh->slots[i];
 
         if (slot->addr_len == addr->len
@@ -310,7 +318,7 @@ ngx_stream_apisix_metrics_lookup(ngx_str_t *addr, ngx_uint_t create)
         }
     }
 
-    if (!create || sh->nused == sh->nslots) {
+    if (!create || nused == sh->nslots) {
         return NULL;
     }
 
@@ -839,7 +847,11 @@ ngx_stream_apisix_metrics_dump(ngx_stream_apisix_metrics_entry_t *entries,
         return NGX_ERROR;
     }
 
-    n = ngx_min(sh->nused, max);
+    /* see the matching barrier in ngx_stream_apisix_metrics_lookup() */
+    n = sh->nused;
+    ngx_memory_barrier();
+
+    n = ngx_min(n, max);
 
     for (i = 0; i < n; i++) {
         slot = &sh->slots[i];
