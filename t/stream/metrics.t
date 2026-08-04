@@ -67,12 +67,13 @@ reason: recv_timeout, status: 200
     proxy_connect_timeout 300ms;
     proxy_pass 127.0.0.1:1979;
     log_by_lua_block {
-        ngx.log(ngx.WARN, "status: ", ngx.var.status)
+        ngx.log(ngx.WARN, "status: ", ngx.var.status,
+                ", reason: ", ngx.var.stream_session_reason)
     }
 --- stream_request eval
 "GET /"
 --- error_log
-status: 502
+status: 502, reason: connect_failed
 
 
 
@@ -159,17 +160,29 @@ apisix_stream_metrics_zone 1m;
 
             -- a partial request, so the upstream keeps the session open
             sock:send("GET / HTTP/1.0\r\n")
+            ngx.sleep(0.3)
 
-            -- outlive one flush interval without closing anything
-            ngx.sleep(1.5)
-
-            for _, e in ipairs(metrics.dump()) do
-                if e.downstream_ingress > 0 then
-                    ngx.say("live active=", e.active,
-                            " di=", e.downstream_ingress,
-                            " ue=", e.upstream_egress)
+            local function seen()
+                for _, e in ipairs(metrics.dump()) do
+                    if e.downstream_ingress > 0 then
+                        return e
+                    end
                 end
             end
+
+            local first = seen()
+            ngx.say("first active=", first.active,
+                    " di=", first.downstream_ingress,
+                    " ue=", first.upstream_egress)
+
+            -- a second burst on the same still-open session: this is what a
+            -- deferred flush would hide
+            sock:send("Host: localhost\r\n")
+            ngx.sleep(0.3)
+
+            local second = seen()
+            ngx.say("second di=", second.di or second.downstream_ingress,
+                    " ue=", second.upstream_egress)
 
             sock:close()
         }
@@ -177,7 +190,8 @@ apisix_stream_metrics_zone 1m;
 --- request
 GET /probe
 --- response_body
-live active=1 di=16 ue=16
+first active=1 di=16 ue=16
+second di=33 ue=33
 
 
 

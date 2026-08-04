@@ -5,12 +5,13 @@
 
 
 /*
- * Counters are merged into the shared zone at most once per second, so a
- * long-lived session keeps the metrics moving without paying an atomic
- * operation per read/write. The pending delta is flushed when the session
- * ends, which keeps the totals exact.
+ * A session accumulates locally and merges into the shared zone once per
+ * proxy_process pass, which is the point where nginx has drained everything
+ * currently readable. That coalesces the inner read/write loop into a single
+ * atomic per direction, without letting a quiesced session hold its last
+ * bytes back: there is no later event to flush them on, so anything deferred
+ * here would stay invisible until the session ended.
  */
-#define NGX_STREAM_APISIX_METRICS_FLUSH_INTERVAL   1
 
 /*
  * One slot per stream listening address. A deployment has a handful of them,
@@ -42,7 +43,6 @@ typedef struct {
 typedef struct {
     ngx_stream_apisix_metrics_slot_t   *slot;
     off_t                               flushed[NGX_STREAM_APISIX_METRICS_DIRECTIONS];
-    time_t                              flush_time;
     ngx_uint_t                          reason;
     unsigned                            counted:1;
     unsigned                            connect_timeout:1;
@@ -139,7 +139,8 @@ static ngx_str_t  ngx_stream_apisix_reasons[] = {
     ngx_string("recv_timeout"),
     ngx_string("send_timeout"),
     ngx_string("upstream_timeout"),
-    ngx_string("shutdown")
+    ngx_string("shutdown"),
+    ngx_string("connect_failed")
 };
 
 #define NGX_STREAM_APISIX_REASONS_N                                          \
@@ -504,23 +505,17 @@ ngx_stream_apisix_metrics_post_accept_handler(ngx_stream_session_t *s)
 
 static void
 ngx_stream_apisix_metrics_flush(ngx_stream_session_t *s,
-    ngx_stream_apisix_metrics_ctx_t *ctx, ngx_uint_t force)
+    ngx_stream_apisix_metrics_ctx_t *ctx)
 {
     off_t                              current[NGX_STREAM_APISIX_METRICS_DIRECTIONS];
     off_t                              delta;
-    ngx_uint_t                         i, flushed;
+    ngx_uint_t                         i;
     ngx_connection_t                  *pc;
     ngx_stream_upstream_t             *u;
     ngx_stream_apisix_metrics_slot_t  *slot;
 
     slot = ctx->slot;
     if (slot == NULL) {
-        return;
-    }
-
-    if (!force && ngx_time() - ctx->flush_time
-                  < NGX_STREAM_APISIX_METRICS_FLUSH_INTERVAL)
-    {
         return;
     }
 
@@ -531,8 +526,6 @@ ngx_stream_apisix_metrics_flush(ngx_stream_session_t *s,
     current[NGX_STREAM_APISIX_METRICS_DOWNSTREAM_EGRESS] = s->connection->sent;
     current[NGX_STREAM_APISIX_METRICS_UPSTREAM_EGRESS] = pc ? pc->sent : 0;
     current[NGX_STREAM_APISIX_METRICS_UPSTREAM_INGRESS] = u ? u->received : 0;
-
-    flushed = 0;
 
     for (i = 0; i < NGX_STREAM_APISIX_METRICS_DIRECTIONS; i++) {
         delta = current[i] - ctx->flushed[i];
@@ -553,16 +546,6 @@ ngx_stream_apisix_metrics_flush(ngx_stream_session_t *s,
 
         (void) ngx_atomic_fetch_add(&slot->bytes[i], (ngx_atomic_int_t) delta);
         ctx->flushed[i] = current[i];
-        flushed = 1;
-    }
-
-    /*
-     * Only an actual write starts the interval. The proxy module calls in
-     * once before any data has moved, and stamping the clock there would
-     * hide the first bytes of the session for a whole second.
-     */
-    if (flushed) {
-        ctx->flush_time = ngx_time();
     }
 }
 
@@ -577,7 +560,7 @@ ngx_stream_apisix_metrics_update(ngx_stream_session_t *s)
         return;
     }
 
-    ngx_stream_apisix_metrics_flush(s, ctx, 0);
+    ngx_stream_apisix_metrics_flush(s, ctx);
 }
 
 
@@ -597,7 +580,7 @@ ngx_stream_apisix_metrics_peer_closing(ngx_stream_session_t *s)
         return;
     }
 
-    ngx_stream_apisix_metrics_flush(s, ctx, 1);
+    ngx_stream_apisix_metrics_flush(s, ctx);
 
     ctx->flushed[NGX_STREAM_APISIX_METRICS_UPSTREAM_EGRESS] = 0;
 }
@@ -736,7 +719,7 @@ ngx_stream_apisix_metrics_finalize(ngx_stream_session_t *s, ngx_uint_t rc)
 
     ctx->finalized = 1;
 
-    ngx_stream_apisix_metrics_flush(s, ctx, 1);
+    ngx_stream_apisix_metrics_flush(s, ctx);
 
     if (ctx->reason == NGX_STREAM_APISIX_REASON_UNSET) {
         ctx->reason = ngx_stream_apisix_derive_reason(s, ctx, rc);
@@ -751,6 +734,17 @@ ngx_stream_apisix_metrics_finalize(ngx_stream_session_t *s, ngx_uint_t rc)
         && rc == NGX_STREAM_OK)
     {
         ctx->reason = NGX_STREAM_APISIX_REASON_CLOSED;
+    }
+
+    /*
+     * Everything that gives up before a peer answers lands here: connection
+     * refused, no live upstream, a failed or timed out upstream handshake.
+     * None of them leave a mark on the connection flags.
+     */
+    if (ctx->reason == NGX_STREAM_APISIX_REASON_UNSET
+        && rc == NGX_STREAM_BAD_GATEWAY)
+    {
+        ctx->reason = NGX_STREAM_APISIX_REASON_CONNECT_FAILED;
     }
 }
 
@@ -823,7 +817,7 @@ ngx_stream_apisix_metrics_log_handler(ngx_stream_session_t *s)
         return NGX_OK;
     }
 
-    ngx_stream_apisix_metrics_flush(s, ctx, 1);
+    ngx_stream_apisix_metrics_flush(s, ctx);
 
     if (ctx->counted) {
         ctx->counted = 0;

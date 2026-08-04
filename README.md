@@ -22,10 +22,10 @@ default: off
 
 Reserve a shared memory zone that collects, per stream listening address, the
 number of active sessions and the bytes transferred in the four directions
-(downstream/upstream × ingress/egress). Counters are merged into the zone at
-most once per second per session and flushed when the session ends, so they
-keep moving during long-lived connections without paying an atomic operation
-per read or write. Without this directive nothing is collected.
+(downstream/upstream × ingress/egress). A session accumulates locally and
+merges into the zone once per forwarding pass, so the counters keep moving
+during a long-lived connection while the inner read/write loop still costs a
+single atomic per direction. Without this directive nothing is collected.
 
 example:
 
@@ -50,8 +50,12 @@ Things worth knowing before building alerts on this:
   is then released.
 - Slots are only ever added. A listening address removed by a reload keeps its
   slot, and its accumulated totals, until the process restarts.
-- A counter is written at most once per second per session, and again when the
-  session ends, so the totals are exact but can lag by up to a second.
+- A counter is written once per forwarding pass and again when the session
+  ends, so a session that has gone quiet has already published everything it
+  moved.
+- A TCP and a UDP listener on the same port share one slot: nginx gives them
+  the same address text, so their traffic is summed and `$stream_listen_addr`
+  cannot tell them apart.
 - `active` is decremented in the log phase, which nginx runs for every session
   it finalizes, including on a graceful shutdown. A worker that dies without
   running it (a crash, or `SIGKILL`) leaks its in-flight sessions into the
@@ -95,7 +99,8 @@ tells a graceful close apart from a timeout or a reset:
 | `send_timeout` | `proxy_timeout` expired with data still buffered towards a peer |
 | `upstream_timeout` | a UDP upstream never answered |
 | `shutdown` | the worker was shutting down |
-| `-` | not applicable, for example a session rejected before `proxy_pass` |
+| `connect_failed` | no upstream could be reached: refused, no live node, or a failed upstream handshake |
+| `-` | no reason applies, for example a session rejected during preread |
 
 A UDP session has no close to observe, so one that ends normally -- including
 one that ends on `proxy_timeout` with the expected responses received --
