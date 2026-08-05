@@ -49,6 +49,14 @@ static ngx_command_t ngx_http_apisix_cmds[] = {
         offsetof(ngx_http_apisix_loc_conf_t, apisix_request_id_var_index),
         NULL
     },
+    {
+        ngx_string("apisix_var_index"),
+        NGX_HTTP_MAIN_CONF|NGX_CONF_1MORE,
+        ngx_http_apisix_var_index,
+        NGX_HTTP_MAIN_CONF_OFFSET,
+        0,
+        NULL
+    },
     ngx_null_command
 };
 
@@ -73,7 +81,7 @@ ngx_module_t ngx_http_apisix_module = {
     ngx_http_apisix_cmds,                /* module directives */
     NGX_HTTP_MODULE,                     /* module type */
     NULL,                                /* init master */
-    NULL,                                /* init module */
+    ngx_http_apisix_var_init_module,     /* init module */
     NULL,                                /* init process */
     NULL,                                /* init thread */
     NULL,                                /* exit thread */

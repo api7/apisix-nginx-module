@@ -65,6 +65,15 @@ ngx_int_t ngx_http_apisix_is_body_filter_by_lua_skipped(ngx_http_request_t *r);
 
 ngx_flag_t ngx_http_apisix_is_ntls_enabled(ngx_http_conf_ctx_t *conf_ctx);
 
+ngx_int_t ngx_http_apisix_var_init_module(ngx_cycle_t *cycle);
+char *ngx_http_apisix_var_index(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+ngx_uint_t ngx_http_apisix_ffi_var_load_indexes(ngx_str_t *names,
+    ngx_uint_t max);
+int ngx_http_apisix_ffi_var_get_by_index(ngx_http_request_t *r,
+    ngx_uint_t index, u_char **value, size_t *value_len);
+int ngx_http_apisix_ffi_var_set_by_index(ngx_http_request_t *r,
+    ngx_uint_t index, u_char *value, size_t value_len, char **err);
+
 char * ngx_http_apisix_error_log_request_id(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 char * ngx_http_apisix_error_log_init(ngx_conf_t *cf);
 char * ngx_http_apisix_error_log_request_id(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
