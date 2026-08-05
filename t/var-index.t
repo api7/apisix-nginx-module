@@ -160,25 +160,31 @@ after: true
 
 
 
-=== TEST 8: load_indexes() is rejected in the init phase
+=== TEST 8: load_indexes() also works in the init phase
 --- http_config
+    apisix_var_index $request_uri;
     init_by_lua_block {
-        local ok, err = pcall(function()
-            require("resty.apisix.var").load_indexes()
-        end)
-        package.loaded.init_err = err
-    }
-    init_worker_by_lua_block {
-        require("resty.apisix.var").load_indexes()
+        local var = require("resty.apisix.var")
+        var.load_indexes()
+        local n = 0
+        for _ in pairs(var.indexes) do n = n + 1 end
+        package.loaded.init_phase_count = n
     }
 --- config
     location /t {
         content_by_lua_block {
-            ngx.say(package.loaded.init_err)
+            local var = require("resty.apisix.var")
+            ngx.say("loaded in init: ", package.loaded.init_phase_count > 0)
+            ngx.say("indexed request_uri: ", var.indexes["request_uri"] ~= nil)
+            ngx.say("value: ", var.get("request_uri"))
         }
     }
---- response_body_like
-.*load_indexes\(\) can not be called in the init phase
+--- request
+GET /t?a=1
+--- response_body
+loaded in init: true
+indexed request_uri: true
+value: /t?a=1
 
 
 

@@ -53,15 +53,12 @@ local indexes = {}
 local _M = {indexes = indexes}
 
 
--- Build the name -> index map. Must run in the init_worker phase or later:
--- before ngx_init_cycle() commits, the ngx_cycle global still points at the
--- previous cycle.
+-- Build the name -> index map. Safe from the init phase on, including across a
+-- reload. Prefer init_worker when a complete map matters: the init phase runs
+-- during postconfiguration, so a variable indexed by a module ordered after
+-- ngx_http_lua_module is not in cmcf->variables yet and simply stays on the
+-- ngx.var path.
 function _M.load_indexes()
-    local phase = ngx.get_phase()
-    if phase == "init" then
-        error("load_indexes() can not be called in the init phase", 2)
-    end
-
     local count = C.ngx_http_apisix_ffi_var_load_indexes(nil, 0)
     if count == 0 then
         return indexes

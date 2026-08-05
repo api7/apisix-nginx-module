@@ -42,9 +42,11 @@ Index based access to the NGINX variables, skipping the name normalization,
 the hash lookup and the per-access `r->pool` allocation that `ngx.var` performs
 on every read.
 
-`load_indexes()` builds the name to index map from `cmcf->variables`. It has to
-run in the `init_worker` phase or later: before `ngx_init_cycle()` commits, the
-`ngx_cycle` global still points at the previous cycle.
+`load_indexes()` builds the name to index map from `cmcf->variables`. It is safe
+from the `init` phase on, across a reload included. Prefer `init_worker` when a
+complete map matters: the `init` phase runs during postconfiguration, so a
+variable that a module indexes from a later postconfiguration hook is not in
+`cmcf->variables` yet and simply stays on the `ngx.var` path.
 
 ```nginx
 init_worker_by_lua_block {

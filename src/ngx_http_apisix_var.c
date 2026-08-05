@@ -95,8 +95,12 @@ ngx_http_apisix_ffi_var_load_indexes(ngx_str_t *names, ngx_uint_t max)
     ngx_http_core_main_conf_t  *cmcf;
 
     /*
-     * only safe from the init_worker phase on: until ngx_init_cycle()
-     * commits, the ngx_cycle global still points at the previous cycle
+     * ngx_cycle already refers to the cycle being initialized by the time
+     * init_by_lua runs, on a reload too, so the init phase is fine. What the
+     * init phase cannot see is a variable that a module indexes from a
+     * postconfiguration hook ordered after ngx_http_lua_module's, since
+     * ngx_http_variables_init_vars() runs later still; cmcf->variables is
+     * append only, so the indexes handed out here stay valid either way.
      */
     cmcf = ngx_http_cycle_get_module_main_conf(ngx_cycle, ngx_http_core_module);
     if (cmcf == NULL) {
