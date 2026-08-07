@@ -1,0 +1,120 @@
+diff --git src/stream/ngx_stream_proxy_module.c src/stream/ngx_stream_proxy_module.c
+--- src/stream/ngx_stream_proxy_module.c
++++ src/stream/ngx_stream_proxy_module.c
+@@ -1416,6 +1416,10 @@
+ 
+     if (c->close) {
+         ngx_log_error(NGX_LOG_INFO, c->log, 0, "shutdown timeout");
++#if (NGX_STREAM_APISIX)
++        ngx_stream_apisix_set_session_reason(s,
++                                            NGX_STREAM_APISIX_REASON_SHUTDOWN);
++#endif
+         ngx_stream_proxy_finalize(s, NGX_STREAM_OK);
+         return;
+     }
+@@ -1479,6 +1483,11 @@
+ 
+                 pc->read->error = 1;
+ 
++#if (NGX_STREAM_APISIX)
++                ngx_stream_apisix_set_session_reason(s,
++                                    NGX_STREAM_APISIX_REASON_UPSTREAM_TIMEOUT);
++#endif
++
+                 ngx_stream_proxy_finalize(s, NGX_STREAM_BAD_GATEWAY);
+ 
+                 return;
+@@ -1486,6 +1495,10 @@
+ 
+             ngx_connection_error(c, NGX_ETIMEDOUT, "connection timed out");
+ 
++#if (NGX_STREAM_APISIX)
++            ngx_stream_apisix_set_session_timeout_reason(s);
++#endif
++
+             ngx_stream_proxy_finalize(s, NGX_STREAM_OK);
+ 
+             return;
+@@ -1522,6 +1535,9 @@
+ 
+     if (ev->timedout) {
+         ngx_log_error(NGX_LOG_ERR, c->log, NGX_ETIMEDOUT, "upstream timed out");
++#if (NGX_STREAM_APISIX)
++        ngx_stream_apisix_set_connect_timeout(s);
++#endif
+         ngx_stream_proxy_next_upstream(s);
+         return;
+     }
+@@ -1618,6 +1634,11 @@
+ 
+         c->log->handler = handler;
+ 
++#if (NGX_STREAM_APISIX)
++        ngx_stream_apisix_set_session_reason(s,
++                                            NGX_STREAM_APISIX_REASON_SHUTDOWN);
++#endif
++
+         ngx_stream_proxy_finalize(s, NGX_STREAM_OK);
+         return;
+     }
+@@ -1695,6 +1716,16 @@
+ 
+             c->log->action = recv_action;
+ 
++#if (NGX_STREAM_APISIX)
++            /*
++             * ngx_ssl_handle_recv() normalises SSL_ERROR_SSL to no error but
++             * leaves errno alone, so clear it here: whatever is readable after
++             * this recv then belongs to this recv, and a leftover ECONNRESET
++             * cannot be mistaken for a real reset.
++             */
++            ngx_set_socket_errno(0);
++#endif
++
+             n = src->recv(src, b->last, size);
+ 
+             if (n == NGX_AGAIN) {
+@@ -1702,6 +1733,10 @@
+             }
+ 
+             if (n == NGX_ERROR) {
++#if (NGX_STREAM_APISIX)
++                ngx_stream_apisix_set_read_error(s, from_upstream,
++                                                 ngx_socket_errno);
++#endif
+                 src->read->eof = 1;
+                 n = 0;
+             }
+@@ -1756,6 +1791,10 @@
+ 
+     c->log->action = "proxying connection";
+ 
++#if (NGX_STREAM_APISIX)
++    ngx_stream_apisix_metrics_update(s);
++#endif
++
+     if (ngx_stream_proxy_test_finalize(s, from_upstream) == NGX_OK) {
+         return;
+     }
+@@ -1935,6 +1974,10 @@
+         ngx_log_debug1(NGX_LOG_DEBUG_STREAM, s->connection->log, 0,
+                        "close proxy upstream connection: %d", pc->fd);
+ 
++#if (NGX_STREAM_APISIX)
++        ngx_stream_apisix_metrics_peer_closing(s);
++#endif
++
+ #if (NGX_STREAM_SSL)
+         if (pc->ssl) {
+             pc->ssl->no_wait_shutdown = 1;
+@@ -1965,6 +2008,10 @@
+     ngx_log_debug1(NGX_LOG_DEBUG_STREAM, s->connection->log, 0,
+                    "finalize stream proxy: %i", rc);
+ 
++#if (NGX_STREAM_APISIX)
++    ngx_stream_apisix_metrics_finalize(s, rc);
++#endif
++
+     u = s->upstream;
+ 
+     if (u == NULL) {
