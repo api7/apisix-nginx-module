@@ -23,9 +23,23 @@ apply_patch() {
 
     dir="$root/bundle/$repo-$ver"
     pushd "$dir" || failed_to_cd "$dir"
-    for patch in "$patch_dir/$repo"-*.patch; do
-        echo "Start to patch $patch to $dir..."
-        patch -p0 --verbose < "$patch" || echo "WARNING: $(basename "$patch") had rejected hunks (may be non-fatal)"
+    for pf in "$patch_dir/$repo"-*.patch; do
+        [ -e "$pf" ] || continue
+        echo "Start to patch $pf to $dir..."
+        if patch -p0 --verbose < "$pf"; then
+            :
+        else
+            st=$?
+            if [ "$st" -eq 1 ]; then
+                # rejected hunks: non-fatal for known compat exceptions (e.g. ngx_lua shdict on rc5)
+                echo "WARNING: $(basename "$pf") had rejected hunks (status 1, may be non-fatal)"
+            else
+                # status 2+ = serious trouble (e.g. file not found) — must abort
+                echo "ERROR: $(basename "$pf") failed with status $st" >&2
+                popd >/dev/null
+                return 1
+            fi
+        fi
     done
     popd
 }
