@@ -181,7 +181,7 @@ apisix_stream_metrics_zone 1m;
             ngx.sleep(0.3)
 
             local second = seen()
-            ngx.say("second di=", second.di or second.downstream_ingress,
+            ngx.say("second di=", second.downstream_ingress,
                     " ue=", second.upstream_egress)
 
             sock:close()

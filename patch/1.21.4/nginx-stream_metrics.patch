@@ -57,7 +57,24 @@ diff --git src/stream/ngx_stream_proxy_module.c src/stream/ngx_stream_proxy_modu
          ngx_stream_proxy_finalize(s, NGX_STREAM_OK);
          return;
      }
-@@ -1697,6 +1718,10 @@
+@@ -1690,6 +1711,16 @@
+ 
+             c->log->action = recv_action;
+ 
++#if (NGX_STREAM_APISIX)
++            /*
++             * ngx_ssl_handle_recv() normalises SSL_ERROR_SSL to no error but
++             * leaves errno alone, so clear it here: whatever is readable after
++             * this recv then belongs to this recv, and a leftover ECONNRESET
++             * cannot be mistaken for a real reset.
++             */
++            ngx_set_socket_errno(0);
++#endif
++
+             n = src->recv(src, b->last, size);
+ 
+             if (n == NGX_AGAIN) {
+@@ -1697,6 +1728,10 @@
              }
  
              if (n == NGX_ERROR) {
@@ -68,7 +85,7 @@ diff --git src/stream/ngx_stream_proxy_module.c src/stream/ngx_stream_proxy_modu
                  src->read->eof = 1;
                  n = 0;
              }
-@@ -1751,6 +1776,10 @@
+@@ -1751,6 +1786,10 @@
  
      c->log->action = "proxying connection";
  
@@ -79,7 +96,7 @@ diff --git src/stream/ngx_stream_proxy_module.c src/stream/ngx_stream_proxy_modu
      if (ngx_stream_proxy_test_finalize(s, from_upstream) == NGX_OK) {
          return;
      }
-@@ -1930,6 +1959,10 @@
+@@ -1930,6 +1969,10 @@
          ngx_log_debug1(NGX_LOG_DEBUG_STREAM, s->connection->log, 0,
                         "close proxy upstream connection: %d", pc->fd);
  
@@ -90,7 +107,7 @@ diff --git src/stream/ngx_stream_proxy_module.c src/stream/ngx_stream_proxy_modu
  #if (NGX_STREAM_SSL)
          if (pc->ssl) {
              pc->ssl->no_wait_shutdown = 1;
-@@ -1960,6 +1993,10 @@
+@@ -1960,6 +2003,10 @@
      ngx_log_debug1(NGX_LOG_DEBUG_STREAM, s->connection->log, 0,
                     "finalize stream proxy: %i", rc);
  
