@@ -38,7 +38,9 @@ typedef enum {
     NGX_STREAM_APISIX_REASON_SEND_TIMEOUT,
     NGX_STREAM_APISIX_REASON_UPSTREAM_TIMEOUT,
     NGX_STREAM_APISIX_REASON_SHUTDOWN,
-    NGX_STREAM_APISIX_REASON_CONNECT_FAILED
+    NGX_STREAM_APISIX_REASON_CONNECT_FAILED,
+    NGX_STREAM_APISIX_REASON_CLIENT_READ_ERROR,
+    NGX_STREAM_APISIX_REASON_UPSTREAM_READ_ERROR
 } ngx_stream_apisix_reason_e;
 
 
@@ -58,6 +60,8 @@ void ngx_stream_apisix_set_session_timeout_reason(ngx_stream_session_t *s);
 void ngx_stream_apisix_set_connect_timeout(ngx_stream_session_t *s);
 void ngx_stream_apisix_metrics_update(ngx_stream_session_t *s);
 void ngx_stream_apisix_metrics_peer_closing(ngx_stream_session_t *s);
+void ngx_stream_apisix_set_read_error(ngx_stream_session_t *s,
+    ngx_uint_t from_upstream, ngx_err_t err);
 void ngx_stream_apisix_metrics_finalize(ngx_stream_session_t *s,
     ngx_uint_t rc);
 

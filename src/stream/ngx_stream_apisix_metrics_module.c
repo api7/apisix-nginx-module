@@ -44,6 +44,8 @@ typedef struct {
     ngx_stream_apisix_metrics_slot_t   *slot;
     off_t                               flushed[NGX_STREAM_APISIX_METRICS_DIRECTIONS];
     ngx_uint_t                          reason;
+    /* errno of the fatal recv(), indexed by from_upstream */
+    ngx_err_t                           read_err[2];
     unsigned                            counted:1;
     unsigned                            connect_timeout:1;
     unsigned                            finalized:1;
@@ -140,7 +142,9 @@ static ngx_str_t  ngx_stream_apisix_reasons[] = {
     ngx_string("send_timeout"),
     ngx_string("upstream_timeout"),
     ngx_string("shutdown"),
-    ngx_string("connect_failed")
+    ngx_string("connect_failed"),
+    ngx_string("client_read_error"),
+    ngx_string("upstream_read_error")
 };
 
 #define NGX_STREAM_APISIX_REASONS_N                                          \
@@ -586,6 +590,27 @@ ngx_stream_apisix_metrics_peer_closing(ngx_stream_session_t *s)
 }
 
 
+/*
+ * nginx raises read->error for every fatal recv(), not only for a reset, and
+ * ngx_ssl_recv adds protocol failures on top. The errno is the only thing
+ * that tells them apart, and it is gone by the time the session is finalized,
+ * so the proxy module hands it over the moment the read fails.
+ */
+void
+ngx_stream_apisix_set_read_error(ngx_stream_session_t *s,
+    ngx_uint_t from_upstream, ngx_err_t err)
+{
+    ngx_stream_apisix_metrics_ctx_t  *ctx;
+
+    ctx = ngx_stream_apisix_metrics_get_ctx(s);
+    if (ctx == NULL) {
+        return;
+    }
+
+    ctx->read_err[from_upstream ? 1 : 0] = err;
+}
+
+
 void
 ngx_stream_apisix_set_session_reason(ngx_stream_session_t *s,
     ngx_uint_t reason)
@@ -679,11 +704,15 @@ ngx_stream_apisix_derive_reason(ngx_stream_session_t *s,
     pc = (u && u->peer.connection) ? u->peer.connection : NULL;
 
     if (c->read->error) {
-        return NGX_STREAM_APISIX_REASON_CLIENT_RST;
+        return ctx && ctx->read_err[0] == NGX_ECONNRESET
+               ? NGX_STREAM_APISIX_REASON_CLIENT_RST
+               : NGX_STREAM_APISIX_REASON_CLIENT_READ_ERROR;
     }
 
     if (pc && pc->read->error) {
-        return NGX_STREAM_APISIX_REASON_UPSTREAM_RST;
+        return ctx && ctx->read_err[1] == NGX_ECONNRESET
+               ? NGX_STREAM_APISIX_REASON_UPSTREAM_RST
+               : NGX_STREAM_APISIX_REASON_UPSTREAM_READ_ERROR;
     }
 
     if (c->error) {

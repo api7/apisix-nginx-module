@@ -287,3 +287,42 @@ GET /probe
 --- response_body
 slot 0.0.0.0:1985
 slots=1
+
+
+
+=== TEST 10: a read failure that is not a reset is not reported as one
+nginx raises read->error for every fatal recv(), so the errno is the only
+thing separating a reset from a protocol failure. Plaintext sent to a TLS
+listener is the latter.
+--- stream_config
+apisix_stream_metrics_zone 1m;
+--- stream_server_config
+    listen 12346 ssl;
+    ssl_certificate ../../certs/mtls_server.crt;
+    ssl_certificate_key ../../certs/mtls_server.key;
+    proxy_pass 127.0.0.1:1994;
+    log_by_lua_block {
+        ngx.log(ngx.WARN, "tls reason: ", ngx.var.stream_session_reason)
+    }
+--- config
+    location /probe {
+        content_by_lua_block {
+            local sock = ngx.socket.tcp()
+            local ok, err = sock:connect("127.0.0.1", 12346)
+            if not ok then
+                ngx.say("connect: ", err)
+                return
+            end
+            sock:send("not-tls-at-all\r\n\r\n")
+            sock:receive("*a")
+            sock:close()
+            ngx.sleep(0.2)
+            ngx.say("done")
+        }
+    }
+--- request
+GET /probe
+--- response_body
+done
+--- error_log
+tls reason: client_read_error

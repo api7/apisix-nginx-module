@@ -90,9 +90,11 @@ tells a graceful close apart from a timeout or a reset:
 | value | meaning |
 |---|---|
 | `closed` | one side sent a FIN, the session ended normally |
-| `client_rst` | the client reset the connection |
+| `client_rst` | the client reset the connection (`ECONNRESET`) |
+| `client_read_error` | reading from the client failed for any other reason, including a TLS protocol failure |
 | `client_error` | sending to the client failed |
-| `upstream_rst` | the upstream reset the connection |
+| `upstream_rst` | the upstream reset the connection (`ECONNRESET`) |
+| `upstream_read_error` | reading from the upstream failed for any other reason |
 | `upstream_error` | sending to the upstream failed |
 | `connect_timeout` | connecting to the upstream timed out and no peer was left |
 | `recv_timeout` | `proxy_timeout` expired while waiting for data |
