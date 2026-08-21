@@ -323,7 +323,6 @@ ngx_http_apisix_set_upstream_ssl(ngx_http_request_t *r, ngx_connection_t *c)
     if (ctx->upstream_cert != NULL) {
         cert  = ctx->upstream_cert;
         pkey  = ctx->upstream_pkey;
-        store = ctx->upstream_trusted_store;
 
         if (sk_X509_num(cert) < 1) {
             ngx_ssl_error(NGX_LOG_ERR, c->log, 0,
@@ -364,16 +363,20 @@ ngx_http_apisix_set_upstream_ssl(ngx_http_request_t *r, ngx_connection_t *c)
                           "SSL_use_PrivateKey() failed");
             goto failed;
         }
+    }
 
-        if (store != NULL) {
-            ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0,
-                           "overriding upstream SSL trusted store");
-        
-            if (SSL_set1_verify_cert_store(sc, store) == 0) {
-                ngx_ssl_error(NGX_LOG_ALERT, c->log, 0,
-                              "SSL_set1_verify_cert_store() failed");
-                goto failed;
-            }
+    /* the trusted store is independent of the client certificate: verifying the
+     * upstream against a caller-supplied CA must work without mTLS too */
+    store = ctx->upstream_trusted_store;
+
+    if (store != NULL) {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0,
+                       "overriding upstream SSL trusted store");
+
+        if (SSL_set1_verify_cert_store(sc, store) == 0) {
+            ngx_ssl_error(NGX_LOG_ALERT, c->log, 0,
+                          "SSL_set1_verify_cert_store() failed");
+            goto failed;
         }
     }
 

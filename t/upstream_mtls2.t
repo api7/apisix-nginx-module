@@ -129,3 +129,90 @@ unable to verify the first certificate
 
 --- response_body
 ok
+
+
+
+=== TEST 3: without a trusted store, the upstream is verified against proxy_ssl_trusted_certificate
+--- http_config
+    server {
+        listen unix:$TEST_NGINX_HTML_DIR/nginx.sock ssl;
+        server_name admin.apisix.dev;
+        ssl_certificate ../../certs/mtls_server.crt;
+        ssl_certificate_key ../../certs/mtls_server.key;
+
+        server_tokens off;
+
+        location /foo {
+            return 200 'ok\n';
+        }
+    }
+--- config
+    location /t {
+        proxy_ssl_trusted_certificate ../../certs/mtls_client.crt;
+        proxy_ssl_verify on;
+        proxy_ssl_name admin.apisix.dev;
+        proxy_pass https://unix:$TEST_NGINX_HTML_DIR/nginx.sock:/foo;
+    }
+--- error_code: 502
+--- error_log
+unable to verify the first certificate
+
+
+
+=== TEST 4: set only the trusted store, without a client certificate
+--- http_config
+    server {
+        listen unix:$TEST_NGINX_HTML_DIR/nginx.sock ssl;
+        server_name admin.apisix.dev;
+        ssl_certificate ../../certs/mtls_server.crt;
+        ssl_certificate_key ../../certs/mtls_server.key;
+
+        server_tokens off;
+
+        location /foo {
+            return 200 'ok\n';
+        }
+    }
+--- config
+    location /t {
+        access_by_lua_block {
+            local upstream = require("resty.apisix.upstream")
+            local openssl_x509_store = require "resty.openssl.x509.store"
+            local openssl_x509 = require "resty.openssl.x509"
+
+            local f = assert(io.open("t/certs/mtls_ca.crt"))
+            local ca_data = f:read("*a")
+            f:close()
+
+            local trust_store, err = openssl_x509_store.new()
+            if not trust_store then
+                ngx.log(ngx.ERR, "failed to create trust store: ", err)
+                ngx.exit(500)
+            end
+
+            local x509, err = openssl_x509.new(ca_data, "PEM")
+            if not x509 then
+                ngx.log(ngx.ERR, "failed to parse ca cert: ", err)
+                ngx.exit(500)
+            end
+
+            local ok, err = trust_store:add(x509)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to add ca cert to trust store: ", err)
+                ngx.exit(500)
+            end
+
+            local ok, err = upstream.set_ssl_trusted_store(trust_store)
+            if not ok then
+                ngx.log(ngx.ERR, "set_ssl_trusted_store failed: ", err)
+                ngx.exit(500)
+            end
+        }
+
+        proxy_ssl_trusted_certificate ../../certs/mtls_client.crt;
+        proxy_ssl_verify on;
+        proxy_ssl_name admin.apisix.dev;
+        proxy_pass https://unix:$TEST_NGINX_HTML_DIR/nginx.sock:/foo;
+    }
+--- response_body
+ok
