@@ -23,9 +23,23 @@ apply_patch() {
 
     dir="$root/bundle/$repo-$ver"
     pushd "$dir" || failed_to_cd "$dir"
-    for patch in "$patch_dir/$repo"-*.patch; do
-        echo "Start to patch $patch to $dir..."
-        patch -p0 --verbose < "$patch"
+    for pf in "$patch_dir/$repo"-*.patch; do
+        [ -e "$pf" ] || continue
+        echo "Start to patch $pf to $dir..."
+        if patch -p0 --verbose < "$pf"; then
+            :
+        else
+            st=$?
+            if [ "$st" -eq 1 ]; then
+                # rejected hunks: non-fatal for known compat exceptions (e.g. ngx_lua shdict on rc5)
+                echo "WARNING: $(basename "$pf") had rejected hunks (status 1, may be non-fatal)"
+            else
+                # status 2+ = serious trouble (e.g. file not found) — must abort
+                echo "ERROR: $(basename "$pf") failed with status $st" >&2
+                popd >/dev/null
+                return 1
+            fi
+        fi
     done
     popd
 }
@@ -84,6 +98,13 @@ elif [[ "$root" == *openresty-1.29.2.4 ]]; then
       apply_patch "$patch_dir" "$root" "lua-resty-core" "0.1.34rc2"
       apply_patch "$patch_dir" "$root" "ngx_lua" "0.10.31rc2"
       apply_patch "$patch_dir" "$root" "ngx_stream_lua" "0.0.19rc3"
+elif [[ "$root" == *openresty-1.31.1.* ]]; then
+      patch_dir="$PWD/1.29.2.4"
+      apply_patch "$patch_dir" "$root" "nginx"          "1.31.1"
+      apply_patch "$patch_dir" "$root" "lua-resty-core" "0.1.34rc3"
+      apply_patch "$patch_dir" "$root" "ngx_lua"        "0.10.31rc5"
+      apply_patch "$patch_dir" "$root" "ngx_stream_lua" "0.0.19rc4"
+
 else
     err "can't detect OpenResty version"
     exit 1
