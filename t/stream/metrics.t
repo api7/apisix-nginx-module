@@ -329,13 +329,13 @@ tls reason: client_read_error
 
 
 
-=== TEST 11: a tagged session is accounted on the slot of its tag
+=== TEST 11: a labelled session is accounted on the slot of its label
 --- stream_config
 apisix_stream_metrics_zone 1m;
 --- stream_server_config
     preread_by_lua_block {
         local metrics = require("resty.apisix.stream.metrics")
-        assert(metrics.set_tag("svc-a"))
+        assert(metrics.set_label("svc-a"))
     }
     proxy_pass 127.0.0.1:1994;
 --- config
@@ -345,7 +345,7 @@ apisix_stream_metrics_zone 1m;
 
             local function show(label)
                 for _, e in ipairs(assert(metrics.dump())) do
-                    ngx.say(label, " ", e.listen_addr, " tag=", e.tag,
+                    ngx.say(label, " ", e.listen_addr, " label=", e.label,
                             " active=", e.active,
                             " di=", e.downstream_ingress,
                             " ue=", e.upstream_egress)
@@ -372,23 +372,23 @@ apisix_stream_metrics_zone 1m;
 --- request
 GET /probe
 --- response_body
-open 0.0.0.0:1985 tag= active=0 di=0 ue=0
-open 0.0.0.0:1985 tag=svc-a active=1 di=16 ue=16
-closed 0.0.0.0:1985 tag= active=0 di=0 ue=0
-closed 0.0.0.0:1985 tag=svc-a active=0 di=16 ue=16
+open 0.0.0.0:1985 label= active=0 di=0 ue=0
+open 0.0.0.0:1985 label=svc-a active=1 di=16 ue=16
+closed 0.0.0.0:1985 label= active=0 di=0 ue=0
+closed 0.0.0.0:1985 label=svc-a active=0 di=16 ue=16
 --- no_error_log
 [error]
 
 
 
-=== TEST 12: an empty tag moves the session back to the untagged slot
+=== TEST 12: an empty label moves the session back to the unlabelled slot
 --- stream_config
 apisix_stream_metrics_zone 1m;
 --- stream_server_config
     preread_by_lua_block {
         local metrics = require("resty.apisix.stream.metrics")
-        assert(metrics.set_tag("svc-a"))
-        assert(metrics.set_tag(""))
+        assert(metrics.set_label("svc-a"))
+        assert(metrics.set_label(""))
     }
     proxy_pass 127.0.0.1:1994;
 --- config
@@ -407,7 +407,7 @@ apisix_stream_metrics_zone 1m;
             ngx.sleep(0.3)
 
             for _, e in ipairs(assert(metrics.dump())) do
-                ngx.say("tag=", e.tag, " active=", e.active,
+                ngx.say("label=", e.label, " active=", e.active,
                         " di=", e.downstream_ingress)
             end
 
@@ -417,27 +417,27 @@ apisix_stream_metrics_zone 1m;
 --- request
 GET /probe
 --- response_body
-tag= active=1 di=16
-tag=svc-a active=0 di=0
+label= active=1 di=16
+label=svc-a active=0 di=0
 --- no_error_log
 [error]
 
 
 
-=== TEST 13: a tag gets one slot per listening address, reused across sessions
+=== TEST 13: a label gets one slot per listening address, reused across sessions
 --- stream_config
 apisix_stream_metrics_zone 1m;
 
 server {
     listen 127.0.0.1:1986;
     preread_by_lua_block {
-        assert(require("resty.apisix.stream.metrics").set_tag("svc-a"))
+        assert(require("resty.apisix.stream.metrics").set_label("svc-a"))
     }
     proxy_pass 127.0.0.1:1994;
 }
 --- stream_server_config
     preread_by_lua_block {
-        assert(require("resty.apisix.stream.metrics").set_tag("svc-a"))
+        assert(require("resty.apisix.stream.metrics").set_label("svc-a"))
     }
     proxy_pass 127.0.0.1:1994;
 --- config
@@ -460,11 +460,11 @@ server {
 
             local res = assert(metrics.dump())
             table.sort(res, function(a, b)
-                return a.listen_addr .. a.tag < b.listen_addr .. b.tag
+                return a.listen_addr .. a.label < b.listen_addr .. b.label
             end)
 
             for _, e in ipairs(res) do
-                ngx.say(e.listen_addr, " tag=", e.tag, " active=", e.active,
+                ngx.say(e.listen_addr, " label=", e.label, " active=", e.active,
                         " sessions=", e.downstream_ingress / 35)
             end
         }
@@ -472,26 +472,26 @@ server {
 --- request
 GET /probe
 --- response_body
-0.0.0.0:1985 tag= active=0 sessions=0
-0.0.0.0:1985 tag=svc-a active=0 sessions=2
-127.0.0.1:1986 tag= active=0 sessions=0
-127.0.0.1:1986 tag=svc-a active=0 sessions=1
+0.0.0.0:1985 label= active=0 sessions=0
+0.0.0.0:1985 label=svc-a active=0 sessions=2
+127.0.0.1:1986 label= active=0 sessions=0
+127.0.0.1:1986 label=svc-a active=0 sessions=1
 --- no_error_log
 [error]
 
 
 
-=== TEST 14: invalid tags and the http subsystem are refused
+=== TEST 14: invalid labels and the http subsystem are refused
 --- stream_config
 apisix_stream_metrics_zone 1m;
 --- stream_server_config
     preread_by_lua_block {
         local metrics = require("resty.apisix.stream.metrics")
-        local ok, err = metrics.set_tag(string.rep("a", 257))
+        local ok, err = metrics.set_label(string.rep("a", 513))
         ngx.log(ngx.WARN, "long: ", ok, " ", err)
-        ok, err = metrics.set_tag(1)
+        ok, err = metrics.set_label(1)
         ngx.log(ngx.WARN, "number: ", ok, " ", err)
-        ok, err = metrics.set_tag(string.rep("a", 256))
+        ok, err = metrics.set_label(string.rep("a", 512))
         ngx.log(ngx.WARN, "longest: ", ok, " ", err)
     }
     proxy_pass 127.0.0.1:1994;
@@ -499,7 +499,7 @@ apisix_stream_metrics_zone 1m;
     location /probe {
         content_by_lua_block {
             local metrics = require("resty.apisix.stream.metrics")
-            ngx.say(metrics.set_tag("svc-a"))
+            ngx.say(metrics.set_label("svc-a"))
 
             local sock = ngx.socket.tcp()
             assert(sock:connect("127.0.0.1", $TEST_NGINX_SERVER_PORT + 1))
@@ -513,26 +513,26 @@ GET /probe
 --- response_body
 nilonly available in the stream subsystem
 --- error_log
-long: nil tag is longer than 256 bytes
-number: nil tag must be a string
+long: nil label is longer than 512 bytes
+number: nil label must be a string
 longest: true nil
 
 
 
-=== TEST 15: tagging without a zone is reported as not accounted
+=== TEST 15: labelling without a zone is reported as not accounted
 --- stream_config
 # intentionally no apisix_stream_metrics_zone here
 --- stream_server_config
     preread_by_lua_block {
-        local ok, err = require("resty.apisix.stream.metrics").set_tag("svc-a")
-        ngx.log(ngx.WARN, "set_tag: ", ok, " ", err)
+        local ok, err = require("resty.apisix.stream.metrics").set_label("svc-a")
+        ngx.log(ngx.WARN, "set_label: ", ok, " ", err)
     }
     proxy_pass 127.0.0.1:1994;
 --- stream_request eval
 "GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"
 --- stream_response_like: hello
 --- error_log
-set_tag: nil not accounted
+set_label: nil not accounted
 
 
 
@@ -543,10 +543,10 @@ apisix_stream_metrics_zone 32k;
     preread_by_lua_block {
         local metrics = require("resty.apisix.stream.metrics")
         for i = 1, 1000 do
-            local ok, err = metrics.set_tag("svc-" .. i)
+            local ok, err = metrics.set_label("svc-" .. i)
             if not ok then
                 ngx.ctx.last = i - 1
-                ngx.log(ngx.WARN, "set_tag: ", err)
+                ngx.log(ngx.WARN, "set_label: ", err)
                 break
             end
         end
@@ -557,7 +557,7 @@ apisix_stream_metrics_zone 32k;
         local want = "svc-" .. ngx.ctx.last
         for _, e in ipairs(assert(metrics.dump())) do
             if e.downstream_ingress > 0 then
-                ngx.log(ngx.WARN, "bytes on the last tag: ", e.tag == want)
+                ngx.log(ngx.WARN, "bytes on the last label: ", e.label == want)
             end
         end
     }
@@ -565,27 +565,27 @@ apisix_stream_metrics_zone 32k;
 "GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"
 --- stream_response_like: hello
 --- error_log
-set_tag: stream metrics zone is full
-bytes on the last tag: true
+set_label: stream metrics zone is full
+bytes on the last label: true
 
 
 
-=== TEST 17: bytes stay on the entry they were counted on when the tag changes
-Tagging again from the log phase, after every byte has moved, must not carry
-what was counted under the first tag over to the second one.
+=== TEST 17: bytes stay on the entry they were counted on when the label changes
+Labelling again from the log phase, after every byte has moved, must not carry
+what was counted under the first label over to the second one.
 --- stream_config
 apisix_stream_metrics_zone 1m;
 --- stream_server_config
     preread_by_lua_block {
-        assert(require("resty.apisix.stream.metrics").set_tag("svc-a"))
+        assert(require("resty.apisix.stream.metrics").set_label("svc-a"))
     }
     proxy_pass 127.0.0.1:1994;
     log_by_lua_block {
         local metrics = require("resty.apisix.stream.metrics")
-        assert(metrics.set_tag("svc-b"))
+        assert(metrics.set_label("svc-b"))
 
         for _, e in ipairs(assert(metrics.dump())) do
-            ngx.log(ngx.WARN, "tag=", e.tag, " di=", e.downstream_ingress,
+            ngx.log(ngx.WARN, "label=", e.label, " di=", e.downstream_ingress,
                     " de=", e.downstream_egress)
         end
     }
@@ -593,6 +593,6 @@ apisix_stream_metrics_zone 1m;
 "GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"
 --- stream_response_like: hello
 --- error_log eval
-[qr/tag= di=0 de=0/, qr/tag=svc-a di=35 de=[1-9]\d*/, qr/tag=svc-b di=0 de=0/]
+[qr/label= di=0 de=0/, qr/label=svc-a di=35 de=[1-9]\d*/, qr/label=svc-b di=0 de=0/]
 --- no_error_log
 [error]

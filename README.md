@@ -21,7 +21,7 @@ context: `stream`
 default: off
 
 Reserve a shared memory zone that collects, per stream listening address (and
-per tag, see below), the number of active sessions and the bytes transferred in the four directions
+per label, see below), the number of active sessions and the bytes transferred in the four directions
 (downstream/upstream × ingress/egress). A session accumulates locally and
 merges into the zone once per forwarding pass, so the counters keep moving
 during a long-lived connection while the inner read/write loop still costs a
@@ -72,34 +72,34 @@ Read the counters from Lua with `resty.apisix.stream.metrics`:
 ```lua
 local metrics = require("resty.apisix.stream.metrics")
 local res, err = metrics.dump()
--- res[i] = { listen_addr = "0.0.0.0:9100", tag = "", active = 3,
+-- res[i] = { listen_addr = "0.0.0.0:9100", label = "", active = 3,
 --            downstream_ingress = 12, downstream_egress = 34,
 --            upstream_egress = 12, upstream_ingress = 34 }
 ```
 
-A session can be split out of its listening address by tagging it, typically
+A session can be split out of its listening address by labelling it, typically
 from `preread_by_lua*` once it is known what the session belongs to:
 
 ```lua
-local ok, err = metrics.set_tag("svc-a")
+local ok, err = metrics.set_label("svc-a")
 ```
 
 From then on its active count and the bytes it moves are accounted on the slot
-of its listening address and tag, which `dump()` reports as a separate entry.
+of its listening address and label, which `dump()` reports as a separate entry.
 Bytes stay on the entry they were counted on: what a session moved before its
-first tag, and every session that is never tagged, stays on the untagged entry
-(`tag = ""`), and what it moved under one tag stays there if it is tagged again
+first label, and every session that is never labelled, stays on the unlabelled entry
+(`label = ""`), and what it moved under one label stays there if it is labelled again
 later. The entries of one listening address therefore always add up to its
-total. An empty tag moves the session back to the untagged entry.
+total. An empty label moves the session back to the unlabelled entry.
 
-- Tags are at most 256 bytes. A tag's slot is claimed the first time a worker
+- Labels are at most 512 bytes. A label's slot is claimed the first time a worker
   sees it on a listening address and, like any slot, is kept until the process
-  restarts, so tags must come from a bounded set.
-- When the zone has no free slot left, `set_tag` returns
+  restarts, so labels must come from a bounded set.
+- When the zone has no free slot left, `set_label` returns
   `nil, "stream metrics zone is full"` and the session stays on the slot it
   already had.
 - Without a zone, or on a listening address that is not accounted for,
-  `set_tag` returns `nil, "not accounted"`.
+  `set_label` returns `nil, "not accounted"`.
 
 ## Variable
 

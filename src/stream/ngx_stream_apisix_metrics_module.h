@@ -19,8 +19,11 @@
 
 #define NGX_STREAM_APISIX_METRICS_ADDR_LEN             128
 
-/* matches the maxLength of an APISIX object id, which is what gets tagged */
-#define NGX_STREAM_APISIX_METRICS_TAG_LEN              256
+/*
+ * Room for a few encoded label values, such as an APISIX object id (at most
+ * 256 bytes) together with its name
+ */
+#define NGX_STREAM_APISIX_METRICS_LABEL_LEN            512
 
 
 /*
@@ -48,14 +51,15 @@ typedef enum {
 
 
 /*
- * The layout Lua reads through FFI, one entry per listening address and tag.
- * The untagged entry of an address holds every session that was never tagged.
+ * The layout Lua reads through FFI, one entry per listening address and label.
+ * The unlabelled entry of an address holds every session that was never
+ * labelled.
  */
 typedef struct {
     u_char        addr[NGX_STREAM_APISIX_METRICS_ADDR_LEN];
     uint32_t      addr_len;
-    uint32_t      tag_len;
-    u_char        tag[NGX_STREAM_APISIX_METRICS_TAG_LEN];
+    uint32_t      label_len;
+    u_char        label[NGX_STREAM_APISIX_METRICS_LABEL_LEN];
     uint64_t      active;
     uint64_t      bytes[NGX_STREAM_APISIX_METRICS_DIRECTIONS];
 } ngx_stream_apisix_metrics_entry_t;
@@ -77,7 +81,7 @@ void ngx_stream_apisix_metrics_finalize(ngx_stream_session_t *s,
 ngx_int_t ngx_stream_apisix_metrics_dump(
     ngx_stream_apisix_metrics_entry_t *entries, ngx_uint_t max);
 ngx_int_t ngx_stream_apisix_metrics_size(void);
-ngx_int_t ngx_stream_apisix_metrics_set_tag(void *r, const u_char *tag,
+ngx_int_t ngx_stream_apisix_metrics_set_label(void *r, const u_char *label,
     size_t len);
 
 
