@@ -493,6 +493,10 @@ apisix_stream_metrics_zone 1m;
         ngx.log(ngx.WARN, "long: ", ok, " ", err)
         ok, err = metrics.set_labels("svc-a")
         ngx.log(ngx.WARN, "not an array: ", ok, " ", err)
+        ok, err = metrics.set_labels({service = "svc-a"})
+        ngx.log(ngx.WARN, "a map: ", ok, " ", err)
+        ok, err = metrics.set_labels({"svc-a", nil, "order"})
+        ngx.log(ngx.WARN, "a hole: ", ok, " ", err)
         ok, err = metrics.set_labels({"svc-a", 1})
         ngx.log(ngx.WARN, "number: ", ok, " ", err)
         ok, err = metrics.set_labels({"svc\31a"})
@@ -521,6 +525,8 @@ nilonly available in the stream subsystem
 --- error_log
 long: nil labels take more than 512 bytes
 not an array: nil labels must be an array of strings
+a map: nil labels must be an array of strings
+a hole: nil labels must be an array of strings
 number: nil label 2 must be a string
 separator: nil label 1 contains the \31 separator
 longest: true nil

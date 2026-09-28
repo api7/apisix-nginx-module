@@ -6,6 +6,7 @@ local ffi_str = ffi.string
 local tonumber = tonumber
 local type = type
 local concat = table.concat
+local nkeys = require("table.nkeys")
 local str_find = string.find
 local str_sub = string.sub
 local subsystem = ngx.config.subsystem
@@ -156,7 +157,9 @@ function _M.set_labels(labels)
         return nil, "this runtime has no stream metrics support"
     end
 
-    if type(labels) ~= "table" then
+    -- a map or an array with holes would otherwise join to fewer values than
+    -- it holds, and an empty join silently means the unlabelled slot
+    if type(labels) ~= "table" or nkeys(labels) ~= #labels then
         return nil, "labels must be an array of strings"
     end
 
