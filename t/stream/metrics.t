@@ -335,10 +335,7 @@ apisix_stream_metrics_zone 1m;
 --- stream_server_config
     preread_by_lua_block {
         local metrics = require("resty.apisix.stream.metrics")
-        local ok, err = metrics.set_tag("svc-a")
-        if not ok then
-            ngx.log(ngx.ERR, "set_tag: ", err)
-        end
+        assert(metrics.set_tag("svc-a"))
     }
     proxy_pass 127.0.0.1:1994;
 --- config
@@ -347,7 +344,7 @@ apisix_stream_metrics_zone 1m;
             local metrics = require("resty.apisix.stream.metrics")
 
             local function show(label)
-                for _, e in ipairs(metrics.dump()) do
+                for _, e in ipairs(assert(metrics.dump())) do
                     ngx.say(label, " ", e.listen_addr, " tag=", e.tag,
                             " active=", e.active,
                             " di=", e.downstream_ingress,
@@ -363,11 +360,11 @@ apisix_stream_metrics_zone 1m;
             end
 
             -- a partial request, so the upstream keeps the session open
-            sock:send("GET / HTTP/1.0\r\n")
+            assert(sock:send("GET / HTTP/1.0\r\n"))
             ngx.sleep(0.3)
             show("open")
 
-            sock:close()
+            assert(sock:close())
             ngx.sleep(0.3)
             show("closed")
         }
@@ -406,15 +403,15 @@ apisix_stream_metrics_zone 1m;
                 return
             end
 
-            sock:send("GET / HTTP/1.0\r\n")
+            assert(sock:send("GET / HTTP/1.0\r\n"))
             ngx.sleep(0.3)
 
-            for _, e in ipairs(metrics.dump()) do
+            for _, e in ipairs(assert(metrics.dump())) do
                 ngx.say("tag=", e.tag, " active=", e.active,
                         " di=", e.downstream_ingress)
             end
 
-            sock:close()
+            assert(sock:close())
         }
     }
 --- request
@@ -451,9 +448,9 @@ server {
             local function roundtrip(port)
                 local sock = ngx.socket.tcp()
                 assert(sock:connect("127.0.0.1", port))
-                sock:send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
-                sock:receive("*a")
-                sock:close()
+                assert(sock:send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"))
+                assert(sock:receive("*a"))
+                assert(sock:close())
             end
 
             roundtrip($TEST_NGINX_SERVER_PORT + 1)
@@ -461,7 +458,7 @@ server {
             roundtrip(1986)
             ngx.sleep(0.3)
 
-            local res = metrics.dump()
+            local res = assert(metrics.dump())
             table.sort(res, function(a, b)
                 return a.listen_addr .. a.tag < b.listen_addr .. b.tag
             end)
@@ -506,9 +503,9 @@ apisix_stream_metrics_zone 1m;
 
             local sock = ngx.socket.tcp()
             assert(sock:connect("127.0.0.1", $TEST_NGINX_SERVER_PORT + 1))
-            sock:send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
-            sock:receive("*a")
-            sock:close()
+            assert(sock:send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"))
+            assert(sock:receive("*a"))
+            assert(sock:close())
         }
     }
 --- request
@@ -558,7 +555,7 @@ apisix_stream_metrics_zone 32k;
     log_by_lua_block {
         local metrics = require("resty.apisix.stream.metrics")
         local want = "svc-" .. ngx.ctx.last
-        for _, e in ipairs(metrics.dump()) do
+        for _, e in ipairs(assert(metrics.dump())) do
             if e.downstream_ingress > 0 then
                 ngx.log(ngx.WARN, "bytes on the last tag: ", e.tag == want)
             end
@@ -570,3 +567,32 @@ apisix_stream_metrics_zone 32k;
 --- error_log
 set_tag: stream metrics zone is full
 bytes on the last tag: true
+
+
+
+=== TEST 17: bytes stay on the entry they were counted on when the tag changes
+Tagging again from the log phase, after every byte has moved, must not carry
+what was counted under the first tag over to the second one.
+--- stream_config
+apisix_stream_metrics_zone 1m;
+--- stream_server_config
+    preread_by_lua_block {
+        assert(require("resty.apisix.stream.metrics").set_tag("svc-a"))
+    }
+    proxy_pass 127.0.0.1:1994;
+    log_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        assert(metrics.set_tag("svc-b"))
+
+        for _, e in ipairs(assert(metrics.dump())) do
+            ngx.log(ngx.WARN, "tag=", e.tag, " di=", e.downstream_ingress,
+                    " de=", e.downstream_egress)
+        end
+    }
+--- stream_request eval
+"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"
+--- stream_response_like: hello
+--- error_log eval
+[qr/tag= di=0 de=0/, qr/tag=svc-a di=35 de=[1-9]\d*/, qr/tag=svc-b di=0 de=0/]
+--- no_error_log
+[error]

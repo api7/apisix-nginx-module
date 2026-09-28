@@ -86,9 +86,11 @@ local ok, err = metrics.set_tag("svc-a")
 
 From then on its active count and the bytes it moves are accounted on the slot
 of its listening address and tag, which `dump()` reports as a separate entry.
-Everything before the call, and every session that is never tagged, stays on
-the untagged entry (`tag = ""`), so the entries of one listening address always
-add up to its total. An empty tag moves the session back to the untagged entry.
+Bytes stay on the entry they were counted on: what a session moved before its
+first tag, and every session that is never tagged, stays on the untagged entry
+(`tag = ""`), and what it moved under one tag stays there if it is tagged again
+later. The entries of one listening address therefore always add up to its
+total. An empty tag moves the session back to the untagged entry.
 
 - Tags are at most 256 bytes. A tag's slot is claimed the first time a worker
   sees it on a listening address and, like any slot, is kept until the process
