@@ -22,6 +22,14 @@
 #define NGX_STREAM_APISIX_METRICS_MAX_SLOTS        8192
 
 /*
+ * A share of the slots that labelled sessions cannot claim. Labels are a
+ * runtime quantity while listening addresses come with the configuration, so
+ * without it a zone filled with labels would leave a listening address added
+ * by a later reload with no slot at all, and its traffic uncounted.
+ */
+#define NGX_STREAM_APISIX_METRICS_LISTEN_SHARE     4
+
+/*
  * Per worker, direct mapped: a session is labelled on every new connection, and
  * scanning the whole zone for it would put a linear search on that path.
  */
@@ -184,6 +192,9 @@ static ngx_stream_apisix_metrics_slot_t
 
 static ngx_str_t  ngx_stream_apisix_metrics_no_labels = ngx_null_string;
 
+/* the zone running out of slots for labels is logged once per worker */
+static ngx_uint_t  ngx_stream_apisix_metrics_full_logged = 0;
+
 
 static void *
 ngx_stream_apisix_metrics_create_main_conf(ngx_conf_t *cf)
@@ -257,9 +268,10 @@ ngx_stream_apisix_metrics_init_zone(ngx_shm_zone_t *shm_zone, void *data)
     }
 
     /*
-     * The slot array is sized once and never grows: the set of stream
-     * listening addresses is fixed at configuration time. Only half of the
-     * zone is handed out so that the slab bookkeeping always fits.
+     * The slot array is sized once, when the zone is created, and slots are
+     * appended into it: one per listening address, and one per set of labels
+     * seen on it. Only half of the zone is handed out so that the slab
+     * bookkeeping always fits.
      */
     nslots = (shm_zone->shm.size - sizeof(ngx_slab_pool_t)) / 2
              / sizeof(ngx_stream_apisix_metrics_slot_t);
@@ -349,6 +361,7 @@ ngx_stream_apisix_metrics_lookup(ngx_str_t *addr, ngx_str_t *labels,
     ngx_uint_t create)
 {
     ngx_uint_t                         nused;
+    ngx_uint_t                         limit;
     ngx_slab_pool_t                   *shpool;
     ngx_stream_apisix_metrics_sh_t    *sh;
     ngx_stream_apisix_metrics_slot_t  *slot;
@@ -377,7 +390,12 @@ ngx_stream_apisix_metrics_lookup(ngx_str_t *addr, ngx_str_t *labels,
     /* only what was appended since the unlocked scan needs another look */
     slot = ngx_stream_apisix_metrics_find(sh, nused, sh->nused, addr, labels);
 
-    if (slot == NULL && sh->nused < sh->nslots) {
+    limit = sh->nslots;
+    if (labels->len) {
+        limit -= sh->nslots / NGX_STREAM_APISIX_METRICS_LISTEN_SHARE;
+    }
+
+    if (slot == NULL && sh->nused < limit) {
         slot = &sh->slots[sh->nused];
 
         slot->addr_len = (uint32_t) addr->len;
@@ -469,6 +487,7 @@ ngx_stream_apisix_metrics_init_process(ngx_cycle_t *cycle)
 
     ngx_memzero(ngx_stream_apisix_metrics_cache,
                 sizeof(ngx_stream_apisix_metrics_cache));
+    ngx_stream_apisix_metrics_full_logged = 0;
 
     ngx_stream_apisix_metrics_bind_zone(cycle);
 
@@ -988,6 +1007,14 @@ ngx_stream_apisix_metrics_set_labels(void *req, const u_char *data, size_t len)
         slot = ngx_stream_apisix_metrics_labelled_slot(ctx->listen_slot,
                                                        &labels);
         if (slot == NULL) {
+            if (!ngx_stream_apisix_metrics_full_logged) {
+                ngx_stream_apisix_metrics_full_logged = 1;
+                ngx_log_error(NGX_LOG_WARN, s->connection->log, 0,
+                              "apisix stream metrics zone has no slot left "
+                              "for labelled sessions, new labels stay on "
+                              "their listening address");
+            }
+
             return NGX_BUSY;
         }
     }

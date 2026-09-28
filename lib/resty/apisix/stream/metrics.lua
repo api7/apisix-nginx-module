@@ -63,9 +63,11 @@ local entries
 local entries_size = 0
 
 -- the stream module is a separate addon, so a build can lack it entirely;
--- resolve the symbol once rather than letting every call throw
+-- resolve the symbol once rather than letting every call throw. The size
+-- reader came with labels, so an older build without it is refused too
+-- rather than read with the wrong entry layout.
 local has_dump = pcall(function()
-    return C.ngx_stream_apisix_metrics_dump
+    return C.ngx_stream_apisix_metrics_size
 end)
 
 local _M = {}
