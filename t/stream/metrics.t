@@ -326,3 +326,247 @@ GET /probe
 done
 --- error_log
 tls reason: client_read_error
+
+
+
+=== TEST 11: a tagged session is accounted on the slot of its tag
+--- stream_config
+apisix_stream_metrics_zone 1m;
+--- stream_server_config
+    preread_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        local ok, err = metrics.set_tag("svc-a")
+        if not ok then
+            ngx.log(ngx.ERR, "set_tag: ", err)
+        end
+    }
+    proxy_pass 127.0.0.1:1994;
+--- config
+    location /probe {
+        content_by_lua_block {
+            local metrics = require("resty.apisix.stream.metrics")
+
+            local function show(label)
+                for _, e in ipairs(metrics.dump()) do
+                    ngx.say(label, " ", e.listen_addr, " tag=", e.tag,
+                            " active=", e.active,
+                            " di=", e.downstream_ingress,
+                            " ue=", e.upstream_egress)
+                end
+            end
+
+            local sock = ngx.socket.tcp()
+            local ok, err = sock:connect("127.0.0.1", $TEST_NGINX_SERVER_PORT + 1)
+            if not ok then
+                ngx.say("connect: ", err)
+                return
+            end
+
+            -- a partial request, so the upstream keeps the session open
+            sock:send("GET / HTTP/1.0\r\n")
+            ngx.sleep(0.3)
+            show("open")
+
+            sock:close()
+            ngx.sleep(0.3)
+            show("closed")
+        }
+    }
+--- request
+GET /probe
+--- response_body
+open 0.0.0.0:1985 tag= active=0 di=0 ue=0
+open 0.0.0.0:1985 tag=svc-a active=1 di=16 ue=16
+closed 0.0.0.0:1985 tag= active=0 di=0 ue=0
+closed 0.0.0.0:1985 tag=svc-a active=0 di=16 ue=16
+--- no_error_log
+[error]
+
+
+
+=== TEST 12: an empty tag moves the session back to the untagged slot
+--- stream_config
+apisix_stream_metrics_zone 1m;
+--- stream_server_config
+    preread_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        assert(metrics.set_tag("svc-a"))
+        assert(metrics.set_tag(""))
+    }
+    proxy_pass 127.0.0.1:1994;
+--- config
+    location /probe {
+        content_by_lua_block {
+            local metrics = require("resty.apisix.stream.metrics")
+
+            local sock = ngx.socket.tcp()
+            local ok, err = sock:connect("127.0.0.1", $TEST_NGINX_SERVER_PORT + 1)
+            if not ok then
+                ngx.say("connect: ", err)
+                return
+            end
+
+            sock:send("GET / HTTP/1.0\r\n")
+            ngx.sleep(0.3)
+
+            for _, e in ipairs(metrics.dump()) do
+                ngx.say("tag=", e.tag, " active=", e.active,
+                        " di=", e.downstream_ingress)
+            end
+
+            sock:close()
+        }
+    }
+--- request
+GET /probe
+--- response_body
+tag= active=1 di=16
+tag=svc-a active=0 di=0
+--- no_error_log
+[error]
+
+
+
+=== TEST 13: a tag gets one slot per listening address, reused across sessions
+--- stream_config
+apisix_stream_metrics_zone 1m;
+
+server {
+    listen 127.0.0.1:1986;
+    preread_by_lua_block {
+        assert(require("resty.apisix.stream.metrics").set_tag("svc-a"))
+    }
+    proxy_pass 127.0.0.1:1994;
+}
+--- stream_server_config
+    preread_by_lua_block {
+        assert(require("resty.apisix.stream.metrics").set_tag("svc-a"))
+    }
+    proxy_pass 127.0.0.1:1994;
+--- config
+    location /probe {
+        content_by_lua_block {
+            local metrics = require("resty.apisix.stream.metrics")
+
+            local function roundtrip(port)
+                local sock = ngx.socket.tcp()
+                assert(sock:connect("127.0.0.1", port))
+                sock:send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
+                sock:receive("*a")
+                sock:close()
+            end
+
+            roundtrip($TEST_NGINX_SERVER_PORT + 1)
+            roundtrip($TEST_NGINX_SERVER_PORT + 1)
+            roundtrip(1986)
+            ngx.sleep(0.3)
+
+            local res = metrics.dump()
+            table.sort(res, function(a, b)
+                return a.listen_addr .. a.tag < b.listen_addr .. b.tag
+            end)
+
+            for _, e in ipairs(res) do
+                ngx.say(e.listen_addr, " tag=", e.tag, " active=", e.active,
+                        " sessions=", e.downstream_ingress / 35)
+            end
+        }
+    }
+--- request
+GET /probe
+--- response_body
+0.0.0.0:1985 tag= active=0 sessions=0
+0.0.0.0:1985 tag=svc-a active=0 sessions=2
+127.0.0.1:1986 tag= active=0 sessions=0
+127.0.0.1:1986 tag=svc-a active=0 sessions=1
+--- no_error_log
+[error]
+
+
+
+=== TEST 14: invalid tags and the http subsystem are refused
+--- stream_config
+apisix_stream_metrics_zone 1m;
+--- stream_server_config
+    preread_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        local ok, err = metrics.set_tag(string.rep("a", 257))
+        ngx.log(ngx.WARN, "long: ", ok, " ", err)
+        ok, err = metrics.set_tag(1)
+        ngx.log(ngx.WARN, "number: ", ok, " ", err)
+        ok, err = metrics.set_tag(string.rep("a", 256))
+        ngx.log(ngx.WARN, "longest: ", ok, " ", err)
+    }
+    proxy_pass 127.0.0.1:1994;
+--- config
+    location /probe {
+        content_by_lua_block {
+            local metrics = require("resty.apisix.stream.metrics")
+            ngx.say(metrics.set_tag("svc-a"))
+
+            local sock = ngx.socket.tcp()
+            assert(sock:connect("127.0.0.1", $TEST_NGINX_SERVER_PORT + 1))
+            sock:send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
+            sock:receive("*a")
+            sock:close()
+        }
+    }
+--- request
+GET /probe
+--- response_body
+nilonly available in the stream subsystem
+--- error_log
+long: nil tag is longer than 256 bytes
+number: nil tag must be a string
+longest: true nil
+
+
+
+=== TEST 15: tagging without a zone is reported as not accounted
+--- stream_config
+# intentionally no apisix_stream_metrics_zone here
+--- stream_server_config
+    preread_by_lua_block {
+        local ok, err = require("resty.apisix.stream.metrics").set_tag("svc-a")
+        ngx.log(ngx.WARN, "set_tag: ", ok, " ", err)
+    }
+    proxy_pass 127.0.0.1:1994;
+--- stream_request eval
+"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"
+--- stream_response_like: hello
+--- error_log
+set_tag: nil not accounted
+
+
+
+=== TEST 16: a full zone keeps the session on the slot it already has
+--- stream_config
+apisix_stream_metrics_zone 32k;
+--- stream_server_config
+    preread_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        for i = 1, 1000 do
+            local ok, err = metrics.set_tag("svc-" .. i)
+            if not ok then
+                ngx.ctx.last = i - 1
+                ngx.log(ngx.WARN, "set_tag: ", err)
+                break
+            end
+        end
+    }
+    proxy_pass 127.0.0.1:1994;
+    log_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        local want = "svc-" .. ngx.ctx.last
+        for _, e in ipairs(metrics.dump()) do
+            if e.downstream_ingress > 0 then
+                ngx.log(ngx.WARN, "bytes on the last tag: ", e.tag == want)
+            end
+        end
+    }
+--- stream_request eval
+"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"
+--- stream_response_like: hello
+--- error_log
+set_tag: stream metrics zone is full
+bytes on the last tag: true

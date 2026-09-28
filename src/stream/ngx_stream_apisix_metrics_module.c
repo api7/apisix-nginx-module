@@ -1,6 +1,7 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_stream.h>
+#include <ngx_stream_lua_api.h>
 #include "ngx_stream_apisix_metrics_module.h"
 
 
@@ -14,10 +15,16 @@
  */
 
 /*
- * One slot per stream listening address. A deployment has a handful of them,
- * the cap only keeps a huge zone from reserving a pointless amount of memory.
+ * One slot per stream listening address, plus one per tag seen on it. The cap
+ * only keeps a huge zone from reserving a pointless amount of memory.
  */
-#define NGX_STREAM_APISIX_METRICS_MAX_SLOTS        512
+#define NGX_STREAM_APISIX_METRICS_MAX_SLOTS        8192
+
+/*
+ * Per worker, direct mapped: a session is tagged on every new connection, and
+ * scanning the whole zone for it would put a linear search on that path.
+ */
+#define NGX_STREAM_APISIX_METRICS_CACHE_SIZE       256
 
 
 typedef struct {
@@ -25,6 +32,8 @@ typedef struct {
     ngx_atomic_t    bytes[NGX_STREAM_APISIX_METRICS_DIRECTIONS];
     uint32_t        addr_len;
     u_char          addr[NGX_STREAM_APISIX_METRICS_ADDR_LEN];
+    uint32_t        tag_len;
+    u_char          tag[NGX_STREAM_APISIX_METRICS_TAG_LEN];
 } ngx_stream_apisix_metrics_slot_t;
 
 
@@ -42,6 +51,8 @@ typedef struct {
 
 typedef struct {
     ngx_stream_apisix_metrics_slot_t   *slot;
+    /* the untagged slot of the listening address, which tags are keyed on */
+    ngx_stream_apisix_metrics_slot_t   *listen_slot;
     off_t                               flushed[NGX_STREAM_APISIX_METRICS_DIRECTIONS];
     ngx_uint_t                          reason;
     /* errno of the fatal recv(), indexed by from_upstream */
@@ -157,6 +168,7 @@ static ngx_str_t  ngx_stream_apisix_reasons[] = {
  * cannot leave this pointing into unmapped shared memory.
  */
 static ngx_stream_apisix_metrics_sh_t  *ngx_stream_apisix_metrics_sh = NULL;
+static ngx_slab_pool_t                 *ngx_stream_apisix_metrics_shpool = NULL;
 
 /*
  * Maps a listening socket to its slot without a lookup on the hot path.
@@ -165,6 +177,11 @@ static ngx_stream_apisix_metrics_sh_t  *ngx_stream_apisix_metrics_sh = NULL;
 static ngx_stream_apisix_metrics_slot_t **ngx_stream_apisix_metrics_map = NULL;
 static ngx_listening_t                   *ngx_stream_apisix_metrics_ls = NULL;
 static ngx_uint_t                         ngx_stream_apisix_metrics_nls = 0;
+
+static ngx_stream_apisix_metrics_slot_t
+    *ngx_stream_apisix_metrics_cache[NGX_STREAM_APISIX_METRICS_CACHE_SIZE];
+
+static ngx_str_t  ngx_stream_apisix_metrics_no_tag = ngx_null_string;
 
 
 static void *
@@ -283,21 +300,55 @@ ngx_stream_apisix_metrics_bind_zone(ngx_cycle_t *cycle)
     ngx_stream_apisix_metrics_main_conf_t  *mcf;
 
     ngx_stream_apisix_metrics_sh = NULL;
+    ngx_stream_apisix_metrics_shpool = NULL;
 
     mcf = ngx_stream_cycle_get_module_main_conf(cycle,
                                             ngx_stream_apisix_metrics_module);
 
     if (mcf != NULL && mcf->shm_zone != NULL) {
         ngx_stream_apisix_metrics_sh = mcf->shm_zone->data;
+        ngx_stream_apisix_metrics_shpool =
+            (ngx_slab_pool_t *) mcf->shm_zone->shm.addr;
     }
 }
 
 
 static ngx_stream_apisix_metrics_slot_t *
-ngx_stream_apisix_metrics_lookup(ngx_str_t *addr, ngx_uint_t create)
+ngx_stream_apisix_metrics_find(ngx_stream_apisix_metrics_sh_t *sh,
+    ngx_uint_t from, ngx_uint_t to, ngx_str_t *addr, ngx_str_t *tag)
 {
     ngx_uint_t                         i;
+    ngx_stream_apisix_metrics_slot_t  *slot;
+
+    for (i = from; i < to; i++) {
+        slot = &sh->slots[i];
+
+        if (slot->addr_len == addr->len
+            && slot->tag_len == tag->len
+            && ngx_memcmp(slot->addr, addr->data, addr->len) == 0
+            && ngx_memcmp(slot->tag, tag->data, tag->len) == 0)
+        {
+            return slot;
+        }
+    }
+
+    return NULL;
+}
+
+
+/*
+ * Slots are only ever appended, never moved or freed, so a reader either sees
+ * a slot fully or does not see it at all and needs no lock. Claiming does: the
+ * master claims the untagged slots, but tagged ones are claimed by whichever
+ * worker first sees the tag, and on a reload the previous generation of
+ * workers keeps claiming while the master appends.
+ */
+static ngx_stream_apisix_metrics_slot_t *
+ngx_stream_apisix_metrics_lookup(ngx_str_t *addr, ngx_str_t *tag,
+    ngx_uint_t create)
+{
     ngx_uint_t                         nused;
+    ngx_slab_pool_t                   *shpool;
     ngx_stream_apisix_metrics_sh_t    *sh;
     ngx_stream_apisix_metrics_slot_t  *slot;
 
@@ -313,44 +364,39 @@ ngx_stream_apisix_metrics_lookup(ngx_str_t *addr, ngx_uint_t create)
     nused = sh->nused;
     ngx_memory_barrier();
 
-    for (i = 0; i < nused; i++) {
-        slot = &sh->slots[i];
-
-        if (slot->addr_len == addr->len
-            && ngx_memcmp(slot->addr, addr->data, addr->len) == 0)
-        {
-            return slot;
-        }
+    slot = ngx_stream_apisix_metrics_find(sh, 0, nused, addr, tag);
+    if (slot != NULL || !create) {
+        return slot;
     }
 
-    if (!create || nused == sh->nslots) {
-        return NULL;
+    shpool = ngx_stream_apisix_metrics_shpool;
+
+    ngx_shmtx_lock(&shpool->mutex);
+
+    /* only what was appended since the unlocked scan needs another look */
+    slot = ngx_stream_apisix_metrics_find(sh, nused, sh->nused, addr, tag);
+
+    if (slot == NULL && sh->nused < sh->nslots) {
+        slot = &sh->slots[sh->nused];
+
+        slot->addr_len = (uint32_t) addr->len;
+        ngx_memcpy(slot->addr, addr->data, addr->len);
+        slot->tag_len = (uint32_t) tag->len;
+        ngx_memcpy(slot->tag, tag->data, tag->len);
+
+        /* publish the contents before the count that exposes them */
+        ngx_memory_barrier();
+
+        sh->nused++;
     }
 
-    slot = &sh->slots[sh->nused];
-
-    slot->addr_len = (uint32_t) addr->len;
-    ngx_memcpy(slot->addr, addr->data, addr->len);
-
-    /*
-     * A reload reuses the zone, so the master appends here while the previous
-     * generation of workers is still reading. Publish the contents before the
-     * count that exposes them.
-     */
-    ngx_memory_barrier();
-
-    sh->nused++;
+    ngx_shmtx_unlock(&shpool->mutex);
 
     return slot;
 }
 
 
-/*
- * Only the master ever claims, and only by appending, so no lock is needed:
- * readers either see a slot fully or do not see it at all. On a reload the
- * previous generation of workers is still reading, which is what the barrier
- * in the lookup above is for.
- */
+/* the master claims the untagged slot of every stream listening address */
 static ngx_int_t
 ngx_stream_apisix_metrics_init_module(ngx_cycle_t *cycle)
 {
@@ -397,7 +443,9 @@ ngx_stream_apisix_metrics_init_module(ngx_cycle_t *cycle)
             continue;
         }
 
-        if (ngx_stream_apisix_metrics_lookup(&addr, 1) == NULL) {
+        if (ngx_stream_apisix_metrics_lookup(&addr,
+                &ngx_stream_apisix_metrics_no_tag, 1) == NULL)
+        {
             ngx_log_error(NGX_LOG_WARN, cycle->log, 0,
                           "apisix stream metrics zone is too small to hold "
                           "listening address \"%V\"", &addr);
@@ -417,6 +465,9 @@ ngx_stream_apisix_metrics_init_process(ngx_cycle_t *cycle)
     ngx_stream_apisix_metrics_map = NULL;
     ngx_stream_apisix_metrics_ls = NULL;
     ngx_stream_apisix_metrics_nls = 0;
+
+    ngx_memzero(ngx_stream_apisix_metrics_cache,
+                sizeof(ngx_stream_apisix_metrics_cache));
 
     ngx_stream_apisix_metrics_bind_zone(cycle);
 
@@ -438,7 +489,8 @@ ngx_stream_apisix_metrics_init_process(ngx_cycle_t *cycle)
         }
 
         ngx_stream_apisix_metrics_map[i] =
-            ngx_stream_apisix_metrics_lookup(&ls[i].addr_text, 0);
+            ngx_stream_apisix_metrics_lookup(&ls[i].addr_text,
+                                         &ngx_stream_apisix_metrics_no_tag, 0);
     }
 
     ngx_stream_apisix_metrics_ls = ls;
@@ -499,6 +551,7 @@ ngx_stream_apisix_metrics_post_accept_handler(ngx_stream_session_t *s)
     }
 
     ctx->slot = slot;
+    ctx->listen_slot = slot;
     ctx->counted = 1;
 
     (void) ngx_atomic_fetch_add(&slot->active, 1);
@@ -857,6 +910,117 @@ ngx_stream_apisix_metrics_log_handler(ngx_stream_session_t *s)
 }
 
 
+static ngx_stream_apisix_metrics_slot_t *
+ngx_stream_apisix_metrics_tagged_slot(
+    ngx_stream_apisix_metrics_slot_t *listen_slot, ngx_str_t *tag)
+{
+    ngx_str_t                           addr;
+    ngx_uint_t                          i;
+    ngx_stream_apisix_metrics_slot_t   *slot;
+
+    i = (ngx_crc32_short(tag->data, tag->len)
+         ^ (uint32_t) (listen_slot - ngx_stream_apisix_metrics_sh->slots))
+        % NGX_STREAM_APISIX_METRICS_CACHE_SIZE;
+
+    slot = ngx_stream_apisix_metrics_cache[i];
+
+    if (slot != NULL
+        && slot->addr_len == listen_slot->addr_len
+        && slot->tag_len == tag->len
+        && ngx_memcmp(slot->addr, listen_slot->addr, slot->addr_len) == 0
+        && ngx_memcmp(slot->tag, tag->data, tag->len) == 0)
+    {
+        return slot;
+    }
+
+    addr.len = listen_slot->addr_len;
+    addr.data = listen_slot->addr;
+
+    slot = ngx_stream_apisix_metrics_lookup(&addr, tag, 1);
+    if (slot != NULL) {
+        ngx_stream_apisix_metrics_cache[i] = slot;
+    }
+
+    return slot;
+}
+
+
+/*
+ * Moves the session onto the slot of its listening address and tag, so that
+ * its active count and every byte it moves from now on are accounted there.
+ * Bytes moved before the call stay where they were counted: a session that
+ * ends before it is tagged, or the handshake of one that is tagged later, is
+ * only ever part of the untagged total. An empty tag moves it back there.
+ */
+ngx_int_t
+ngx_stream_apisix_metrics_set_tag(void *req, const u_char *data, size_t len)
+{
+    ngx_str_t                           tag;
+    ngx_stream_session_t               *s;
+    ngx_stream_lua_request_t           *r;
+    ngx_stream_apisix_metrics_ctx_t    *ctx;
+    ngx_stream_apisix_metrics_slot_t   *slot;
+
+    r = req;
+
+    if (r == NULL || len > NGX_STREAM_APISIX_METRICS_TAG_LEN) {
+        return NGX_ERROR;
+    }
+
+    s = r->session;
+
+    ctx = ngx_stream_apisix_metrics_get_ctx(s);
+    if (ctx == NULL || ctx->listen_slot == NULL
+        || ngx_stream_apisix_metrics_sh == NULL)
+    {
+        return NGX_DECLINED;
+    }
+
+    if (len == 0) {
+        slot = ctx->listen_slot;
+
+    } else {
+        tag.len = len;
+        tag.data = (u_char *) data;
+
+        slot = ngx_stream_apisix_metrics_tagged_slot(ctx->listen_slot, &tag);
+        if (slot == NULL) {
+            return NGX_BUSY;
+        }
+    }
+
+    if (slot == ctx->slot) {
+        return NGX_OK;
+    }
+
+    ngx_stream_apisix_metrics_flush(s, ctx);
+
+    /* raise the new slot first so that the per address sum never dips */
+    if (ctx->counted) {
+        (void) ngx_atomic_fetch_add(&slot->active, 1);
+        (void) ngx_atomic_fetch_add(&ctx->slot->active, -1);
+    }
+
+    ctx->slot = slot;
+
+    return NGX_OK;
+}
+
+
+ngx_int_t
+ngx_stream_apisix_metrics_size(void)
+{
+    ngx_stream_apisix_metrics_sh_t  *sh;
+
+    sh = ngx_stream_apisix_metrics_sh;
+    if (sh == NULL) {
+        return NGX_ERROR;
+    }
+
+    return (ngx_int_t) sh->nused;
+}
+
+
 ngx_int_t
 ngx_stream_apisix_metrics_dump(ngx_stream_apisix_metrics_entry_t *entries,
     ngx_uint_t max)
@@ -882,6 +1046,10 @@ ngx_stream_apisix_metrics_dump(ngx_stream_apisix_metrics_entry_t *entries,
         entries[i].addr_len = ngx_min(slot->addr_len,
                                       NGX_STREAM_APISIX_METRICS_ADDR_LEN);
         ngx_memcpy(entries[i].addr, slot->addr, entries[i].addr_len);
+
+        entries[i].tag_len = ngx_min(slot->tag_len,
+                                     NGX_STREAM_APISIX_METRICS_TAG_LEN);
+        ngx_memcpy(entries[i].tag, slot->tag, entries[i].tag_len);
 
         entries[i].active = (uint64_t) slot->active;
 
