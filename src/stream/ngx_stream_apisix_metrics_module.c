@@ -984,16 +984,14 @@ ngx_stream_apisix_metrics_set_labels(void *req, const u_char *data, size_t len)
 
     r = req;
 
-    if (r == NULL || len > NGX_STREAM_APISIX_METRICS_LABELS_LEN) {
+    if (len > NGX_STREAM_APISIX_METRICS_LABELS_LEN) {
         return NGX_ERROR;
     }
 
     s = r->session;
 
     ctx = ngx_stream_apisix_metrics_get_ctx(s);
-    if (ctx == NULL || ctx->listen_slot == NULL
-        || ngx_stream_apisix_metrics_sh == NULL)
-    {
+    if (ctx == NULL || ctx->listen_slot == NULL) {
         return NGX_DECLINED;
     }
 

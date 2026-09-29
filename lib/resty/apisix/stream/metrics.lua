@@ -114,15 +114,8 @@ function _M.dump()
         entries_size = size
     end
 
-    if size == 0 then
-        return {}
-    end
-
     -- slots claimed after the size was taken are simply read next time
     local n = tonumber(C.ngx_stream_apisix_metrics_dump(entries, entries_size))
-    if n < 0 then
-        return nil, "stream metrics zone is not configured"
-    end
 
     local res = {}
     for i = 0, n - 1 do
@@ -151,10 +144,6 @@ end
 function _M.set_labels(labels)
     if subsystem ~= "stream" then
         return nil, "only available in the stream subsystem"
-    end
-
-    if not has_dump then
-        return nil, "this runtime has no stream metrics support"
     end
 
     -- a map or an array with holes would otherwise join to fewer values than
