@@ -192,9 +192,6 @@ static ngx_stream_apisix_metrics_slot_t
 
 static ngx_str_t  ngx_stream_apisix_metrics_no_labels = ngx_null_string;
 
-/* the zone running out of slots for labels is logged once per worker */
-static ngx_uint_t  ngx_stream_apisix_metrics_full_logged = 0;
-
 
 static void *
 ngx_stream_apisix_metrics_create_main_conf(ngx_conf_t *cf)
@@ -487,7 +484,6 @@ ngx_stream_apisix_metrics_init_process(ngx_cycle_t *cycle)
 
     ngx_memzero(ngx_stream_apisix_metrics_cache,
                 sizeof(ngx_stream_apisix_metrics_cache));
-    ngx_stream_apisix_metrics_full_logged = 0;
 
     ngx_stream_apisix_metrics_bind_zone(cycle);
 
@@ -995,26 +991,13 @@ ngx_stream_apisix_metrics_set_labels(void *req, const u_char *data, size_t len)
         return NGX_DECLINED;
     }
 
-    if (len == 0) {
-        slot = ctx->listen_slot;
+    /* empty labels find the unlabelled slot, which is keyed the same way */
+    labels.len = len;
+    labels.data = (u_char *) data;
 
-    } else {
-        labels.len = len;
-        labels.data = (u_char *) data;
-
-        slot = ngx_stream_apisix_metrics_labelled_slot(ctx->listen_slot,
-                                                       &labels);
-        if (slot == NULL) {
-            if (!ngx_stream_apisix_metrics_full_logged) {
-                ngx_stream_apisix_metrics_full_logged = 1;
-                ngx_log_error(NGX_LOG_WARN, s->connection->log, 0,
-                              "apisix stream metrics zone has no slot left "
-                              "for labelled sessions, new labels stay on "
-                              "their listening address");
-            }
-
-            return NGX_BUSY;
-        }
+    slot = ngx_stream_apisix_metrics_labelled_slot(ctx->listen_slot, &labels);
+    if (slot == NULL) {
+        return NGX_BUSY;
     }
 
     if (slot == ctx->slot) {

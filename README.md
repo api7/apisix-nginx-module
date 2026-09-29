@@ -109,7 +109,7 @@ empty array moves the session back to the unlabelled entry.
   the rest.
 - When no slot is left for labels, `set_labels` returns
   `nil, "stream metrics zone is full"` and the session stays on the slot it
-  already had. Each worker logs this once, at `warn`.
+  already had.
 - Each worker caches the slots of the last 256 or so sets of labels it used.
   More sets than that in active use still work, but a session may then have
   to look its slot up across the whole zone.

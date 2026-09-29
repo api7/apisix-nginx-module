@@ -581,7 +581,6 @@ apisix_stream_metrics_zone 32k;
 --- error_log
 set_labels: stream metrics zone is full
 bytes on the last label: true
-apisix stream metrics zone has no slot left for labelled sessions
 
 
 
