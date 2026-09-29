@@ -19,6 +19,13 @@
 
 #define NGX_STREAM_APISIX_METRICS_ADDR_LEN             128
 
+/*
+ * Room for the label values of a session, which the Lua side joins into one
+ * byte string: for instance an APISIX object id (at most 256 bytes) together
+ * with its name
+ */
+#define NGX_STREAM_APISIX_METRICS_LABELS_LEN           512
+
 
 /*
  * Why a session ended. nginx keeps `s->status` at 200 for every failure that
@@ -44,10 +51,16 @@ typedef enum {
 } ngx_stream_apisix_reason_e;
 
 
-/* the layout Lua reads through FFI, one entry per listening address */
+/*
+ * The layout Lua reads through FFI, one entry per listening address and set
+ * of label values. The unlabelled entry of an address holds every session
+ * that was never labelled.
+ */
 typedef struct {
     u_char        addr[NGX_STREAM_APISIX_METRICS_ADDR_LEN];
     uint32_t      addr_len;
+    uint32_t      labels_len;
+    u_char        labels[NGX_STREAM_APISIX_METRICS_LABELS_LEN];
     uint64_t      active;
     uint64_t      bytes[NGX_STREAM_APISIX_METRICS_DIRECTIONS];
 } ngx_stream_apisix_metrics_entry_t;
@@ -68,6 +81,9 @@ void ngx_stream_apisix_metrics_finalize(ngx_stream_session_t *s,
 /* called from Lua through FFI */
 ngx_int_t ngx_stream_apisix_metrics_dump(
     ngx_stream_apisix_metrics_entry_t *entries, ngx_uint_t max);
+ngx_int_t ngx_stream_apisix_metrics_size(void);
+ngx_int_t ngx_stream_apisix_metrics_set_labels(void *r, const u_char *labels,
+    size_t len);
 
 
 #endif /* _NGX_STREAM_APISIX_METRICS_H_INCLUDED_ */

@@ -20,12 +20,13 @@ context: `stream`
 
 default: off
 
-Reserve a shared memory zone that collects, per stream listening address, the
-number of active sessions and the bytes transferred in the four directions
-(downstream/upstream × ingress/egress). A session accumulates locally and
-merges into the zone once per forwarding pass, so the counters keep moving
-during a long-lived connection while the inner read/write loop still costs a
-single atomic per direction. Without this directive nothing is collected.
+Reserve a shared memory zone that collects, per stream listening address (and
+per set of labels, see below), the number of active sessions and the bytes
+transferred in the four directions (downstream/upstream × ingress/egress). A
+session accumulates locally and merges into the zone once per forwarding pass,
+so the counters keep moving during a long-lived connection while the inner
+read/write loop still costs a single atomic per direction. Without this
+directive nothing is collected.
 
 example:
 
@@ -72,10 +73,48 @@ Read the counters from Lua with `resty.apisix.stream.metrics`:
 ```lua
 local metrics = require("resty.apisix.stream.metrics")
 local res, err = metrics.dump()
--- res[i] = { listen_addr = "0.0.0.0:9100", active = 3,
+-- res[i] = { listen_addr = "0.0.0.0:9100", labels = {}, active = 3,
 --            downstream_ingress = 12, downstream_egress = 34,
 --            upstream_egress = 12, upstream_ingress = 34 }
 ```
+
+A session can be split out of its listening address by labelling it, typically
+from `preread_by_lua*` once it is known what the session belongs to. The
+labels are label values, in the order the caller's own metric declares its
+labels; the names stay with the caller:
+
+```lua
+local ok, err = metrics.set_labels({ "svc-a", "order" })
+```
+
+From then on its active count and the bytes it moves are accounted on the slot
+of its listening address and labels, which `dump()` reports as a separate entry
+with those values in `labels`. Bytes stay on the entry they were counted on:
+what a session moved before it was first labelled, and every session that is
+never labelled, stays on the unlabelled entry (`labels = {}`), and what it
+moved under one set of labels stays there if it is labelled again later. The
+entries of one listening address therefore always add up to its total. An
+empty array moves the session back to the unlabelled entry.
+
+- The values are joined into one byte string of at most 512 bytes, `\31`
+  between them, so a value cannot contain `\31`. An array holding just `""`
+  joins to the same empty string as `{}` and is the unlabelled entry too.
+- A slot is claimed the first time a worker sees a set of labels on a listening
+  address and, like any slot, is kept until the process restarts, so label
+  values must come from a bounded set.
+- A slot takes about 690 bytes and only half of the zone is handed out, so a
+  zone holds about `size / 2 / 690` slots: about 760 for `1m`. A quarter of
+  them is kept for listening addresses, which labels cannot take, so that an
+  address added by a later reload is still counted when labels have filled
+  the rest.
+- When no slot is left for labels, `set_labels` returns
+  `nil, "stream metrics zone is full"` and the session stays on the slot it
+  already had.
+- Each worker caches the slots of the last 256 or so sets of labels it used.
+  More sets than that in active use still work, but a session may then have
+  to look its slot up across the whole zone.
+- Without a zone, or on a listening address that is not accounted for,
+  `set_labels` returns `nil, "not accounted"`.
 
 ## Variable
 

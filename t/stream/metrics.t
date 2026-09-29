@@ -326,3 +326,317 @@ GET /probe
 done
 --- error_log
 tls reason: client_read_error
+
+
+
+=== TEST 11: a labelled session is accounted on the slot of its label
+--- stream_config
+apisix_stream_metrics_zone 1m;
+--- stream_server_config
+    preread_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        assert(metrics.set_labels({"svc-a"}))
+    }
+    proxy_pass 127.0.0.1:1994;
+--- config
+    location /probe {
+        content_by_lua_block {
+            local metrics = require("resty.apisix.stream.metrics")
+
+            local function show(label)
+                for _, e in ipairs(assert(metrics.dump())) do
+                    ngx.say(label, " ", e.listen_addr, " labels=", table.concat(e.labels, ","),
+                            " active=", e.active,
+                            " di=", e.downstream_ingress,
+                            " ue=", e.upstream_egress)
+                end
+            end
+
+            local sock = ngx.socket.tcp()
+            local ok, err = sock:connect("127.0.0.1", $TEST_NGINX_SERVER_PORT + 1)
+            if not ok then
+                ngx.say("connect: ", err)
+                return
+            end
+
+            -- a partial request, so the upstream keeps the session open
+            assert(sock:send("GET / HTTP/1.0\r\n"))
+            ngx.sleep(0.3)
+            show("open")
+
+            assert(sock:close())
+            ngx.sleep(0.3)
+            show("closed")
+        }
+    }
+--- request
+GET /probe
+--- response_body
+open 0.0.0.0:1985 labels= active=0 di=0 ue=0
+open 0.0.0.0:1985 labels=svc-a active=1 di=16 ue=16
+closed 0.0.0.0:1985 labels= active=0 di=0 ue=0
+closed 0.0.0.0:1985 labels=svc-a active=0 di=16 ue=16
+--- no_error_log
+[error]
+
+
+
+=== TEST 12: an empty label moves the session back to the unlabelled slot
+--- stream_config
+apisix_stream_metrics_zone 1m;
+--- stream_server_config
+    preread_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        assert(metrics.set_labels({"svc-a"}))
+        assert(metrics.set_labels({}))
+    }
+    proxy_pass 127.0.0.1:1994;
+--- config
+    location /probe {
+        content_by_lua_block {
+            local metrics = require("resty.apisix.stream.metrics")
+
+            local sock = ngx.socket.tcp()
+            local ok, err = sock:connect("127.0.0.1", $TEST_NGINX_SERVER_PORT + 1)
+            if not ok then
+                ngx.say("connect: ", err)
+                return
+            end
+
+            assert(sock:send("GET / HTTP/1.0\r\n"))
+            ngx.sleep(0.3)
+
+            for _, e in ipairs(assert(metrics.dump())) do
+                ngx.say("labels=", table.concat(e.labels, ","), " active=", e.active,
+                        " di=", e.downstream_ingress)
+            end
+
+            assert(sock:close())
+        }
+    }
+--- request
+GET /probe
+--- response_body
+labels= active=1 di=16
+labels=svc-a active=0 di=0
+--- no_error_log
+[error]
+
+
+
+=== TEST 13: a label gets one slot per listening address, reused across sessions
+--- stream_config
+apisix_stream_metrics_zone 1m;
+
+server {
+    listen 127.0.0.1:1986;
+    preread_by_lua_block {
+        assert(require("resty.apisix.stream.metrics").set_labels({"svc-a"}))
+    }
+    proxy_pass 127.0.0.1:1994;
+}
+--- stream_server_config
+    preread_by_lua_block {
+        assert(require("resty.apisix.stream.metrics").set_labels({"svc-a"}))
+    }
+    proxy_pass 127.0.0.1:1994;
+--- config
+    location /probe {
+        content_by_lua_block {
+            local metrics = require("resty.apisix.stream.metrics")
+
+            local function roundtrip(port)
+                local sock = ngx.socket.tcp()
+                assert(sock:connect("127.0.0.1", port))
+                assert(sock:send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"))
+                assert(sock:receive("*a"))
+                assert(sock:close())
+            end
+
+            roundtrip($TEST_NGINX_SERVER_PORT + 1)
+            roundtrip($TEST_NGINX_SERVER_PORT + 1)
+            roundtrip(1986)
+            ngx.sleep(0.3)
+
+            local res = assert(metrics.dump())
+            table.sort(res, function(a, b)
+                return a.listen_addr .. table.concat(a.labels, ",")
+                       < b.listen_addr .. table.concat(b.labels, ",")
+            end)
+
+            for _, e in ipairs(res) do
+                ngx.say(e.listen_addr, " labels=", table.concat(e.labels, ","),
+                        " active=", e.active,
+                        " sessions=", e.downstream_ingress / 35)
+            end
+        }
+    }
+--- request
+GET /probe
+--- response_body
+0.0.0.0:1985 labels= active=0 sessions=0
+0.0.0.0:1985 labels=svc-a active=0 sessions=2
+127.0.0.1:1986 labels= active=0 sessions=0
+127.0.0.1:1986 labels=svc-a active=0 sessions=1
+--- no_error_log
+[error]
+
+
+
+=== TEST 14: invalid labels and the http subsystem are refused
+--- stream_config
+apisix_stream_metrics_zone 1m;
+--- stream_server_config
+    preread_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        local ok, err = metrics.set_labels({string.rep("a", 256), string.rep("b", 256)})
+        ngx.log(ngx.WARN, "long: ", ok, " ", err)
+        ok, err = metrics.set_labels("svc-a")
+        ngx.log(ngx.WARN, "not an array: ", ok, " ", err)
+        ok, err = metrics.set_labels({service = "svc-a"})
+        ngx.log(ngx.WARN, "a map: ", ok, " ", err)
+        ok, err = metrics.set_labels({"svc-a", nil, "order"})
+        ngx.log(ngx.WARN, "a hole: ", ok, " ", err)
+        ok, err = metrics.set_labels({"svc-a", 1})
+        ngx.log(ngx.WARN, "number: ", ok, " ", err)
+        ok, err = metrics.set_labels({"svc\31a"})
+        ngx.log(ngx.WARN, "separator: ", ok, " ", err)
+        ok, err = metrics.set_labels({string.rep("a", 255), string.rep("b", 256)})
+        ngx.log(ngx.WARN, "longest: ", ok, " ", err)
+    }
+    proxy_pass 127.0.0.1:1994;
+--- config
+    location /probe {
+        content_by_lua_block {
+            local metrics = require("resty.apisix.stream.metrics")
+            ngx.say(metrics.set_labels({"svc-a"}))
+
+            local sock = ngx.socket.tcp()
+            assert(sock:connect("127.0.0.1", $TEST_NGINX_SERVER_PORT + 1))
+            assert(sock:send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"))
+            assert(sock:receive("*a"))
+            assert(sock:close())
+        }
+    }
+--- request
+GET /probe
+--- response_body
+nilonly available in the stream subsystem
+--- error_log
+long: nil labels take more than 512 bytes
+not an array: nil labels must be an array of strings
+a map: nil labels must be an array of strings
+a hole: nil labels must be an array of strings
+number: nil label 2 must be a string
+separator: nil label 1 contains the \31 separator
+longest: true nil
+
+
+
+=== TEST 15: labelling without a zone is reported as not accounted
+--- stream_config
+# intentionally no apisix_stream_metrics_zone here
+--- stream_server_config
+    preread_by_lua_block {
+        local ok, err = require("resty.apisix.stream.metrics").set_labels({"svc-a"})
+        ngx.log(ngx.WARN, "set_labels: ", ok, " ", err)
+    }
+    proxy_pass 127.0.0.1:1994;
+--- stream_request eval
+"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"
+--- stream_response_like: hello
+--- error_log
+set_labels: nil not accounted
+
+
+
+=== TEST 16: a full zone keeps the session on the slot it already has
+--- stream_config
+apisix_stream_metrics_zone 32k;
+--- stream_server_config
+    preread_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        for i = 1, 1000 do
+            local ok, err = metrics.set_labels({"svc-" .. i})
+            if not ok then
+                ngx.ctx.last = i - 1
+                ngx.log(ngx.WARN, "set_labels: ", err)
+                break
+            end
+        end
+    }
+    proxy_pass 127.0.0.1:1994;
+    log_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        local want = "svc-" .. ngx.ctx.last
+        for _, e in ipairs(assert(metrics.dump())) do
+            if e.downstream_ingress > 0 then
+                ngx.log(ngx.WARN, "bytes on the last label: ", table.concat(e.labels, ",") == want)
+            end
+        end
+    }
+--- stream_request eval
+"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"
+--- stream_response_like: hello
+--- error_log
+set_labels: stream metrics zone is full
+bytes on the last label: true
+
+
+
+=== TEST 17: bytes stay on the entry they were counted on when the label changes
+Labelling again from the log phase, after every byte has moved, must not carry
+what was counted under the first label over to the second one.
+--- stream_config
+apisix_stream_metrics_zone 1m;
+--- stream_server_config
+    preread_by_lua_block {
+        assert(require("resty.apisix.stream.metrics").set_labels({"svc-a"}))
+    }
+    proxy_pass 127.0.0.1:1994;
+    log_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        assert(metrics.set_labels({"svc-b"}))
+
+        for _, e in ipairs(assert(metrics.dump())) do
+            ngx.log(ngx.WARN, "labels=", table.concat(e.labels, ","), " di=", e.downstream_ingress,
+                    " de=", e.downstream_egress)
+        end
+    }
+--- stream_request eval
+"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"
+--- stream_response_like: hello
+--- error_log eval
+[qr/labels= di=0 de=0/, qr/labels=svc-a di=35 de=[1-9]\d*/, qr/labels=svc-b di=0 de=0/]
+--- no_error_log
+[error]
+
+
+
+=== TEST 18: several label values are one slot, returned in order
+A set of values is its own slot: {"svc-a", "order"} is not {"svc-a"}, and an
+empty value keeps its position.
+--- stream_config
+apisix_stream_metrics_zone 1m;
+--- stream_server_config
+    preread_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        assert(metrics.set_labels({"svc-a"}))
+        assert(metrics.set_labels({"svc-a", "", "order"}))
+    }
+    proxy_pass 127.0.0.1:1994;
+    log_by_lua_block {
+        local metrics = require("resty.apisix.stream.metrics")
+        for _, e in ipairs(assert(metrics.dump())) do
+            ngx.log(ngx.WARN, "n=", #e.labels, " labels=", table.concat(e.labels, "|"),
+                    " di=", e.downstream_ingress)
+        end
+    }
+--- stream_request eval
+"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n"
+--- stream_response_like: hello
+--- error_log eval
+[qr/n=0 labels= di=0/, qr/n=1 labels=svc-a di=0/, qr/n=3 labels=svc-a\|\|order di=35/]
+--- no_error_log
+[error]
+
