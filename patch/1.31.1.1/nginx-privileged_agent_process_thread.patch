@@ -1,0 +1,14 @@
+diff --git src/core/ngx_thread_pool.c src/core/ngx_thread_pool.c
+index 23ae201..4a64ab5 100644
+--- src/core/ngx_thread_pool.c
++++ src/core/ngx_thread_pool.c
+@@ -622,6 +622,9 @@ ngx_thread_pool_exit_worker(ngx_cycle_t *cycle)
+     ngx_thread_pool_conf_t   *tcf;
+ 
+     if (ngx_process != NGX_PROCESS_WORKER
++#if HAVE_PRIVILEGED_PROCESS_PATCH
++        && !ngx_is_privileged_agent
++#endif
+         && ngx_process != NGX_PROCESS_SINGLE)
+     {
+         return;
