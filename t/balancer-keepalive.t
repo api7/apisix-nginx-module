@@ -1438,8 +1438,8 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 --- response_body
 requests=1
 requests=1
---- no_error_log
-get keepalive peer
+--- grep_error_log eval: qr/get keepalive peer/
+--- grep_error_log_out
 
 
 
