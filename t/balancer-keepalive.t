@@ -21,6 +21,10 @@ our $UpstreamSrvConfig = <<_EOC_;
             return 200 'SNI=\$ssl_server_name\\n';
         }
 
+        location = /echo_connection_requests {
+            return 200 'requests=\$connection_requests\\n';
+        }
+
         location = /echo_addrs {
             return 200 'server=\$server_addr client=\$remote_addr\\n';
         }
@@ -1228,8 +1232,6 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 === TEST 28: enable_keepalive: is superseded by a subsequent 'keepalive' directive
 In this case, the upstream_keepalive_module pool gets queried but is always
 empty, as peers always get saved by the Lua pooling.
---- skip_nginx
-3: >= 1.31.1
 --- http_upstream
     upstream test_upstream {
         server 0.0.0.1;
@@ -1413,11 +1415,7 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 
 
 
-=== TEST 32: enable_keepalive: is not superseded by a subsequent 'keepalive' directive
-Since nginx 1.31.1 the keepalive module wraps upstreams after their balancers
-are set up, so the Lua balancer stays outside it whatever the directive order.
---- skip_nginx
-3: < 1.31.1
+=== TEST 32: no 'keepalive' directive: peers set by Lua are not pooled
 --- http_upstream
     upstream test_upstream {
         server 0.0.0.1;
@@ -1430,10 +1428,32 @@ are set up, so the Lua balancer stays outside it whatever the directive order.
                 ngx.log(ngx.ERR, "failed to set current peer: ", err)
                 return
             end
+        }
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_connection_requests' -q 'sni=one';
+        echo_subrequest GET '/proxy/echo_connection_requests' -q 'sni=one';
+    }
+--- response_body
+requests=1
+requests=1
+--- no_error_log
+get keepalive peer
 
-            local ok, err = b.enable_keepalive()
+
+
+=== TEST 33: 'keepalive' after balancer_by_lua pools peers set by Lua by address
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local ok, err = b.set_current_peer("127.0.0.1", $TEST_NGINX_SERVER_SSL_PORT)
             if not ok then
-                ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+                ngx.log(ngx.ERR, "failed to set current peer: ", err)
                 return
             end
         }
@@ -1442,17 +1462,12 @@ are set up, so the Lua balancer stays outside it whatever the directive order.
     }
 --- config
     location = /t {
-        echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
-        echo_subrequest GET '/proxy/echo_sni' -q 'sni=two';
+        echo_subrequest GET '/proxy/echo_connection_requests' -q 'sni=one';
+        echo_subrequest GET '/proxy/echo_connection_requests' -q 'sni=one';
     }
 --- response_body
-SNI=one
-SNI=two
---- grep_error_log eval: qr/(?:lua balancer: keepalive .*|(?:get|free) keepalive peer)/
---- grep_error_log_out eval
-qr/^lua balancer: keepalive create pool, name: \S+, size: 30
-lua balancer: keepalive no free connection, cpool: \S+
-lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
-lua balancer: keepalive create pool, name: \S+, size: 30
-lua balancer: keepalive no free connection, cpool: \S+
-lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
+requests=1
+requests=2
+--- grep_error_log eval: qr/get keepalive peer: using connection/
+--- grep_error_log_out
+get keepalive peer: using connection

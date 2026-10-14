@@ -1,19 +1,30 @@
 diff --git src/http/modules/ngx_http_upstream_keepalive_module.c src/http/modules/ngx_http_upstream_keepalive_module.c
-index c605e98..a44dcf5 100644
+index c605e98..6437707 100644
 --- src/http/modules/ngx_http_upstream_keepalive_module.c
 +++ src/http/modules/ngx_http_upstream_keepalive_module.c
-@@ -554,9 +554,19 @@ ngx_http_upstream_keepalive_init_main_conf(ngx_conf_t *cf, void *conf)
+@@ -23,6 +23,10 @@ typedef struct {
+ 
+     ngx_uint_t                         local; /* unsigned  local:1; */
+ 
++#if (NGX_HTTP_APISIX)
++    unsigned                           after_balancer:1;
++#endif
++
+ } ngx_http_upstream_keepalive_srv_conf_t;
+ 
+ 
+@@ -554,9 +558,19 @@ ngx_http_upstream_keepalive_init_main_conf(ngx_conf_t *cf, void *conf)
              kcf->max_cached = 32;
          }
  
 -        kcf->original_init_peer = uscfp[i]->peer.init;
 +#if (NGX_HTTP_APISIX)
-+        if (uscfp[i]->inner_init_peer) {
++        if (uscfp[i]->inner_init_peer && !kcf->after_balancer) {
 +            kcf->original_init_peer = *uscfp[i]->inner_init_peer;
++
++            *uscfp[i]->inner_init_peer = ngx_http_upstream_init_keepalive_peer;
  
 -        uscfp[i]->peer.init = ngx_http_upstream_init_keepalive_peer;
-+            *uscfp[i]->inner_init_peer = ngx_http_upstream_init_keepalive_peer;
-+
 +        } else
 +#endif
 +        {
@@ -24,6 +35,28 @@ index c605e98..a44dcf5 100644
  
          /* allocate cache items and add to free queue */
  
+@@ -586,11 +600,21 @@ ngx_http_upstream_keepalive(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+ 
+     ngx_int_t    n;
+     ngx_str_t   *value;
++#if (NGX_HTTP_APISIX)
++    ngx_http_upstream_srv_conf_t  *uscf;
++#endif
+ 
+     if (kcf->max_cached != NGX_CONF_UNSET_UINT) {
+         return "is duplicate";
+     }
+ 
++#if (NGX_HTTP_APISIX)
++    uscf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_upstream_module);
++
++    /* like before nginx 1.29.7, wrap the balancers declared above */
++    kcf->after_balancer = uscf->peer.init_upstream != NULL;
++#endif
++
+     /* read options */
+ 
+     value = cf->args->elts;
 diff --git src/http/ngx_http_upstream.h src/http/ngx_http_upstream.h
 index 4675a91..970b5c4 100644
 --- src/http/ngx_http_upstream.h
