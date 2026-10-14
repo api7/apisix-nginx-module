@@ -206,3 +206,60 @@ err: key too long
 --- response_body
 rc: -1
 err: key too long
+
+
+
+=== TEST 10: accept a 65535-byte key in store
+--- http_config
+    lua_shared_dict dict 1m;
+--- config
+    location = /t {
+        content_by_lua_block {
+            local ffi = require "ffi"
+            require "resty.core.shdict"
+            local C = ffi.C
+
+            local zone = C.ngx_meta_lua_ffi_shdict_udata_to_zone(ngx.shared.dict[1])
+            local key = string.rep("a", 65535)
+            local errmsg = ffi.new("char *[1]")
+            local forcible = ffi.new("int[1]")
+
+            -- op 0 is set, value_type 3 is a number
+            local rc = C.ngx_meta_lua_ffi_shdict_store(zone, 0, key, #key, 3,
+                                                       nil, 0, 1, 0, 0,
+                                                       errmsg, forcible)
+            ngx.say("rc: ", rc)
+            ngx.say("value: ", ngx.shared.dict:get(key))
+        }
+    }
+--- response_body
+rc: 0
+value: 1
+
+
+
+=== TEST 11: accept a 65535-byte key in incr
+--- http_config
+    lua_shared_dict dict 1m;
+--- config
+    location = /t {
+        content_by_lua_block {
+            local ffi = require "ffi"
+            require "resty.core.shdict"
+            local C = ffi.C
+
+            local zone = C.ngx_meta_lua_ffi_shdict_udata_to_zone(ngx.shared.dict[1])
+            local key = string.rep("a", 65535)
+            local value = ffi.new("double[1]", 1)
+            local err = ffi.new("char *[1]")
+            local forcible = ffi.new("int[1]")
+
+            local rc = C.ngx_meta_lua_ffi_shdict_incr(zone, key, #key, value,
+                                                      err, 1, 0, 0, forcible)
+            ngx.say("rc: ", rc)
+            ngx.say("value: ", ngx.shared.dict:get(key))
+        }
+    }
+--- response_body
+rc: 0
+value: 1
