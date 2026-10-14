@@ -1471,3 +1471,30 @@ requests=2
 --- grep_error_log eval: qr/get keepalive peer: using connection/
 --- grep_error_log_out
 get keepalive peer: using connection
+
+
+
+=== TEST 34: a successful response leaves the balancer tries count alone
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local ok, err = b.set_current_peer("127.0.0.1", $TEST_NGINX_SERVER_SSL_PORT)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set current peer: ", err)
+                return
+            end
+        }
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
+    }
+--- response_body
+SNI=one
+--- grep_error_log eval: qr/free peer, tries: \d+/
+--- grep_error_log_out
+free peer, tries: 1
