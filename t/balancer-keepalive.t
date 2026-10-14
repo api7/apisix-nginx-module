@@ -1228,6 +1228,8 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
 === TEST 28: enable_keepalive: is superseded by a subsequent 'keepalive' directive
 In this case, the upstream_keepalive_module pool gets queried but is always
 empty, as peers always get saved by the Lua pooling.
+--- skip_nginx
+3: >= 1.31.1
 --- http_upstream
     upstream test_upstream {
         server 0.0.0.1;
@@ -1406,5 +1408,51 @@ lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|\|1\|host-c\|x, s
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
 lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|\|1\|host-c\|y, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
+lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
+
+
+
+=== TEST 32: enable_keepalive: is not superseded by a subsequent 'keepalive' directive
+Since nginx 1.31.1 the keepalive module wraps upstreams after their balancers
+are set up, so the Lua balancer stays outside it whatever the directive order.
+--- skip_nginx
+3: < 1.31.1
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local ok, err = b.set_current_peer("127.0.0.1", $TEST_NGINX_SERVER_SSL_PORT)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set current peer: ", err)
+                return
+            end
+
+            local ok, err = b.enable_keepalive()
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+                return
+            end
+        }
+
+        keepalive 10;
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=two';
+    }
+--- response_body
+SNI=one
+SNI=two
+--- grep_error_log eval: qr/(?:lua balancer: keepalive .*|(?:get|free) keepalive peer)/
+--- grep_error_log_out eval
+qr/^lua balancer: keepalive create pool, name: \S+, size: 30
+lua balancer: keepalive no free connection, cpool: \S+
+lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
+lua balancer: keepalive create pool, name: \S+, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/

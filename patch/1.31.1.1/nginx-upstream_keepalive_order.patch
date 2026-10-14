@@ -1,0 +1,42 @@
+diff --git src/http/modules/ngx_http_upstream_keepalive_module.c src/http/modules/ngx_http_upstream_keepalive_module.c
+index c605e98..a44dcf5 100644
+--- src/http/modules/ngx_http_upstream_keepalive_module.c
++++ src/http/modules/ngx_http_upstream_keepalive_module.c
+@@ -554,9 +554,19 @@ ngx_http_upstream_keepalive_init_main_conf(ngx_conf_t *cf, void *conf)
+             kcf->max_cached = 32;
+         }
+ 
+-        kcf->original_init_peer = uscfp[i]->peer.init;
++#if (NGX_HTTP_APISIX)
++        if (uscfp[i]->inner_init_peer) {
++            kcf->original_init_peer = *uscfp[i]->inner_init_peer;
+ 
+-        uscfp[i]->peer.init = ngx_http_upstream_init_keepalive_peer;
++            *uscfp[i]->inner_init_peer = ngx_http_upstream_init_keepalive_peer;
++
++        } else
++#endif
++        {
++            kcf->original_init_peer = uscfp[i]->peer.init;
++
++            uscfp[i]->peer.init = ngx_http_upstream_init_keepalive_peer;
++        }
+ 
+         /* allocate cache items and add to free queue */
+ 
+diff --git src/http/ngx_http_upstream.h src/http/ngx_http_upstream.h
+index 4675a91..970b5c4 100644
+--- src/http/ngx_http_upstream.h
++++ src/http/ngx_http_upstream.h
+@@ -149,6 +149,11 @@ struct ngx_http_upstream_srv_conf_s {
+     ngx_resolver_t                  *resolver;
+     ngx_msec_t                       resolver_timeout;
+ #endif
++
++#if (NGX_HTTP_APISIX)
++    /* set by a balancer that must stay outside the keepalive module */
++    ngx_http_upstream_init_peer_pt  *inner_init_peer;
++#endif
+ };
+ 
+ 

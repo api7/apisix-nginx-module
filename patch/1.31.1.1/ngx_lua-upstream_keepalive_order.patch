@@ -1,0 +1,16 @@
+diff --git src/ngx_http_lua_balancer.c src/ngx_http_lua_balancer.c
+index 3948881..43f3ae4 100644
+--- src/ngx_http_lua_balancer.c
++++ src/ngx_http_lua_balancer.c
+@@ -347,6 +347,11 @@ ngx_http_lua_balancer_init(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
+ 
+     us->peer.init = ngx_http_lua_balancer_init_peer;
+ 
++#if (NGX_HTTP_APISIX)
++    /* keep the keepalive module inside the Lua balancer */
++    us->inner_init_peer = &lscf->balancer.original_init_peer;
++#endif
++
+     return NGX_OK;
+ }
+ 
