@@ -422,6 +422,152 @@ ngx_http_apisix_get_upstream_ssl_verify(ngx_http_request_t *r, ngx_flag_t proxy_
 
     return ctx->upstream_ssl_verify;
 }
+
+
+static int         ngx_http_apisix_store_id_index = -1;
+static ngx_uint_t  ngx_http_apisix_store_id_next;
+
+
+/* a store's address can be reused after it is freed, its id is not */
+static ngx_int_t
+ngx_http_apisix_trusted_store_id(X509_STORE *store, ngx_uint_t *id)
+{
+    void  *data;
+
+    if (ngx_http_apisix_store_id_index == -1) {
+        ngx_http_apisix_store_id_index =
+            X509_STORE_get_ex_new_index(0, NULL, NULL, NULL, NULL);
+
+        if (ngx_http_apisix_store_id_index == -1) {
+            return NGX_ERROR;
+        }
+    }
+
+    data = X509_STORE_get_ex_data(store, ngx_http_apisix_store_id_index);
+
+    if (data == NULL) {
+        data = (void *) (uintptr_t) ++ngx_http_apisix_store_id_next;
+
+        if (X509_STORE_set_ex_data(store, ngx_http_apisix_store_id_index,
+                                   data)
+            == 0)
+        {
+            return NGX_ERROR;
+        }
+    }
+
+    *id = (uintptr_t) data;
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_http_apisix_cert_chain_digest(STACK_OF(X509) *chain, u_char *out)
+{
+    int            i;
+    unsigned int   n;
+    u_char         md[EVP_MAX_MD_SIZE];
+    EVP_MD_CTX    *mdctx;
+    ngx_int_t      rc = NGX_ERROR;
+
+    mdctx = EVP_MD_CTX_new();
+    if (mdctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    if (EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL) == 0) {
+        goto done;
+    }
+
+    for (i = 0; i < (int) sk_X509_num(chain); i++) {
+        if (X509_digest(sk_X509_value(chain, i), EVP_sha256(), md, &n) == 0
+            || EVP_DigestUpdate(mdctx, md, n) == 0)
+        {
+            goto done;
+        }
+    }
+
+    if (EVP_DigestFinal_ex(mdctx, out, &n) == 0) {
+        goto done;
+    }
+
+    rc = NGX_OK;
+
+done:
+
+    EVP_MD_CTX_free(mdctx);
+
+    return rc;
+}
+
+
+/* identity of the per-request upstream TLS settings, empty when none is set */
+ngx_int_t
+ngx_http_apisix_upstream_ssl_id(ngx_http_request_t *r, ngx_str_t *id)
+{
+    u_char                      *p;
+    u_char                       md[SHA256_DIGEST_LENGTH];
+    ngx_uint_t                   store_id;
+    ngx_http_apisix_ctx_t       *ctx;
+
+    ngx_str_null(id);
+
+    ctx = ngx_http_get_module_ctx(r, ngx_http_apisix_module);
+
+    if (ctx == NULL || !ngx_http_apisix_is_upstream_ssl_overridden(r)) {
+        return NGX_OK;
+    }
+
+    p = ngx_pnalloc(r->pool, sizeof("c=,s=,v=") - 1
+                             + 2 * SHA256_DIGEST_LENGTH + NGX_INT_T_LEN + 1);
+    if (p == NULL) {
+        return NGX_ERROR;
+    }
+
+    id->data = p;
+
+    p = ngx_cpymem(p, "c=", 2);
+
+    if (ctx->upstream_cert != NULL) {
+        if (ngx_http_apisix_cert_chain_digest(ctx->upstream_cert, md)
+            != NGX_OK)
+        {
+            goto failed;
+        }
+
+        p = ngx_hex_dump(p, md, SHA256_DIGEST_LENGTH);
+    }
+
+    p = ngx_cpymem(p, ",s=", 3);
+
+    if (ctx->upstream_trusted_store != NULL) {
+        if (ngx_http_apisix_trusted_store_id(ctx->upstream_trusted_store,
+                                             &store_id)
+            != NGX_OK)
+        {
+            goto failed;
+        }
+
+        p = ngx_sprintf(p, "%ui", store_id);
+    }
+
+    p = ngx_cpymem(p, ",v=", 3);
+
+    if (ctx->upstream_ssl_verify_set) {
+        *p++ = ctx->upstream_ssl_verify ? '1' : '0';
+    }
+
+    id->len = p - id->data;
+
+    return NGX_OK;
+
+failed:
+
+    ngx_http_apisix_flush_ssl_error();
+
+    return NGX_ERROR;
+}
 #endif
 
 
