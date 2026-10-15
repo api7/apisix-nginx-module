@@ -83,3 +83,66 @@ a client request body is buffered to a temporary file
 qr/a client request body is buffered to a temporary file/
 --- grep_error_log_out
 a client request body is buffered to a temporary file
+
+
+
+=== TEST 5: proxy_request_buffering off by Lua API with HTTP/2 to the upstream
+--- skip_nginx
+3: < 1.31.1
+--- http_config
+    server {
+        listen unix:$TEST_NGINX_HTML_DIR/h2.sock;
+        http2 on;
+
+        location /up {
+            return 200;
+        }
+    }
+--- config
+    proxy_request_buffering on;
+    location /t {
+        access_by_lua_block {
+            local client = require("resty.apisix.client")
+            assert(client.set_proxy_request_buffering(false))
+        }
+        proxy_http_version 2;
+        proxy_pass http://unix:$TEST_NGINX_HTML_DIR/h2.sock:/up;
+    }
+--- request eval
+"POST /t
+" . "12345" x 10240
+--- grep_error_log eval
+qr/a client request body is buffered to a temporary file/
+--- grep_error_log_out
+
+
+
+=== TEST 6: proxy_request_buffering on by Lua API with HTTP/2 to the upstream
+--- skip_nginx
+3: < 1.31.1
+--- http_config
+    server {
+        listen unix:$TEST_NGINX_HTML_DIR/h2.sock;
+        http2 on;
+
+        location /up {
+            return 200;
+        }
+    }
+--- config
+    proxy_request_buffering off;
+    location /t {
+        access_by_lua_block {
+            local client = require("resty.apisix.client")
+            assert(client.set_proxy_request_buffering(true))
+        }
+        proxy_http_version 2;
+        proxy_pass http://unix:$TEST_NGINX_HTML_DIR/h2.sock:/up;
+    }
+--- request eval
+"POST /t
+" . "12345" x 10240
+--- grep_error_log eval
+qr/a client request body is buffered to a temporary file/
+--- grep_error_log_out
+a client request body is buffered to a temporary file

@@ -426,6 +426,23 @@ ngx_http_apisix_get_upstream_ssl_verify(ngx_http_request_t *r, ngx_flag_t proxy_
 
 
 ngx_flag_t
+ngx_http_apisix_is_upstream_ssl_overridden(ngx_http_request_t *r)
+{
+    ngx_http_apisix_ctx_t       *ctx;
+
+    ctx = ngx_http_get_module_ctx(r, ngx_http_apisix_module);
+
+    if (ctx == NULL) {
+        return 0;
+    }
+
+    return ctx->upstream_cert != NULL
+           || ctx->upstream_trusted_store != NULL
+           || ctx->upstream_ssl_verify_set;
+}
+
+
+ngx_flag_t
 ngx_http_apisix_delay_client_max_body_check(ngx_http_request_t *r)
 {
     ngx_http_apisix_loc_conf_t  *alcf;

@@ -1,0 +1,70 @@
+diff --git src/http/modules/ngx_http_mirror_module.c src/http/modules/ngx_http_mirror_module.c
+index 787adb3..61d0fd3 100644
+--- src/http/modules/ngx_http_mirror_module.c
++++ src/http/modules/ngx_http_mirror_module.c
+@@ -8,10 +8,16 @@
+ #include <ngx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_http.h>
++#if (NGX_HTTP_APISIX)
++#include <ngx_http_apisix_module.h>
++#endif
+ 
+ 
+ typedef struct {
+     ngx_array_t  *mirror;
++#if (NGX_HTTP_APISIX)
++    ngx_flag_t    on_demand;
++#endif
+     ngx_flag_t    request_body;
+ } ngx_http_mirror_loc_conf_t;
+ 
+@@ -33,6 +39,15 @@ static ngx_int_t ngx_http_mirror_init(ngx_conf_t *cf);
+ 
+ static ngx_command_t  ngx_http_mirror_commands[] = {
+ 
++#if (NGX_HTTP_APISIX)
++    { ngx_string("apisix_mirror_on_demand"),
++      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
++      ngx_conf_set_flag_slot,
++      NGX_HTTP_LOC_CONF_OFFSET,
++      offsetof(ngx_http_mirror_loc_conf_t, on_demand),
++      NULL },
++#endif
++
+     { ngx_string("mirror"),
+       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+       ngx_http_mirror,
+@@ -99,6 +114,12 @@ ngx_http_mirror_handler(ngx_http_request_t *r)
+         return NGX_DECLINED;
+     }
+ 
++#if (NGX_HTTP_APISIX)
++    if (mlcf->on_demand && !ngx_http_apisix_is_mirror_enabled(r)) {
++        return NGX_DECLINED;
++    }
++#endif
++
+     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "mirror handler");
+ 
+     if (mlcf->request_body) {
+@@ -186,6 +207,9 @@ ngx_http_mirror_create_loc_conf(ngx_conf_t *cf)
+     }
+ 
+     mlcf->mirror = NGX_CONF_UNSET_PTR;
++#if (NGX_HTTP_APISIX)
++    mlcf->on_demand = NGX_CONF_UNSET;
++#endif
+     mlcf->request_body = NGX_CONF_UNSET;
+ 
+     return mlcf;
+@@ -198,6 +222,9 @@ ngx_http_mirror_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
+     ngx_http_mirror_loc_conf_t *prev = parent;
+     ngx_http_mirror_loc_conf_t *conf = child;
+ 
++#if (NGX_HTTP_APISIX)
++    ngx_conf_merge_value(conf->on_demand, prev->on_demand, 0);
++#endif
+     ngx_conf_merge_ptr_value(conf->mirror, prev->mirror, NULL);
+     ngx_conf_merge_value(conf->request_body, prev->request_body, 1);
+ 

@@ -21,6 +21,10 @@ our $UpstreamSrvConfig = <<_EOC_;
             return 200 'SNI=\$ssl_server_name\\n';
         }
 
+        location = /echo_connection_requests {
+            return 200 'requests=\$connection_requests\\n';
+        }
+
         location = /echo_addrs {
             return 200 'server=\$server_addr client=\$remote_addr\\n';
         }
@@ -1408,3 +1412,185 @@ lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1
 lua balancer: keepalive create pool, name: 127\.0\.0\.1:23456\|\|1\|host-c\|y, size: 30
 lua balancer: keepalive no free connection, cpool: \S+
 lua balancer: keepalive saving connection \S+, cpool: \S+, connections: 1$/
+
+
+
+=== TEST 32: no 'keepalive' directive: peers set by Lua are not pooled
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local ok, err = b.set_current_peer("127.0.0.1", $TEST_NGINX_SERVER_SSL_PORT)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set current peer: ", err)
+                return
+            end
+        }
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_connection_requests' -q 'sni=one';
+        echo_subrequest GET '/proxy/echo_connection_requests' -q 'sni=one';
+    }
+--- response_body
+requests=1
+requests=1
+--- grep_error_log eval: qr/get keepalive peer/
+--- grep_error_log_out
+
+
+
+=== TEST 33: 'keepalive' after balancer_by_lua pools peers set by Lua by address
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local ok, err = b.set_current_peer("127.0.0.1", $TEST_NGINX_SERVER_SSL_PORT)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set current peer: ", err)
+                return
+            end
+        }
+
+        keepalive 10;
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_connection_requests' -q 'sni=one';
+        echo_subrequest GET '/proxy/echo_connection_requests' -q 'sni=one';
+    }
+--- response_body
+requests=1
+requests=2
+--- grep_error_log eval: qr/get keepalive peer: using connection/
+--- grep_error_log_out
+get keepalive peer: using connection
+
+
+
+=== TEST 34: a successful response leaves the balancer tries count alone
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local ok, err = b.set_current_peer("127.0.0.1", $TEST_NGINX_SERVER_SSL_PORT)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set current peer: ", err)
+                return
+            end
+        }
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
+    }
+--- response_body
+SNI=one
+--- grep_error_log eval: qr/free peer, tries: \d+/
+--- grep_error_log_out
+free peer, tries: 1
+
+
+
+=== TEST 35: 'keepalive' between hash and balancer_by_lua stays inside the Lua balancer
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+        hash $arg_sni;
+        keepalive 10;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local ok, err = b.set_current_peer("127.0.0.1", $TEST_NGINX_SERVER_SSL_PORT)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set current peer: ", err)
+                return
+            end
+
+            local ok, err = b.enable_keepalive()
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+                return
+            end
+        }
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=two';
+    }
+--- response_body
+SNI=one
+SNI=two
+--- grep_error_log eval: qr/(get|free) keepalive peer/
+--- grep_error_log_out
+
+
+
+=== TEST 36: 'keepalive' between balancer_by_lua and multi wraps the Lua balancer only
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local ok, err = b.set_current_peer("127.0.0.1", $TEST_NGINX_SERVER_SSL_PORT)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set current peer: ", err)
+                return
+            end
+        }
+
+        keepalive 10;
+        multi 1;
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
+    }
+--- ignore_response
+--- grep_error_log eval: qr/init keepalive peer|multi: init multi upstream peer/
+--- grep_error_log_out
+multi: init multi upstream peer
+init keepalive peer
+
+
+
+=== TEST 37: 'keepalive' after balancer_by_lua and multi wraps both
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local ok, err = b.set_current_peer("127.0.0.1", $TEST_NGINX_SERVER_SSL_PORT)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set current peer: ", err)
+                return
+            end
+        }
+
+        multi 1;
+        keepalive 10;
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
+    }
+--- ignore_response
+--- grep_error_log eval: qr/init keepalive peer|multi: init multi upstream peer/
+--- grep_error_log_out
+init keepalive peer
+multi: init multi upstream peer

@@ -1,0 +1,15 @@
+diff --git src/stream/ngx_stream_proxy_module.c src/stream/ngx_stream_proxy_module.c
+--- src/stream/ngx_stream_proxy_module.c
++++ src/stream/ngx_stream_proxy_module.c
+@@ -1219,7 +1219,11 @@ ngx_stream_proxy_ssl_init_connection(ngx_stream_session_t *s)
+     }
+ 
+     s->connection->log->action = "SSL handshaking to upstream";
+ 
++#if (NGX_STREAM_APISIX)
++    ngx_stream_apisix_set_upstream_ssl(s, pc);
++#endif
++
+     rc = ngx_ssl_handshake(pc);
+ 
+     if (rc == NGX_AGAIN) {

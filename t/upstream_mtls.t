@@ -174,3 +174,66 @@ client SSL certificate verify error
 
 --- response_body
 ok
+
+
+
+=== TEST 5: keepalive skips connections for requests with their own client certificate
+--- skip_nginx
+3: < 1.31.1
+--- http_config
+    upstream mtls_backend {
+        server unix:$TEST_NGINX_HTML_DIR/nginx.sock;
+        keepalive 8;
+    }
+
+    server {
+        listen unix:$TEST_NGINX_HTML_DIR/nginx.sock ssl;
+        server_name admin.apisix.dev;
+        ssl_certificate ../../certs/mtls_server.crt;
+        ssl_certificate_key ../../certs/mtls_server.key;
+        ssl_client_certificate ../../certs/mtls_ca.crt;
+        ssl_verify_client optional;
+
+        server_tokens off;
+
+        location /dn {
+            return 200 'dn=$ssl_client_s_dn\n';
+        }
+    }
+--- config
+    location /plain {
+        proxy_http_version 1.1;
+        proxy_set_header Connection '';
+        proxy_ssl_session_reuse off;
+        proxy_pass https://mtls_backend/dn;
+    }
+
+    location /cert {
+        access_by_lua_block {
+            local upstream = require("resty.apisix.upstream")
+            local ssl = require("ngx.ssl")
+
+            local f = assert(io.open("t/certs/mtls_client.crt"))
+            local cert_data = f:read("*a")
+            f:close()
+
+            local cert = assert(ssl.parse_pem_cert(cert_data))
+
+            f = assert(io.open("t/certs/mtls_client.key"))
+            local key_data = f:read("*a")
+            f:close()
+
+            local key = assert(ssl.parse_pem_priv_key(key_data))
+
+            assert(upstream.set_cert_and_key(cert, key))
+        }
+
+        proxy_http_version 1.1;
+        proxy_set_header Connection '';
+        proxy_ssl_session_reuse off;
+        proxy_pass https://mtls_backend/dn;
+    }
+--- request eval
+["GET /plain", "GET /cert", "GET /plain"]
+--- response_body eval
+["dn=\n", "dn=CN=client.apisix.dev,L=ZhuHai,O=api7,ST=GuangDong,C=cn\n", "dn=\n"]
