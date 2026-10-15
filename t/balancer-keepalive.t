@@ -1498,3 +1498,99 @@ SNI=one
 --- grep_error_log eval: qr/free peer, tries: \d+/
 --- grep_error_log_out
 free peer, tries: 1
+
+
+
+=== TEST 35: 'keepalive' between hash and balancer_by_lua stays inside the Lua balancer
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+        hash $arg_sni;
+        keepalive 10;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local ok, err = b.set_current_peer("127.0.0.1", $TEST_NGINX_SERVER_SSL_PORT)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set current peer: ", err)
+                return
+            end
+
+            local ok, err = b.enable_keepalive()
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+                return
+            end
+        }
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=two';
+    }
+--- response_body
+SNI=one
+SNI=two
+--- grep_error_log eval: qr/(get|free) keepalive peer/
+--- grep_error_log_out
+
+
+
+=== TEST 36: 'keepalive' between balancer_by_lua and multi wraps the Lua balancer only
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local ok, err = b.set_current_peer("127.0.0.1", $TEST_NGINX_SERVER_SSL_PORT)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set current peer: ", err)
+                return
+            end
+        }
+
+        keepalive 10;
+        multi 1;
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
+    }
+--- ignore_response
+--- grep_error_log eval: qr/init keepalive peer|multi: init multi upstream peer/
+--- grep_error_log_out
+multi: init multi upstream peer
+init keepalive peer
+
+
+
+=== TEST 37: 'keepalive' after balancer_by_lua and multi wraps both
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local ok, err = b.set_current_peer("127.0.0.1", $TEST_NGINX_SERVER_SSL_PORT)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set current peer: ", err)
+                return
+            end
+        }
+
+        multi 1;
+        keepalive 10;
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
+    }
+--- ignore_response
+--- grep_error_log eval: qr/init keepalive peer|multi: init multi upstream peer/
+--- grep_error_log_out
+init keepalive peer
+multi: init multi upstream peer
