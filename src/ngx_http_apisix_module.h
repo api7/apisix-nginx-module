@@ -45,6 +45,7 @@ typedef struct {
 void ngx_http_apisix_set_upstream_ssl(ngx_http_request_t *r, ngx_connection_t *c);
 ngx_flag_t ngx_http_apisix_get_upstream_ssl_verify(ngx_http_request_t *r, ngx_flag_t proxy_ssl_verify);
 ngx_flag_t ngx_http_apisix_is_upstream_ssl_overridden(ngx_http_request_t *r);
+ngx_int_t ngx_http_apisix_upstream_ssl_id(ngx_http_request_t *r, ngx_str_t *id);
 
 ngx_flag_t ngx_http_apisix_delay_client_max_body_check(ngx_http_request_t *r);
 off_t ngx_http_apisix_client_max_body_size(ngx_http_request_t *r);
