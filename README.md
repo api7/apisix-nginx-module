@@ -1,5 +1,12 @@
 # APISIX Nginx Module
 
+## Dynamic TLS Session Tickets
+
+[`resty.apisix.ssl_session_ticket`](docs/ssl-session-ticket.md) updates HTTP
+session ticket keys through FFI without reloading NGINX. It extends the native
+ticket callback, uses `ssl_session_tickets on` and the existing shared session
+cache, and requires no `ssl_session_ticket_key` files or additional directive.
+
 ## Directive
 
 ### apisix_delay_client_max_body_check [on|off]
