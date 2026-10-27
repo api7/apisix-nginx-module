@@ -66,6 +66,12 @@ ngx_int_t ngx_http_apisix_is_body_filter_by_lua_skipped(ngx_http_request_t *r);
 
 ngx_flag_t ngx_http_apisix_is_ntls_enabled(ngx_http_conf_ctx_t *conf_ctx);
 
+#if (NGX_HTTP_SSL)
+/* called by the patched ngx_http_ssl_module once a server has its SSL_CTX */
+ngx_int_t ngx_http_apisix_ssl_session_ticket_bind(ngx_conf_t *cf,
+    ngx_ssl_t *ssl);
+#endif
+
 char * ngx_http_apisix_error_log_request_id(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 char * ngx_http_apisix_error_log_init(ngx_conf_t *cf);
 char * ngx_http_apisix_error_log_request_id(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
