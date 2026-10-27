@@ -32,7 +32,7 @@ jobs:
             # Tests requiring nginx features not available in OR 1.21 (nginx 1.21)
             exclude_tests: "t/pipe.t t/upstream_pass_trailers.t"
 
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     name: build (${{ matrix.runtime.name }})
 
     env:
