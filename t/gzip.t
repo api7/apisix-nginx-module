@@ -33,3 +33,41 @@ apisix gzip num:4 size:8192
 content-encoding: gzip
 --- no_error_log
 [error]
+
+
+
+=== TEST 2: buffer_size smaller than the default gzip buffer
+--- skip_nginx
+3: < 1.31.8
+--- config
+location /t {
+    content_by_lua_block {
+        -- poorly compressible, so the output needs many buffers
+        local t, x = {}, 1
+        for i = 1, 16384 do
+            x = (x * 1103515245 + 12345) % 2147483648
+            t[i] = string.char(33 + x % 94)
+        end
+        ngx.say(table.concat(t))
+    }
+    header_filter_by_lua_block {
+        local response = require "resty.apisix.response"
+        local ok, err = response.set_gzip({
+            buffer_num = 64,
+            buffer_size = 512,
+            compress_level = 1,
+        })
+        if not ok then
+            ngx.log(ngx.ERR, err)
+        end
+    }
+}
+--- more_headers
+Accept-Encoding: gzip
+--- response_headers
+Content-Encoding: gzip
+--- no_error_log
+[error]
+[alert]
+AddressSanitizer
+

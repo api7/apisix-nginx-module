@@ -1538,6 +1538,7 @@ SNI=two
 
 
 === TEST 36: 'keepalive' between balancer_by_lua and multi wraps the Lua balancer only
+proxy_pass can not multiplex, so the request fails with 500; only the wrapping order matters here
 --- http_upstream
     upstream test_upstream {
         server 0.0.0.1;
@@ -1560,6 +1561,8 @@ SNI=two
         echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
     }
 --- ignore_response
+--- no_error_log
+[emerg]
 --- grep_error_log eval: qr/init keepalive peer|multi: init multi upstream peer/
 --- grep_error_log_out
 multi: init multi upstream peer
@@ -1568,6 +1571,7 @@ init keepalive peer
 
 
 === TEST 37: 'keepalive' after balancer_by_lua and multi wraps both
+proxy_pass can not multiplex, so the request fails with 500; only the wrapping order matters here
 --- http_upstream
     upstream test_upstream {
         server 0.0.0.1;
@@ -1590,7 +1594,74 @@ init keepalive peer
         echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
     }
 --- ignore_response
+--- no_error_log
+[emerg]
 --- grep_error_log eval: qr/init keepalive peer|multi: init multi upstream peer/
 --- grep_error_log_out
 init keepalive peer
 multi: init multi upstream peer
+
+
+
+=== TEST 38: set_current_peer: 'pool_size' that is not a usable integer
+--- skip_nginx
+2: < 1.31.8
+--- config
+    location = /t {
+        content_by_lua_block {
+            local b = require "ngx.balancer"
+
+            local values = { 0/0, 1.5, 2^32, math.huge }
+
+            for _, val in ipairs(values) do
+                local pok, perr = pcall(b.set_current_peer, "127.0.0.1", 80, {
+                    pool = "foo",
+                    pool_size = val,
+                })
+                if not pok then
+                    ngx.say(perr)
+                end
+            end
+        }
+    }
+--- response_body
+bad option 'pool_size' to 'set_current_peer' (integer up to 2147483647 expected)
+bad option 'pool_size' to 'set_current_peer' (integer up to 2147483647 expected)
+bad option 'pool_size' to 'set_current_peer' (integer up to 2147483647 expected)
+bad option 'pool_size' to 'set_current_peer' (integer up to 2147483647 expected)
+--- grep_error_log_out
+
+
+
+=== TEST 39: set_current_peer FFI rejects a pool size of 0
+--- skip_nginx
+3: < 1.31.8
+--- http_upstream
+    upstream test_upstream {
+        server 0.0.0.1;
+
+        balancer_by_lua_block {
+            local ffi = require "ffi"
+            local base = require "resty.core.base"
+            local b = require "ngx.balancer"
+
+            local addr = "127.0.0.1"
+            local errmsg = base.get_errmsg_ptr()
+            local rc = ffi.C.ngx_http_lua_ffi_balancer_set_current_peer(
+                base.get_request(), addr, #addr, $TEST_NGINX_SERVER_SSL_PORT,
+                nil, 0, "foo", 3, 0, errmsg)
+            if rc ~= base.FFI_OK then
+                ngx.log(ngx.WARN, "set_current_peer: ", ffi.string(errmsg[0]))
+            end
+
+            assert(b.set_current_peer(addr, $TEST_NGINX_SERVER_SSL_PORT))
+        }
+    }
+--- config
+    location = /t {
+        echo_subrequest GET '/proxy/echo_sni' -q 'sni=one';
+    }
+--- ignore_response
+--- grep_error_log eval: qr/set_current_peer: bad pool size/
+--- grep_error_log_out
+set_current_peer: bad pool size
