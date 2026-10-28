@@ -1,0 +1,17 @@
+diff --git src/http/ngx_http_upstream.h src/http/ngx_http_upstream.h
+index 970b5c4..fc85809 100644
+--- src/http/ngx_http_upstream.h
++++ src/http/ngx_http_upstream.h
+@@ -56,7 +56,12 @@
+ #define NGX_HTTP_UPSTREAM_IGN_XA_CHARSET     0x00000100
+ #define NGX_HTTP_UPSTREAM_IGN_VARY           0x00000200
+ 
++#if (NGX_HTTP_APISIX)
++/* 0x1 is taken by NGX_HTTP_UPSTREAM_NOTIFY_HEADER */
++#define NGX_HTTP_UPSTREAM_NOTIFY_CACHED_CONNECTION_ERROR 0x80
++#else
+ #define NGX_HTTP_UPSTREAM_NOTIFY_CACHED_CONNECTION_ERROR 0x1
++#endif
+ 
+ 
+ #define NGX_HTTP_UPSTREAM_NOTIFY_HEADER      0x1

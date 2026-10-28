@@ -1,0 +1,52 @@
+diff --git src/http/modules/ngx_http_proxy_module.c src/http/modules/ngx_http_proxy_module.c
+index f3e43ef..6d0494d 100644
+--- src/http/modules/ngx_http_proxy_module.c
++++ src/http/modules/ngx_http_proxy_module.c
+@@ -9,6 +9,9 @@
+ #include <ngx_core.h>
+ #include <ngx_http.h>
+ #include <ngx_http_proxy_module.h>
++#if (NGX_HTTP_APISIX)
++#include "ngx_http_apisix_module.h"
++#endif
+ 
+ 
+ #define  NGX_HTTP_PROXY_COOKIE_SECURE           0x0001
+@@ -951,7 +954,11 @@ ngx_http_proxy_handler(ngx_http_request_t *r)
+ 
+     u->accel = 1;
+ 
++#if (NGX_HTTP_APISIX)
++    if (!ngx_http_apisix_is_request_buffering(r, plcf->upstream.request_buffering)
++#else
+     if (!plcf->upstream.request_buffering
++#endif
+         && plcf->body_values == NULL && plcf->upstream.pass_request_body
+         && (!r->headers_in.chunked
+             || plcf->http_version == NGX_HTTP_VERSION_11))
+diff --git src/http/modules/ngx_http_proxy_v2_module.c src/http/modules/ngx_http_proxy_v2_module.c
+index 0be5691..4bb35b0 100644
+--- src/http/modules/ngx_http_proxy_v2_module.c
++++ src/http/modules/ngx_http_proxy_v2_module.c
+@@ -9,6 +9,9 @@
+ #include <ngx_core.h>
+ #include <ngx_http.h>
+ #include <ngx_http_proxy_module.h>
++#if (NGX_HTTP_APISIX)
++#include "ngx_http_apisix_module.h"
++#endif
+ 
+ 
+ typedef enum {
+@@ -298,7 +301,11 @@ ngx_http_proxy_v2_handler(ngx_http_request_t *r)
+ 
+     u->accel = 1;
+ 
++#if (NGX_HTTP_APISIX)
++    if (!ngx_http_apisix_is_request_buffering(r, plcf->upstream.request_buffering)
++#else
+     if (!plcf->upstream.request_buffering
++#endif
+         && plcf->body_values == NULL && plcf->upstream.pass_request_body)
+     {
+         r->request_body_no_buffering = 1;
