@@ -3,6 +3,7 @@ local base = require("resty.core.base")
 local get_request = base.get_request
 local C = ffi.C
 local NGX_ERROR = ngx.ERROR
+local NGX_DECLINED = ngx.DECLINED
 
 
 base.allows_subsystem("http")
@@ -32,6 +33,9 @@ function _M.set_gzip(opts)
     local rc = C.ngx_http_apisix_set_gzip(r, opts.buffer_num, opts.buffer_size, opts.compress_level)
     if rc == NGX_ERROR then
         return nil, "no memory"
+    end
+    if rc == NGX_DECLINED then
+        return nil, "bad buffer_num or buffer_size"
     end
     return true
 end

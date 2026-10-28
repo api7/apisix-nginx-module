@@ -71,3 +71,25 @@ Content-Encoding: gzip
 [alert]
 AddressSanitizer
 
+
+
+
+=== TEST 3: reject buffers zlib can not write into
+--- config
+location /t {
+    content_by_lua_block {
+        local response = require "resty.apisix.response"
+        for _, b in ipairs({ {0, 8192}, {-1, 8192}, {4, 0} }) do
+            local ok, err = response.set_gzip({
+                buffer_num = b[1],
+                buffer_size = b[2],
+                compress_level = 2,
+            })
+            ngx.say(ok, " ", err)
+        end
+    }
+}
+--- response_body
+nil bad buffer_num or buffer_size
+nil bad buffer_num or buffer_size
+nil bad buffer_num or buffer_size
