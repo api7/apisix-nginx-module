@@ -1,5 +1,5 @@
 diff --git lib/ngx/balancer.lua lib/ngx/balancer.lua
-index 18bdc2c..cd87245 100644
+index 18bdc2c..ef94900 100644
 --- lib/ngx/balancer.lua
 +++ lib/ngx/balancer.lua
 @@ -4,7 +4,6 @@
@@ -10,7 +10,15 @@ index 18bdc2c..cd87245 100644
  local ffi = require "ffi"
  local C = ffi.C
  local ffi_str = ffi.string
-@@ -35,8 +34,9 @@ if subsystem == 'http' then
+@@ -20,6 +19,7 @@ local error = error
+ local type = type
+ local tonumber = tonumber
+ local max = math.max
++local floor = math.floor
+ 
+ local subsystem = ngx.config.subsystem
+ local ngx_lua_ffi_balancer_set_current_peer
+@@ -35,8 +35,9 @@ if subsystem == 'http' then
      ffi.cdef[[
      int ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
          const unsigned char *addr, size_t addr_len, int port,
@@ -22,15 +30,16 @@ index 18bdc2c..cd87245 100644
  
      int ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
          unsigned long timeout, unsigned int max_requests, char **err);
-@@ -130,6 +130,7 @@ else
+@@ -130,6 +131,8 @@ else
      error("unknown subsystem: " .. subsystem)
  end
  
 +local DEFAULT_KEEPALIVE_POOL_SIZE = 30
++local MAX_KEEPALIVE_POOL_SIZE = 2147483647
  local DEFAULT_KEEPALIVE_IDLE_TIMEOUT = 60000
  local DEFAULT_KEEPALIVE_MAX_REQUESTS = 100
  
-@@ -143,27 +144,73 @@ local peer_state_names = {
+@@ -143,27 +146,80 @@ local peer_state_names = {
  local _M = { version = base.version }
  
  if subsystem == "http" then
@@ -76,6 +85,13 @@ index 18bdc2c..cd87245 100644
 +                    elseif pool_size < 1 then
 +                        error("bad option 'pool_size' to " ..
 +                              "'set_current_peer' (expected > 0)", 2)
++
++                    elseif pool_size ~= floor(pool_size)
++                           or pool_size > MAX_KEEPALIVE_POOL_SIZE
++                    then
++                        error("bad option 'pool_size' to " ..
++                              "'set_current_peer' (integer up to " ..
++                              MAX_KEEPALIVE_POOL_SIZE .. " expected)", 2)
 +                    end
 +                end
 +
@@ -110,7 +126,7 @@ index 18bdc2c..cd87245 100644
                                                           errmsg)
          if rc == FFI_OK then
              return true
-@@ -172,26 +219,26 @@ if subsystem == "http" then
+@@ -172,26 +228,26 @@ if subsystem == "http" then
          return nil, ffi_str(errmsg[0])
      end
  else

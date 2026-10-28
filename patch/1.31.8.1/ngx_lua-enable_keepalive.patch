@@ -1,5 +1,5 @@
 diff --git src/ngx_http_lua_balancer.c src/ngx_http_lua_balancer.c
-index bd56d9d..d4877c6 100644
+index bd56d9d..1c7ea6a 100644
 --- src/ngx_http_lua_balancer.c
 +++ src/ngx_http_lua_balancer.c
 @@ -31,10 +31,43 @@ typedef struct {
@@ -729,7 +729,20 @@ index bd56d9d..d4877c6 100644
  {
      ngx_url_t              url;
      ngx_http_lua_ctx_t    *ctx;
-@@ -947,6 +1110,24 @@ ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
+@@ -892,6 +1055,12 @@ ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
+         return NGX_ERROR;
+     }
+ 
++    /* an empty pool has no item to save a connection in */
++    if (cpool_size == 0) {
++        *err = "bad pool size";
++        return NGX_ERROR;
++    }
++
+     ngx_memzero(&url, sizeof(ngx_url_t));
+ 
+     url.url.data = ngx_palloc(r->pool, addr_len);
+@@ -947,6 +1116,24 @@ ngx_http_lua_ffi_balancer_set_current_peer(ngx_http_request_t *r,
          ngx_str_null(&bp->host);
      }
  
@@ -754,7 +767,7 @@ index bd56d9d..d4877c6 100644
      return NGX_OK;
  }
  
-@@ -1055,11 +1236,15 @@ ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
+@@ -1055,11 +1242,15 @@ ngx_http_lua_ffi_balancer_enable_keepalive(ngx_http_request_t *r,
  
      bp = (ngx_http_lua_balancer_peer_data_t *) u->peer.data;
  
@@ -771,7 +784,7 @@ index bd56d9d..d4877c6 100644
      bp->keepalive_timeout = (ngx_msec_t) timeout;
      bp->keepalive_requests = (ngx_uint_t) max_requests;
      bp->keepalive = 1;
-@@ -1435,85 +1620,76 @@ done:
+@@ -1435,85 +1626,76 @@ done:
  #endif
  
  
@@ -788,11 +801,7 @@ index bd56d9d..d4877c6 100644
 +    u_char     *p;
 +    unsigned    tls = 0;
 +    ngx_str_t   ssl_name = ngx_null_string;
- 
--    hash = ngx_hash_key_lc(name->data, name->len);
--    hash ^= ngx_hash_key((u_char *) sockaddr, socklen);
--    if (local != NULL) {
--        hash ^= ngx_hash_key((u_char *) local->sockaddr, local->socklen);
++
 +    /*
 +     * the default pool identity must cover every property that is only
 +     * applied when the connection is established: the remote address,
@@ -816,7 +825,11 @@ index bd56d9d..d4877c6 100644
 +        if (ngx_http_lua_upstream_get_ssl_name(r, u) != NGX_OK) {
 +            return NGX_ERROR;
 +        }
-+
+ 
+-    hash = ngx_hash_key_lc(name->data, name->len);
+-    hash ^= ngx_hash_key((u_char *) sockaddr, socklen);
+-    if (local != NULL) {
+-        hash ^= ngx_hash_key((u_char *) local->sockaddr, local->socklen);
 +        ssl_name = u->ssl_name;
      }
 +#endif
