@@ -1,0 +1,40 @@
+diff --git src/http/modules/ngx_http_grpc_module.c src/http/modules/ngx_http_grpc_module.c
+--- src/http/modules/ngx_http_grpc_module.c
++++ src/http/modules/ngx_http_grpc_module.c
+@@ -5126,6 +5126,16 @@
+                       "no grpc_ssl_trusted_certificate for grpc_ssl_verify");
+             return NGX_ERROR;
+         }
++#if (NGX_HTTP_APISIX)
++    }
++
++    /*
++     * load the trusted certificates and CRL even when verification is off,
++     * so that verification enabled per request has them; this does not
++     * enable verification
++     */
++    if (glcf->upstream.ssl_verify || glcf->ssl_trusted_certificate.len) {
++#endif
+ 
+         if (ngx_ssl_trusted_certificate(cf, glcf->upstream.ssl,
+                                         &glcf->ssl_trusted_certificate,
+diff --git src/http/modules/ngx_http_proxy_module.c src/http/modules/ngx_http_proxy_module.c
+--- src/http/modules/ngx_http_proxy_module.c
++++ src/http/modules/ngx_http_proxy_module.c
+@@ -5393,6 +5393,16 @@
+                       "no proxy_ssl_trusted_certificate for proxy_ssl_verify");
+             return NGX_ERROR;
+         }
++#if (NGX_HTTP_APISIX)
++    }
++
++    /*
++     * load the trusted certificates and CRL even when verification is off,
++     * so that verification enabled per request has them; this does not
++     * enable verification
++     */
++    if (plcf->upstream.ssl_verify || plcf->ssl_trusted_certificate.len) {
++#endif
+ 
+         if (ngx_ssl_trusted_certificate(cf, plcf->upstream.ssl,
+                                         &plcf->ssl_trusted_certificate,
