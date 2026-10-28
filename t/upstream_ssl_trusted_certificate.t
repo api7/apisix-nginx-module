@@ -63,6 +63,28 @@ _EOC_
     }
 });
 
+our $chain_http_config = <<'_EOC_';
+    server {
+        listen unix:$TEST_NGINX_HTML_DIR/chain.sock ssl http2;
+        server_name admin.apisix.dev;
+        # leaf, intermediate 2 and intermediate 1
+        ssl_certificate ../../certs/chain_server.crt;
+        ssl_certificate_key ../../certs/chain_server.key;
+
+        server_tokens off;
+
+        location / {
+            return 200 'ok\n';
+        }
+    }
+
+    proxy_ssl_trusted_certificate ../../certs/chain_root.crt;
+    proxy_ssl_name admin.apisix.dev;
+
+    grpc_ssl_trusted_certificate ../../certs/chain_root.crt;
+    grpc_ssl_name admin.apisix.dev;
+_EOC_
+
 run_tests;
 
 __DATA__
@@ -260,3 +282,185 @@ upstream SSL certificate verify error: (23:certificate revoked) while SSL handsh
 --- must_die
 --- error_log
 no proxy_ssl_trusted_certificate for proxy_ssl_verify
+
+
+
+=== TEST 15: proxy, verify per request, no proxy_ssl_verify_depth limit
+--- http_config eval: $::chain_http_config
+--- config
+    location /t {
+        access_by_lua_block {
+            assert(require("resty.apisix.upstream").set_ssl_verify(true))
+        }
+        proxy_pass https://unix:$TEST_NGINX_HTML_DIR/chain.sock:/;
+    }
+--- response_body
+ok
+
+
+
+=== TEST 16: proxy, static verify, default proxy_ssl_verify_depth rejects two intermediates
+--- http_config eval: $::chain_http_config
+--- config
+    location /t {
+        proxy_ssl_verify on;
+        proxy_pass https://unix:$TEST_NGINX_HTML_DIR/chain.sock:/;
+    }
+--- error_code: 502
+--- error_log eval
+qr/upstream SSL certificate verify error: \((20:unable to get local issuer certificate|22:certificate chain too long)\)/
+
+
+
+=== TEST 17: proxy, static verify, proxy_ssl_verify_depth 2 accepts two intermediates
+--- http_config eval: $::chain_http_config
+--- config
+    location /t {
+        proxy_ssl_verify on;
+        proxy_ssl_verify_depth 2;
+        proxy_pass https://unix:$TEST_NGINX_HTML_DIR/chain.sock:/;
+    }
+--- response_body
+ok
+
+
+
+=== TEST 18: proxy, static verify and verify per request, proxy_ssl_verify_depth applies
+--- http_config eval: $::chain_http_config
+--- config
+    location /t {
+        access_by_lua_block {
+            assert(require("resty.apisix.upstream").set_ssl_verify(true))
+        }
+        proxy_ssl_verify on;
+        proxy_pass https://unix:$TEST_NGINX_HTML_DIR/chain.sock:/;
+    }
+--- error_code: 502
+--- error_log eval
+qr/upstream SSL certificate verify error: \((20:unable to get local issuer certificate|22:certificate chain too long)\)/
+
+
+
+=== TEST 19: proxy, static verify disabled per request, depth is not checked
+--- http_config eval: $::chain_http_config
+--- config
+    location /t {
+        access_by_lua_block {
+            assert(require("resty.apisix.upstream").set_ssl_verify(false))
+        }
+        proxy_ssl_verify on;
+        proxy_pass https://unix:$TEST_NGINX_HTML_DIR/chain.sock:/;
+    }
+--- response_body
+ok
+
+
+
+=== TEST 20: grpc, verify per request, no grpc_ssl_verify_depth limit
+--- http_config eval: $::chain_http_config
+--- config
+    location /t {
+        access_by_lua_block {
+            assert(require("resty.apisix.upstream").set_ssl_verify(true))
+        }
+        grpc_pass grpcs://unix:$TEST_NGINX_HTML_DIR/chain.sock;
+    }
+--- response_body
+ok
+
+
+
+=== TEST 21: grpc, static verify, default grpc_ssl_verify_depth rejects two intermediates
+--- http_config eval: $::chain_http_config
+--- config
+    location /t {
+        grpc_ssl_verify on;
+        grpc_pass grpcs://unix:$TEST_NGINX_HTML_DIR/chain.sock;
+    }
+--- error_code: 502
+--- error_log eval
+qr/upstream SSL certificate verify error: \((20:unable to get local issuer certificate|22:certificate chain too long)\)/
+
+
+
+=== TEST 22: grpc, static verify, grpc_ssl_verify_depth 2 accepts two intermediates
+--- http_config eval: $::chain_http_config
+--- config
+    location /t {
+        grpc_ssl_verify on;
+        grpc_ssl_verify_depth 2;
+        grpc_pass grpcs://unix:$TEST_NGINX_HTML_DIR/chain.sock;
+    }
+--- response_body
+ok
+
+
+
+=== TEST 23: grpc, static verify and verify per request, grpc_ssl_verify_depth applies
+--- http_config eval: $::chain_http_config
+--- config
+    location /t {
+        access_by_lua_block {
+            assert(require("resty.apisix.upstream").set_ssl_verify(true))
+        }
+        grpc_ssl_verify on;
+        grpc_pass grpcs://unix:$TEST_NGINX_HTML_DIR/chain.sock;
+    }
+--- error_code: 502
+--- error_log eval
+qr/upstream SSL certificate verify error: \((20:unable to get local issuer certificate|22:certificate chain too long)\)/
+
+
+
+=== TEST 24: grpc, static verify disabled per request, depth is not checked
+--- http_config eval: $::chain_http_config
+--- config
+    location /t {
+        access_by_lua_block {
+            assert(require("resty.apisix.upstream").set_ssl_verify(false))
+        }
+        grpc_ssl_verify on;
+        grpc_pass grpcs://unix:$TEST_NGINX_HTML_DIR/chain.sock;
+    }
+--- response_body
+ok
+
+
+
+=== TEST 25: proxy, verification disabled per request
+--- config
+    location /t {
+        access_by_lua_block {
+            assert(require("resty.apisix.upstream").set_ssl_verify(false))
+        }
+        proxy_pass https://unix:$TEST_NGINX_HTML_DIR/untrusted.sock:/;
+    }
+--- response_body
+ok
+
+
+
+=== TEST 26: grpc, verification disabled per request
+--- config
+    location /t {
+        access_by_lua_block {
+            assert(require("resty.apisix.upstream").set_ssl_verify(false))
+        }
+        grpc_pass grpcs://unix:$TEST_NGINX_HTML_DIR/untrusted.sock;
+    }
+--- response_body
+ok
+
+
+
+=== TEST 27: grpc, static verify disabled per request
+--- config
+    location /t {
+        access_by_lua_block {
+            assert(require("resty.apisix.upstream").set_ssl_verify(false))
+        }
+        grpc_ssl_verify on;
+        grpc_pass grpcs://unix:$TEST_NGINX_HTML_DIR/untrusted.sock;
+    }
+--- response_body
+ok
