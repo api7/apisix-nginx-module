@@ -1,5 +1,5 @@
 diff --git src/http/modules/ngx_http_gzip_filter_module.c src/http/modules/ngx_http_gzip_filter_module.c
-index ed0de60..791c9e8 100644
+index dac21bb..8e31cb0 100644
 --- src/http/modules/ngx_http_gzip_filter_module.c
 +++ src/http/modules/ngx_http_gzip_filter_module.c
 @@ -8,6 +8,9 @@
@@ -47,7 +47,7 @@ index ed0de60..791c9e8 100644
  
      r->gzip_vary = 1;
  
-@@ -521,7 +545,18 @@ ngx_http_gzip_filter_memory(ngx_http_request_t *r, ngx_http_gzip_ctx_t *ctx)
+@@ -523,7 +547,18 @@ ngx_http_gzip_filter_memory(ngx_http_request_t *r, ngx_http_gzip_ctx_t *ctx)
           * and 128K hash.
           */
  
@@ -66,7 +66,7 @@ index ed0de60..791c9e8 100644
              wbits = ngx_max(wbits, 13);
          }
  
-@@ -621,8 +656,20 @@ ngx_http_gzip_filter_deflate_start(ngx_http_request_t *r,
+@@ -623,8 +658,20 @@ ngx_http_gzip_filter_deflate_start(ngx_http_request_t *r,
      ctx->zstream.zfree = ngx_http_gzip_filter_free;
      ctx->zstream.opaque = ctx;
  
@@ -87,7 +87,7 @@ index ed0de60..791c9e8 100644
  
      if (rc != Z_OK) {
          ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
-@@ -711,6 +758,16 @@ ngx_http_gzip_filter_get_buf(ngx_http_request_t *r, ngx_http_gzip_ctx_t *ctx)
+@@ -713,6 +760,16 @@ ngx_http_gzip_filter_get_buf(ngx_http_request_t *r, ngx_http_gzip_ctx_t *ctx)
  
      conf = ngx_http_get_module_loc_conf(r, ngx_http_gzip_filter_module);
  
@@ -104,7 +104,7 @@ index ed0de60..791c9e8 100644
      if (ctx->free) {
  
          cl = ctx->free;
-@@ -719,9 +776,15 @@ ngx_http_gzip_filter_get_buf(ngx_http_request_t *r, ngx_http_gzip_ctx_t *ctx)
+@@ -721,9 +778,15 @@ ngx_http_gzip_filter_get_buf(ngx_http_request_t *r, ngx_http_gzip_ctx_t *ctx)
  
          ngx_free_chain(r->pool, cl);
  
@@ -120,11 +120,24 @@ index ed0de60..791c9e8 100644
          if (ctx->out_buf == NULL) {
              return NGX_ERROR;
          }
+@@ -738,7 +801,12 @@ ngx_http_gzip_filter_get_buf(ngx_http_request_t *r, ngx_http_gzip_ctx_t *ctx)
+     }
+ 
+     ctx->zstream.next_out = ctx->out_buf->pos;
++#if (NGX_HTTP_APISIX)
++    /* the buffer size can be set per request */
++    ctx->zstream.avail_out = ctx->out_buf->end - ctx->out_buf->pos;
++#else
+     ctx->zstream.avail_out = conf->bufs.size;
++#endif
+ 
+     return NGX_OK;
+ }
 diff --git src/http/ngx_http_core_module.c src/http/ngx_http_core_module.c
-index 7845f8f..6bbb9a3 100644
+index 608dfff..e4ccd07 100644
 --- src/http/ngx_http_core_module.c
 +++ src/http/ngx_http_core_module.c
-@@ -2074,9 +2074,16 @@ ngx_http_gzip_ok(ngx_http_request_t *r)
+@@ -2195,9 +2195,16 @@ ngx_http_gzip_ok(ngx_http_request_t *r)
          return NGX_DECLINED;
      }
  
