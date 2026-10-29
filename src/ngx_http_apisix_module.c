@@ -3,6 +3,7 @@
 #include <ngx_http.h>
 #include <ngx_http_realip_module.h>
 #include "ngx_http_apisix_module.h"
+#include "ngx_apisix_ssl_session_ticket.h"
 
 
 #define NGX_HTTP_APISIX_SSL_ENC     1
@@ -11,7 +12,15 @@
 
 typedef struct {
     ngx_flag_t      enable_ntls;
+    /* the servers marked with apisix_ssl_session_ticket_takeover */
+    ngx_array_t     ssl_session_tickets;
 } ngx_http_apisix_main_conf_t;
+
+
+typedef struct {
+    ngx_flag_t      ssl_session_ticket_takeover;
+    ngx_str_t       ssl_session_ticket_location;
+} ngx_http_apisix_srv_conf_t;
 
 
 static ngx_str_t remote_addr = ngx_string("remote_addr");
@@ -19,11 +28,25 @@ static ngx_str_t remote_port = ngx_string("remote_port");
 static ngx_str_t realip_remote_addr = ngx_string("realip_remote_addr");
 static ngx_str_t realip_remote_port = ngx_string("realip_remote_port");
 
+/*
+ * The configuration generations this master process has committed: one per
+ * successful start or reload. A worker process inherits the generation it is
+ * started for, which tells apart the workers of overlapping generations
+ * during a reload, where ngx.worker.id() repeats.
+ */
+static ngx_uint_t  ngx_http_apisix_generation;
+
 static ngx_int_t ngx_http_apisix_init(ngx_conf_t *cf);
+static ngx_int_t ngx_http_apisix_init_module(ngx_cycle_t *cycle);
 static void *ngx_http_apisix_create_main_conf(ngx_conf_t *cf);
+static void *ngx_http_apisix_create_srv_conf(ngx_conf_t *cf);
+static char *ngx_http_apisix_merge_srv_conf(ngx_conf_t *cf, void *parent,
+    void *child);
 static void *ngx_http_apisix_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_apisix_merge_loc_conf(ngx_conf_t *cf, void *parent,
     void *child);
+static char *ngx_http_apisix_ssl_session_ticket_takeover(ngx_conf_t *cf,
+    ngx_command_t *cmd, void *conf);
 
 static ngx_int_t
 ngx_http_apisix_init(ngx_conf_t *cf)
@@ -49,6 +72,13 @@ static ngx_command_t ngx_http_apisix_cmds[] = {
         offsetof(ngx_http_apisix_loc_conf_t, apisix_request_id_var_index),
         NULL
     },
+    /* only in server{}: a mark that http{} cannot pass down to every server */
+    { ngx_string("apisix_ssl_session_ticket_takeover"),
+      NGX_HTTP_SRV_CONF|NGX_CONF_FLAG,
+      ngx_http_apisix_ssl_session_ticket_takeover,
+      NGX_HTTP_SRV_CONF_OFFSET,
+      offsetof(ngx_http_apisix_srv_conf_t, ssl_session_ticket_takeover),
+      NULL },
     ngx_null_command
 };
 
@@ -59,8 +89,8 @@ static ngx_http_module_t ngx_http_apisix_module_ctx = {
     ngx_http_apisix_create_main_conf,        /* create main configuration */
     NULL,                                    /* init main configuration */
 
-    NULL,                                    /* create server configuration */
-    NULL,                                    /* merge server configuration */
+    ngx_http_apisix_create_srv_conf,         /* create server configuration */
+    ngx_http_apisix_merge_srv_conf,          /* merge server configuration */
 
     ngx_http_apisix_create_loc_conf,         /* create location configuration */
     ngx_http_apisix_merge_loc_conf           /* merge location configuration */
@@ -73,7 +103,7 @@ ngx_module_t ngx_http_apisix_module = {
     ngx_http_apisix_cmds,                /* module directives */
     NGX_HTTP_MODULE,                     /* module type */
     NULL,                                /* init master */
-    NULL,                                /* init module */
+    ngx_http_apisix_init_module,         /* init module */
     NULL,                                /* init process */
     NULL,                                /* init thread */
     NULL,                                /* exit thread */
@@ -99,7 +129,75 @@ ngx_http_apisix_create_main_conf(ngx_conf_t *cf)
      *     acf->enable_ntls = 0;
      */
 
+    if (ngx_array_init(&acf->ssl_session_tickets, cf->pool, 1, sizeof(void *))
+        != NGX_OK)
+    {
+        return NULL;
+    }
+
     return acf;
+}
+
+
+static ngx_int_t
+ngx_http_apisix_init_module(ngx_cycle_t *cycle)
+{
+    /* nginx calls init_module() once the new configuration is committed */
+    ngx_http_apisix_generation++;
+
+    return NGX_OK;
+}
+
+
+ngx_uint_t
+ngx_apisix_get_generation(void)
+{
+    return ngx_http_apisix_generation;
+}
+
+
+static void *
+ngx_http_apisix_create_srv_conf(ngx_conf_t *cf)
+{
+    ngx_http_apisix_srv_conf_t  *ascf;
+
+    ascf = ngx_pcalloc(cf->pool, sizeof(ngx_http_apisix_srv_conf_t));
+    if (ascf == NULL) {
+        return NULL;
+    }
+
+    /*
+     * set by ngx_pcalloc():
+     *
+     *     ascf->ssl_session_ticket_location = { 0, NULL };
+     */
+
+    ascf->ssl_session_ticket_takeover = NGX_CONF_UNSET;
+
+    return ascf;
+}
+
+
+static char *
+ngx_http_apisix_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
+{
+    ngx_http_apisix_srv_conf_t  *conf = child;
+
+    /* not inherited: each server is marked on its own */
+    ngx_conf_init_value(conf->ssl_session_ticket_takeover, 0);
+
+    return NGX_CONF_OK;
+}
+
+
+static char *
+ngx_http_apisix_ssl_session_ticket_takeover(ngx_conf_t *cf, ngx_command_t *cmd,
+    void *conf)
+{
+    ngx_http_apisix_srv_conf_t  *ascf = conf;
+
+    return ngx_apisix_ssl_session_ticket_takeover(cf, cmd, conf,
+                                          &ascf->ssl_session_ticket_location);
 }
 
 static void *
@@ -952,6 +1050,82 @@ ngx_http_apisix_is_ntls_enabled(ngx_http_conf_ctx_t *conf_ctx)
 
     acf = ngx_http_get_module_main_conf(conf_ctx, ngx_http_apisix_module);
     return acf->enable_ntls;
+}
+
+
+#if (NGX_HTTP_SSL)
+
+ngx_int_t
+ngx_http_apisix_ssl_session_ticket_bind(ngx_conf_t *cf, ngx_ssl_t *ssl)
+{
+#if (NGX_APISIX_SSL_SESSION_TICKET)
+    ngx_http_apisix_srv_conf_t   *ascf;
+    ngx_http_apisix_main_conf_t  *amcf;
+
+    /*
+     * cf holds the configuration of the server being merged; the mark is only
+     * ever set in that server, so this module needs no merge of its own first
+     */
+
+    ascf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_apisix_module);
+
+    if (ascf->ssl_session_ticket_takeover != 1) {
+        return NGX_OK;
+    }
+
+    amcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_apisix_module);
+
+    return ngx_apisix_ssl_session_ticket_bind(cf, ssl,
+                                          &amcf->ssl_session_tickets,
+                                          &ascf->ssl_session_ticket_location);
+#else
+    return NGX_OK;
+#endif
+}
+
+#endif
+
+
+/* the number of marked servers in this worker, NGX_DECLINED if unsupported */
+ngx_int_t
+ngx_http_apisix_ssl_session_ticket_count(void)
+{
+#if (NGX_APISIX_SSL_SESSION_TICKET)
+    ngx_http_apisix_main_conf_t  *amcf;
+
+    amcf = ngx_http_cycle_get_module_main_conf(ngx_cycle,
+                                               ngx_http_apisix_module);
+    if (amcf == NULL) {
+        return 0;
+    }
+
+    return amcf->ssl_session_tickets.nelts;
+#else
+    return NGX_DECLINED;
+#endif
+}
+
+
+/* the marked server with this 1-based id, in the order of the configuration */
+void *
+ngx_http_apisix_ssl_session_ticket_get(ngx_uint_t id)
+{
+#if (NGX_APISIX_SSL_SESSION_TICKET)
+    void                        **t;
+    ngx_http_apisix_main_conf_t  *amcf;
+
+    amcf = ngx_http_cycle_get_module_main_conf(ngx_cycle,
+                                               ngx_http_apisix_module);
+    if (amcf == NULL || id == 0 || id > amcf->ssl_session_tickets.nelts) {
+        return NULL;
+    }
+
+    t = amcf->ssl_session_tickets.elts;
+
+    return t[id - 1];
+#else
+    return NULL;
+#endif
 }
 
 /*******************Log handler***************** */

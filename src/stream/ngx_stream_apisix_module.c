@@ -1,6 +1,7 @@
 #include <ngx_stream.h>
 #include <ngx_stream_lua_api.h>
 #include "ngx_stream_apisix_module.h"
+#include "../ngx_apisix_ssl_session_ticket.h"
 
 
 typedef struct {
@@ -12,22 +13,56 @@ typedef struct {
 } ngx_stream_apisix_ctx_t;
 
 
+typedef struct {
+    /* the servers marked with apisix_ssl_session_ticket_takeover */
+    ngx_array_t          ssl_session_tickets;
+} ngx_stream_apisix_main_conf_t;
+
+
+typedef struct {
+    ngx_flag_t           ssl_session_ticket_takeover;
+    ngx_str_t            ssl_session_ticket_location;
+} ngx_stream_apisix_srv_conf_t;
+
+
+static void *ngx_stream_apisix_create_main_conf(ngx_conf_t *cf);
+static void *ngx_stream_apisix_create_srv_conf(ngx_conf_t *cf);
+static char *ngx_stream_apisix_merge_srv_conf(ngx_conf_t *cf, void *parent,
+    void *child);
+static char *ngx_stream_apisix_ssl_session_ticket_takeover(ngx_conf_t *cf,
+    ngx_command_t *cmd, void *conf);
+
+
+static ngx_command_t ngx_stream_apisix_cmds[] = {
+
+    /* only in server{}: each TLS terminating server is marked on its own */
+    { ngx_string("apisix_ssl_session_ticket_takeover"),
+      NGX_STREAM_SRV_CONF|NGX_CONF_FLAG,
+      ngx_stream_apisix_ssl_session_ticket_takeover,
+      NGX_STREAM_SRV_CONF_OFFSET,
+      offsetof(ngx_stream_apisix_srv_conf_t, ssl_session_ticket_takeover),
+      NULL },
+
+      ngx_null_command
+};
+
+
 static ngx_stream_module_t ngx_stream_apisix_module_ctx = {
     NULL,                                    /* preconfiguration */
     NULL,                                    /* postconfiguration */
 
-    NULL,                                    /* create main configuration */
+    ngx_stream_apisix_create_main_conf,      /* create main configuration */
     NULL,                                    /* init main configuration */
 
-    NULL,                                    /* create server configuration */
-    NULL,                                    /* merge server configuration */
+    ngx_stream_apisix_create_srv_conf,       /* create server configuration */
+    ngx_stream_apisix_merge_srv_conf,        /* merge server configuration */
 };
 
 
 ngx_module_t ngx_stream_apisix_module = {
     NGX_MODULE_V1,
     &ngx_stream_apisix_module_ctx,       /* module context */
-    NULL,                                /* module directives */
+    ngx_stream_apisix_cmds,              /* module directives */
     NGX_STREAM_MODULE,                   /* module type */
     NULL,                                /* init master */
     NULL,                                /* init module */
@@ -38,6 +73,152 @@ ngx_module_t ngx_stream_apisix_module = {
     NULL,                                /* exit master */
     NGX_MODULE_V1_PADDING
 };
+
+
+static void *
+ngx_stream_apisix_create_main_conf(ngx_conf_t *cf)
+{
+    ngx_stream_apisix_main_conf_t  *amcf;
+
+    amcf = ngx_pcalloc(cf->pool, sizeof(ngx_stream_apisix_main_conf_t));
+    if (amcf == NULL) {
+        return NULL;
+    }
+
+    if (ngx_array_init(&amcf->ssl_session_tickets, cf->pool, 1, sizeof(void *))
+        != NGX_OK)
+    {
+        return NULL;
+    }
+
+    return amcf;
+}
+
+
+static void *
+ngx_stream_apisix_create_srv_conf(ngx_conf_t *cf)
+{
+    ngx_stream_apisix_srv_conf_t  *ascf;
+
+    ascf = ngx_pcalloc(cf->pool, sizeof(ngx_stream_apisix_srv_conf_t));
+    if (ascf == NULL) {
+        return NULL;
+    }
+
+    /*
+     * set by ngx_pcalloc():
+     *
+     *     ascf->ssl_session_ticket_location = { 0, NULL };
+     */
+
+    ascf->ssl_session_ticket_takeover = NGX_CONF_UNSET;
+
+    return ascf;
+}
+
+
+static char *
+ngx_stream_apisix_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
+{
+    ngx_stream_apisix_srv_conf_t  *conf = child;
+
+    /* not inherited: each server is marked on its own */
+    ngx_conf_init_value(conf->ssl_session_ticket_takeover, 0);
+
+    return NGX_CONF_OK;
+}
+
+
+static char *
+ngx_stream_apisix_ssl_session_ticket_takeover(ngx_conf_t *cf,
+    ngx_command_t *cmd, void *conf)
+{
+#if (NGX_HTTP_APISIX)
+    ngx_stream_apisix_srv_conf_t  *ascf = conf;
+
+    return ngx_apisix_ssl_session_ticket_takeover(cf, cmd, conf,
+                                          &ascf->ssl_session_ticket_location);
+#else
+    /* the takeover lives in the http addon of this module */
+    return ngx_conf_set_flag_slot(cf, cmd, conf);
+#endif
+}
+
+
+#if (NGX_STREAM_SSL)
+
+ngx_int_t
+ngx_stream_apisix_ssl_session_ticket_bind(ngx_conf_t *cf, ngx_ssl_t *ssl)
+{
+#if (NGX_APISIX_SSL_SESSION_TICKET)
+    ngx_stream_apisix_srv_conf_t   *ascf;
+    ngx_stream_apisix_main_conf_t  *amcf;
+
+    /*
+     * cf holds the configuration of the server being merged; the mark is only
+     * ever set in that server, so this module needs no merge of its own first
+     */
+
+    ascf = ngx_stream_conf_get_module_srv_conf(cf, ngx_stream_apisix_module);
+
+    if (ascf->ssl_session_ticket_takeover != 1) {
+        return NGX_OK;
+    }
+
+    amcf = ngx_stream_conf_get_module_main_conf(cf, ngx_stream_apisix_module);
+
+    return ngx_apisix_ssl_session_ticket_bind(cf, ssl,
+                                          &amcf->ssl_session_tickets,
+                                          &ascf->ssl_session_ticket_location);
+#else
+    return NGX_OK;
+#endif
+}
+
+#endif
+
+
+/* the number of marked servers in this worker, NGX_DECLINED if unsupported */
+ngx_int_t
+ngx_stream_apisix_ssl_session_ticket_count(void)
+{
+#if (NGX_APISIX_SSL_SESSION_TICKET)
+    ngx_stream_apisix_main_conf_t  *amcf;
+
+    amcf = ngx_stream_cycle_get_module_main_conf(ngx_cycle,
+                                                 ngx_stream_apisix_module);
+    if (amcf == NULL) {
+        return 0;
+    }
+
+    return amcf->ssl_session_tickets.nelts;
+#else
+    return NGX_DECLINED;
+#endif
+}
+
+
+/* the marked server with this 1-based id, in the order of the configuration */
+void *
+ngx_stream_apisix_ssl_session_ticket_get(ngx_uint_t id)
+{
+#if (NGX_APISIX_SSL_SESSION_TICKET)
+    void                          **t;
+    ngx_stream_apisix_main_conf_t  *amcf;
+
+    amcf = ngx_stream_cycle_get_module_main_conf(ngx_cycle,
+                                                 ngx_stream_apisix_module);
+    if (amcf == NULL || id == 0 || id > amcf->ssl_session_tickets.nelts) {
+        return NULL;
+    }
+
+    t = amcf->ssl_session_tickets.elts;
+
+    return t[id - 1];
+#else
+    return NULL;
+#endif
+}
 
 
 #if (NGX_STREAM_SSL)
