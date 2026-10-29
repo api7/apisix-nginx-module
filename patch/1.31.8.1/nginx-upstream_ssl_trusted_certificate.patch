@@ -1,0 +1,82 @@
+diff --git src/http/modules/ngx_http_grpc_module.c src/http/modules/ngx_http_grpc_module.c
+--- src/http/modules/ngx_http_grpc_module.c
++++ src/http/modules/ngx_http_grpc_module.c
+@@ -5124,8 +5124,24 @@
+         }
+     }
+ 
++#if (NGX_HTTP_APISIX)
++    /*
++     * load the trusted certificates and CRL even when verification is off,
++     * so that verification enabled per request has them; this enables
++     * neither verification nor grpc_ssl_verify_depth
++     */
++    if (glcf->upstream.ssl_verify || glcf->ssl_trusted_certificate.len) {
++        int  depth;
++
++        depth = SSL_CTX_get_verify_depth(glcf->upstream.ssl->ctx);
++
++        if (glcf->upstream.ssl_verify
++            && glcf->ssl_trusted_certificate.len == 0)
++        {
++#else
+     if (glcf->upstream.ssl_verify) {
+         if (glcf->ssl_trusted_certificate.len == 0) {
++#endif
+             ngx_log_error(NGX_LOG_EMERG, cf->log, 0,
+                       "no grpc_ssl_trusted_certificate for grpc_ssl_verify");
+             return NGX_ERROR;
+@@ -5142,6 +5158,12 @@
+         if (ngx_ssl_crl(cf, glcf->upstream.ssl, &glcf->ssl_crl) != NGX_OK) {
+             return NGX_ERROR;
+         }
++#if (NGX_HTTP_APISIX)
++
++        if (!glcf->upstream.ssl_verify) {
++            SSL_CTX_set_verify_depth(glcf->upstream.ssl->ctx, depth);
++        }
++#endif
+     }
+ 
+     if (ngx_ssl_client_session_cache(cf, glcf->upstream.ssl,
+diff --git src/http/modules/ngx_http_proxy_module.c src/http/modules/ngx_http_proxy_module.c
+--- src/http/modules/ngx_http_proxy_module.c
++++ src/http/modules/ngx_http_proxy_module.c
+@@ -5321,8 +5321,24 @@
+         }
+     }
+ 
++#if (NGX_HTTP_APISIX)
++    /*
++     * load the trusted certificates and CRL even when verification is off,
++     * so that verification enabled per request has them; this enables
++     * neither verification nor proxy_ssl_verify_depth
++     */
++    if (plcf->upstream.ssl_verify || plcf->ssl_trusted_certificate.len) {
++        int  depth;
++
++        depth = SSL_CTX_get_verify_depth(plcf->upstream.ssl->ctx);
++
++        if (plcf->upstream.ssl_verify
++            && plcf->ssl_trusted_certificate.len == 0)
++        {
++#else
+     if (plcf->upstream.ssl_verify) {
+         if (plcf->ssl_trusted_certificate.len == 0) {
++#endif
+             ngx_log_error(NGX_LOG_EMERG, cf->log, 0,
+                       "no proxy_ssl_trusted_certificate for proxy_ssl_verify");
+             return NGX_ERROR;
+@@ -5339,6 +5355,12 @@
+         if (ngx_ssl_crl(cf, plcf->upstream.ssl, &plcf->ssl_crl) != NGX_OK) {
+             return NGX_ERROR;
+         }
++#if (NGX_HTTP_APISIX)
++
++        if (!plcf->upstream.ssl_verify) {
++            SSL_CTX_set_verify_depth(plcf->upstream.ssl->ctx, depth);
++        }
++#endif
+     }
+ 
+     if (ngx_ssl_client_session_cache(cf, plcf->upstream.ssl,
