@@ -1,0 +1,17 @@
+diff --git src/http/ngx_http_upstream.c src/http/ngx_http_upstream.c
+index d04d91e..2dd1102 100644
+--- src/http/ngx_http_upstream.c
++++ src/http/ngx_http_upstream.c
+@@ -2989,6 +2989,12 @@ ngx_http_upstream_process_trailers(ngx_http_request_t *r,
+         return NGX_OK;
+     }
+ 
++#if (NGX_HTTP_APISIX)
++    if (!ngx_http_apisix_is_upstream_pass_trailers(r)) {
++        return NGX_OK;
++    }
++#endif
++
+     part = &u->headers_in.trailers.part;
+     h = part->elts;
+ 

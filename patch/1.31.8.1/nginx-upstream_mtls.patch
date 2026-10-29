@@ -1,0 +1,112 @@
+diff --git src/http/modules/ngx_http_upstream_keepalive_module.c src/http/modules/ngx_http_upstream_keepalive_module.c
+index bb2b174..b1796ed 100644
+--- src/http/modules/ngx_http_upstream_keepalive_module.c
++++ src/http/modules/ngx_http_upstream_keepalive_module.c
+@@ -8,6 +8,9 @@
+ #include <ngx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_http.h>
++#if (NGX_HTTP_APISIX)
++#include <ngx_http_apisix_module.h>
++#endif
+ 
+ 
+ typedef struct {
+@@ -49,6 +52,10 @@ typedef struct {
+ 
+     ngx_http_upstream_t               *upstream;
+ 
++#if (NGX_HTTP_APISIX)
++    ngx_http_request_t                *request;
++#endif
++
+     void                              *data;
+ 
+     ngx_event_get_peer_pt              original_get_peer;
+@@ -185,6 +192,9 @@ ngx_http_upstream_init_keepalive_peer(ngx_http_request_t *r,
+ 
+     kp->conf = kcf;
+     kp->upstream = r->upstream;
++#if (NGX_HTTP_APISIX)
++    kp->request = r;
++#endif
+     kp->data = r->upstream->peer.data;
+     kp->original_get_peer = r->upstream->peer.get;
+     kp->original_free_peer = r->upstream->peer.free;
+@@ -230,6 +240,13 @@ ngx_http_upstream_get_keepalive_peer(ngx_peer_connection_t *pc, void *data)
+         return rc;
+     }
+ 
++#if (NGX_HTTP_APISIX)
++    /* per-request upstream TLS settings need a new handshake */
++    if (ngx_http_apisix_is_upstream_ssl_overridden(kp->request)) {
++        return NGX_OK;
++    }
++#endif
++
+     /* search cache for suitable connection */
+ 
+     cache = &kp->conf->cache;
+@@ -328,6 +345,12 @@ ngx_http_upstream_free_keepalive_peer(ngx_peer_connection_t *pc, void *data,
+         goto invalid;
+     }
+ 
++#if (NGX_HTTP_APISIX)
++    if (ngx_http_apisix_is_upstream_ssl_overridden(kp->request)) {
++        goto invalid;
++    }
++#endif
++
+     if (ngx_terminate || ngx_exiting) {
+         goto invalid;
+     }
+diff --git src/http/ngx_http_upstream.c src/http/ngx_http_upstream.c
+index b168bce..c374815 100644
+--- src/http/ngx_http_upstream.c
++++ src/http/ngx_http_upstream.c
+@@ -8,6 +8,9 @@
+ #include <ngx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_http.h>
++#if (NGX_HTTP_APISIX)
++#include <ngx_http_apisix_module.h>
++#endif
+ 
+ #if (T_NGX_MULTI_UPSTREAM)
+ #include <ngx_http_multi_upstream_module.h>
+@@ -1840,8 +1843,11 @@ ngx_http_upstream_ssl_init_connection(ngx_http_request_t *r,
+                                            NGX_HTTP_INTERNAL_SERVER_ERROR);
+         return;
+     }
+-
++#if (NGX_HTTP_APISIX)
++    if (u->conf->ssl_server_name || ngx_http_apisix_get_upstream_ssl_verify(r, u->conf->ssl_verify)) {
++#else
+     if (u->conf->ssl_server_name || u->conf->ssl_verify) {
++#endif
+         if (ngx_http_upstream_ssl_name(r, u, c) != NGX_OK) {
+             ngx_http_upstream_finalize_request(r, u,
+                                                NGX_HTTP_INTERNAL_SERVER_ERROR);
+@@ -1900,6 +1906,10 @@ ngx_http_upstream_ssl_init_connection(ngx_http_request_t *r,
+ 
+     r->connection->log->action = "SSL handshaking to upstream";
+ 
++#if (NGX_HTTP_APISIX)
++    ngx_http_apisix_set_upstream_ssl(r, c);
++#endif
++
+     rc = ngx_ssl_handshake(c);
+ 
+     if (rc == NGX_AGAIN) {
+@@ -1947,7 +1957,11 @@ ngx_http_upstream_ssl_handshake(ngx_http_request_t *r, ngx_http_upstream_t *u,
+ 
+     if (c->ssl->handshaked) {
+ 
++#if (NGX_HTTP_APISIX)
++        if (ngx_http_apisix_get_upstream_ssl_verify(r, u->conf->ssl_verify)) {
++#else
+         if (u->conf->ssl_verify) {
++#endif
+             rc = SSL_get_verify_result(c->ssl->connection);
+ 
+             if (rc != X509_V_OK) {

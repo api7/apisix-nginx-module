@@ -557,6 +557,11 @@ ngx_http_apisix_set_gzip(ngx_http_request_t *r, ngx_int_t num, size_t size,
     ngx_http_apisix_ctx_t          *ctx;
     ngx_http_apisix_gzip_t         *gzip;
 
+    /* zlib needs at least one buffer with room to write into */
+    if (num <= 0 || size == 0) {
+        return NGX_DECLINED;
+    }
+
     ctx = ngx_http_apisix_get_module_ctx(r->main);
     if (ctx == NULL) {
         return NGX_ERROR;

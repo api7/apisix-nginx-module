@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     strategy:
@@ -19,12 +22,12 @@ jobs:
             # changed in OpenResty 1.29.2.4 (stream-lua 0.0.19); they still run on
             # api7ee-runtime (OR 1.21, stream-lua 0.0.16) for functional coverage.
             exclude_tests: "t/stream/xrpc/downstream.t t/stream/xrpc/upstream.t"
-          - name: apisix-runtime-or-1.31.1.1
+          - name: apisix-runtime-or-1.31.8.1
             script_url: "https://raw.githubusercontent.com/api7/apisix-build-tools/master/build-apisix-runtime.sh"
             script_name: "build-apisix-runtime.sh"
-            build_env: "OPENRESTY_VERSION=1.31.1.1 OPENSSL_VERSION=3.5.9"
-            # build-tools master still pins a multi_upstream release without nginx 1.31.1 support
-            multi_upstream_ver: "1.4.0"
+            build_env: "OPENRESTY_VERSION=1.31.8.1 OPENSSL_VERSION=3.5.9"
+            # build-tools master still pins a multi_upstream release without nginx 1.31.8 support
+            multi_upstream_ver: "1.4.1"
             exclude_tests: "t/stream/xrpc/downstream.t t/stream/xrpc/upstream.t"
           - name: api7ee-runtime
             script_url: "https://raw.githubusercontent.com/api7/apisix-build-tools/release/api7ee-runtime/build-api7ee-runtime.sh"

@@ -1,0 +1,22 @@
+diff --git src/http/modules/ngx_http_grpc_module.c src/http/modules/ngx_http_grpc_module.c
+index ec9101b..3155544 100644
+--- src/http/modules/ngx_http_grpc_module.c
++++ src/http/modules/ngx_http_grpc_module.c
+@@ -4814,8 +4814,15 @@ ngx_http_grpc_init_headers(ngx_conf_t *cf, ngx_http_grpc_loc_conf_t *conf,
+         src = conf->headers_source->elts;
+         for (i = 0; i < conf->headers_source->nelts; i++) {
+ 
+-            if (src[i].key.len == 4
+-                && ngx_strncasecmp(src[i].key.data, (u_char *) "Host", 4) == 0)
++            if ((src[i].key.len == 4
++                 && ngx_strncasecmp(src[i].key.data, (u_char *) "Host", 4) == 0)
++#if (NGX_HTTP_APISIX)
++                /* :authority overrides the default one, same as Host */
++                || (src[i].key.len == 10
++                    && ngx_strncasecmp(src[i].key.data,
++                                       (u_char *) ":authority", 10) == 0)
++#endif
++               )
+             {
+                 conf->host_value = ngx_pcalloc(cf->pool,
+                                              sizeof(ngx_http_complex_value_t));
