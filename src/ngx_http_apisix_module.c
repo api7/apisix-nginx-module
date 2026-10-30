@@ -3,6 +3,7 @@
 #include <ngx_http.h>
 #include <ngx_http_realip_module.h>
 #include "ngx_http_apisix_module.h"
+#include "ngx_http_apisix_ssl_session_ticket.h"
 
 
 #define NGX_HTTP_APISIX_SSL_ENC     1
@@ -31,7 +32,7 @@ ngx_http_apisix_init(ngx_conf_t *cf)
     if (ngx_http_apisix_error_log_init(cf) !=  NGX_CONF_OK) {
         return NGX_ERROR;
     }
-    return NGX_OK;
+    return ngx_http_apisix_ssl_session_ticket_init();
 }
 
 static ngx_command_t ngx_http_apisix_cmds[] = {
@@ -77,7 +78,7 @@ ngx_module_t ngx_http_apisix_module = {
     NULL,                                /* init process */
     NULL,                                /* init thread */
     NULL,                                /* exit thread */
-    NULL,                                /* exit process */
+    ngx_http_apisix_ssl_session_ticket_exit, /* exit process */
     NULL,                                /* exit master */
     NGX_MODULE_V1_PADDING
 };

@@ -84,3 +84,4 @@ jobs:
             done
           fi
           echo "$TEST_FILES" | xargs prove -I. -Itest-nginx/lib
+          python3 t/ssl-session-ticket.py
