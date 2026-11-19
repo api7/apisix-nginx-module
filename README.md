@@ -14,6 +14,49 @@ default: off
 
 Disable request mirror until we enable it in the Lua code.
 
+### apisix_ssl_session_ticket_takeover [on|off]
+
+context: `server` (http and stream)
+
+default: off
+
+Hand the TLS session ticket keys of this server's SSL context over to Lua:
+instead of the keys nginx rotates in `ssl_session_cache` or reads from
+`ssl_session_ticket_key`, the context encrypts and decrypts tickets with a
+complete, ordered set of keys installed through
+[`resty.apisix.ssl_session_ticket`](#restyapisixssl_session_ticket). Servers
+of different nodes that install the same set resume each other's sessions.
+
+```nginx
+server {
+    listen 9443 ssl;
+    ssl_certificate     cert.pem;
+    ssl_certificate_key cert.key;
+    ssl_session_tickets off;
+    apisix_ssl_session_ticket_takeover on;
+}
+```
+
+- The directive is only allowed in `server{}`, so a mark is never inherited
+  from `http{}` or `stream{}`: every server, including each of several stream
+  servers, is marked on its own. A server that is not marked, such as the
+  Admin API, keeps the native behavior, including the keys nginx rotates in a
+  session cache it shares with a marked server.
+- A marked context starts with stateless tickets off whatever
+  `ssl_session_tickets` says, and stays off until Lua installs a set and turns
+  them on. Without a set it never falls back to keys of its own.
+- It works without a session cache, the stream default.
+- It cannot be combined with `ssl_session_ticket_key`, nginx refuses to start.
+- Only a server that has an SSL context is concerned: one with
+  `ssl_certificate` or `ssl_reject_handshake on`. When several servers share a
+  listening address, tickets follow the context the handshake starts with,
+  the one of the default server of that address, as for native nginx.
+- The takeover needs the `nginx-ssl_session_ticket_takeover` patch, which only
+  exists for OpenResty 1.31.1.1 (nginx 1.31.1), the release it is verified
+  against: the module refuses to compile with the patch on any other nginx.
+  Other builds accept the directive with a warning and take nothing over, and
+  the Lua API reports `not_supported`.
+
 ### apisix_stream_metrics_zone \<size\>
 
 context: `stream`
@@ -171,3 +214,98 @@ lua {
     lua_shared_dict prometheus-metrics 15m;
 }
 ```
+
+## Lua API
+
+### resty.apisix.ssl_session_ticket
+
+Manages the servers marked with
+[`apisix_ssl_session_ticket_takeover`](#apisix_ssl_session_ticket_takeover-onoff).
+The module works in the http and in the stream subsystem, and only ever sees
+the marked servers of the subsystem it runs in, as the current worker has
+them. Every function returns `nil` and an error on failure; see the table
+below.
+
+```lua
+local ticket = require("resty.apisix.ssl_session_ticket")
+
+-- turn tickets on: a complete set first, then the switch
+assert(ticket.set_keys(id, { current, previous }))
+assert(ticket.enable_tickets(id))
+
+-- and off: the switch first, then the keys
+assert(ticket.disable_tickets(id))
+assert(ticket.revoke_keys(id))
+```
+
+- `contexts()` returns the marked servers:
+  `{ id = 1, registered = true, tickets = false, keys = 0, generation = 1,
+  conf = "/path/nginx.conf:42" }`. `id` is the position of the server in the
+  configuration, starting at 1, and does not change for the life of the
+  worker. `registered` tells that the ticket callback was registered for this
+  context in the configuration generation of the worker; OpenSSL has no getter
+  for the callback, so this is the record the successful registration left on
+  the context. A context with `registered = false` stays off: it takes no keys
+  and its tickets cannot be turned on. `tickets` is true when
+  `SSL_OP_NO_TICKET` is clear on the context, `keys` counts the installed keys
+  and `conf` tells where the directive is, for diagnostics only. Use it from
+  `init_worker_by_lua*` on: in `init_by_lua*` the configuration being loaded
+  is not committed yet, and its contexts do not verify.
+- `set_keys(id, keys)` installs a complete, ordered set of keys: the first one
+  encrypts new tickets, every one decrypts. A key is 80 raw bytes in the nginx
+  layout, `name(16) | HMAC-SHA256(32) | AES-256-CBC(32)`; names must be unique
+  and there are 1 to `MAX_KEYS` (256) of them. The set replaces the previous
+  one as a whole, which is never visible half replaced; a rejected set leaves
+  the previous one in place. It does not change whether tickets are on. As
+  nginx does, a ticket decrypted with any key but the first is renewed under
+  the first one, and every TLSv1.3 resumption gets a new ticket.
+- `enable_tickets(id)` clears `SSL_OP_NO_TICKET` on the context. It needs a
+  verified registration and an installed set.
+- `disable_tickets(id)` sets `SSL_OP_NO_TICKET` on the context and keeps the
+  set.
+- `revoke_keys(id)` sets `SSL_OP_NO_TICKET`, then wipes and drops the set.
+- `sync_connection()` aligns `SSL_OP_NO_TICKET` on the TLS connection of the
+  current request with its context, and returns whether the connection may
+  use stateless tickets, and the id of its context. A connection copies the
+  options of the context when it is accepted, so a context switched while the
+  handshake is pending does not reach it otherwise: call it from
+  `ssl_client_hello_by_lua*`, after bringing the context up to date.
+- `connection_tickets()` returns the same as `sync_connection()` without
+  changing the connection.
+
+Turning tickets off only stops stateless tickets: TLSv1.2 then issues none,
+while TLSv1.3 keeps sending the stateful tickets of the session cache, and
+whether those resume depends on the cache, as before. None of the calls closes
+a connection. Whatever the options of a connection say, the context refuses to
+encrypt or decrypt a ticket once it is off or has no keys: a refused ticket
+means a full handshake, and a refused encryption an empty ticket in TLSv1.2 and
+no ticket in TLSv1.3, never a handshake failure.
+
+| error | meaning |
+|---|---|
+| `not_supported` | this nginx cannot take over the keys, see the directive |
+| `not_registered` | the server is marked, but the callback registration failed or does not verify; the context stays off |
+| `no_context` | the current subsystem and worker have no marked server with this id |
+| `invalid_keys` | the set is rejected (empty, a key not 80 bytes, too many keys, a duplicate name), followed by `: ` and a reason |
+| `no_keys` | tickets cannot be turned on without a set |
+| `failed` | out of memory, the previous set stays |
+| `not_marked` | the context of the current connection is not marked |
+| `no_request`, `no_ssl` | the connection functions need the request of a TLS connection |
+
+### resty.apisix.process
+
+- `get_generation()` returns the configuration generation of the process: 1
+  for the configuration the master started with, then one more for each
+  successful reload. A worker keeps the generation it was started for, so the
+  workers of two generations that overlap during a reload tell apart, which
+  `ngx.worker.id()` does not; a worker the master restarts after a crash gets
+  the generation of its siblings. It is 0 until the first configuration is in
+  place, in `init_by_lua*` for instance, and starts over with nginx, as the
+  shared memory zones do.
+- `get_identity()` returns
+  `{ type = "worker", pid = 1234, worker_id = 0, worker_count = 4,
+  generation = 3, slot = 0 }`, where `type` is `ngx.process.type()`. `slot` is
+  the worker id for a worker or a single process, `worker_count` for the
+  privileged agent and `nil` for the other processes: within a generation it
+  stays below `worker_count + 1`, and a restarted worker gets its slot back,
+  with another pid.

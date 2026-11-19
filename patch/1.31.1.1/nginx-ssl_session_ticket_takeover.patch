@@ -1,0 +1,100 @@
+diff --git src/event/ngx_event_openssl.h src/event/ngx_event_openssl.h
+--- src/event/ngx_event_openssl.h
++++ src/event/ngx_event_openssl.h
+@@ -296,6 +296,17 @@
+     ngx_array_t *paths);
+ ngx_int_t ngx_ssl_session_cache_init(ngx_shm_zone_t *shm_zone, void *data);
+ 
++#if (NGX_HTTP_APISIX)
++/*
++ * apisix-nginx-module takes over the session ticket keys of an SSL_CTX whose
++ * server is marked with apisix_ssl_session_ticket_takeover, see
++ * ngx_apisix_ssl_session_ticket.c in the module
++ */
++#define NGX_APISIX_SSL_SESSION_TICKET  1
++ngx_int_t ngx_apisix_ssl_session_ticket_register(ngx_conf_t *cf,
++    ngx_ssl_t *ssl, ngx_array_t *paths);
++#endif
++
+ ngx_int_t ngx_ssl_set_client_hello_callback(ngx_ssl_t *ssl,
+     ngx_ssl_client_hello_arg *cb);
+ #ifdef SSL_CLIENT_HELLO_SUCCESS
+diff --git src/event/ngx_event_openssl.c src/event/ngx_event_openssl.c
+--- src/event/ngx_event_openssl.c
++++ src/event/ngx_event_openssl.c
+@@ -4883,6 +4883,21 @@
+     ngx_file_info_t        fi;
+     ngx_pool_cleanup_t    *cln;
+     ngx_ssl_ticket_key_t  *key;
++#if (NGX_APISIX_SSL_SESSION_TICKET)
++    ngx_int_t              rc;
++
++    /*
++     * a marked context gets the module's callback instead of the native
++     * keys; this must come before the return below, which a server without
++     * a shared session cache, the stream default, would otherwise take
++     */
++
++    rc = ngx_apisix_ssl_session_ticket_register(cf, ssl, paths);
++
++    if (rc != NGX_DECLINED) {
++        return rc;
++    }
++#endif
+ 
+     if (paths == NULL
+         && SSL_CTX_get_ex_data(ssl->ctx, ngx_ssl_session_cache_index) == NULL)
+diff --git src/http/modules/ngx_http_ssl_module.c src/http/modules/ngx_http_ssl_module.c
+--- src/http/modules/ngx_http_ssl_module.c
++++ src/http/modules/ngx_http_ssl_module.c
+@@ -13,6 +13,10 @@
+ #include <ngx_event_quic_openssl_compat.h>
+ #endif
+ 
++#if (NGX_HTTP_APISIX)
++#include <ngx_http_apisix_module.h>
++#endif
++
+ 
+ typedef ngx_int_t (*ngx_ssl_variable_handler_pt)(ngx_connection_t *c,
+     ngx_pool_t *pool, ngx_str_t *s);
+@@ -931,6 +935,12 @@
+     ngx_conf_merge_ptr_value(conf->session_ticket_keys,
+                          prev->session_ticket_keys, NULL);
+ 
++#if (NGX_HTTP_APISIX)
++    if (ngx_http_apisix_ssl_session_ticket_bind(cf, &conf->ssl) != NGX_OK) {
++        return NGX_CONF_ERROR;
++    }
++#endif
++
+     if (ngx_ssl_session_ticket_keys(cf, &conf->ssl, conf->session_ticket_keys)
+         != NGX_OK)
+     {
+diff --git src/stream/ngx_stream_ssl_module.c src/stream/ngx_stream_ssl_module.c
+--- src/stream/ngx_stream_ssl_module.c
++++ src/stream/ngx_stream_ssl_module.c
+@@ -9,6 +9,10 @@
+ #include <ngx_core.h>
+ #include <ngx_stream.h>
+ 
++#if (NGX_STREAM_APISIX)
++#include <ngx_stream_apisix_module.h>
++#endif
++
+ 
+ typedef ngx_int_t (*ngx_ssl_variable_handler_pt)(ngx_connection_t *c,
+     ngx_pool_t *pool, ngx_str_t *s);
+@@ -1186,6 +1190,12 @@
+     ngx_conf_merge_ptr_value(conf->session_ticket_keys,
+                          prev->session_ticket_keys, NULL);
+ 
++#if (NGX_STREAM_APISIX)
++    if (ngx_stream_apisix_ssl_session_ticket_bind(cf, &conf->ssl) != NGX_OK) {
++        return NGX_CONF_ERROR;
++    }
++#endif
++
+     if (ngx_ssl_session_ticket_keys(cf, &conf->ssl, conf->session_ticket_keys)
+         != NGX_OK)
+     {
