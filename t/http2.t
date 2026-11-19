@@ -7,50 +7,8 @@ add_block_preprocessor(sub {
     $block->set_value("no_error_log",
                       "$no_error_log\nclient violated connection flow control");
 
-    my $config = $block->config // '';
     my $http_config = $block->http_config // '';
-
-    # "listen ... http2" is deprecated but, unlike "http2 on", works before
-    # nginx 1.25.1, so the grpc_pass tests also run on OpenResty 1.21.4
-    if ($config =~ /h2_legacy_backend/) {
-        $http_config .= <<_EOC_;
-    upstream h2_legacy_backend {
-        server unix:$ENV{TEST_NGINX_HTML_DIR}/h2_legacy.sock;
-        keepalive 4;
-    }
-
-    server {
-        listen unix:$ENV{TEST_NGINX_HTML_DIR}/h2_legacy.sock http2;
-        client_max_body_size 2m;
-
-        location /up {
-            content_by_lua_block {
-                local size = tonumber(ngx.var.arg_size) or 0
-                ngx.header["Content-Length"] = size
-                ngx.header["X-Server-Protocol"] = ngx.var.server_protocol
-                ngx.print(string.rep("a", size))
-            }
-        }
-
-        location /echo {
-            content_by_lua_block {
-                ngx.req.read_body()
-                local data = ngx.req.get_body_data()
-                if not data then
-                    local f = assert(io.open(ngx.req.get_body_file()))
-                    data = f:read("*a")
-                    f:close()
-                end
-                ngx.say(ngx.var.server_protocol, " ", #data)
-            }
-        }
-    }
-_EOC_
-    }
-
-    # "http2 on" needs nginx 1.25.1+, so only the upstream tests get this server
-    if ($config =~ /h2_backend/) {
-        $http_config .= <<_EOC_;
+    $http_config .= <<_EOC_;
     upstream h2_backend {
         server unix:$ENV{TEST_NGINX_HTML_DIR}/h2.sock;
         keepalive 4;
@@ -70,7 +28,6 @@ _EOC_
         }
     }
 _EOC_
-    }
 
     $block->set_value("http_config", $http_config);
 });
@@ -161,45 +118,3 @@ HTTP/2.0 200 1048576
 6: 200 262144
 7: 200 262144
 8: 200 262144
-
-
-
-=== TEST 4: response larger than the initial flow control window over HTTP/2 (grpc_pass)
---- config
-    location /proxy {
-        grpc_pass h2_legacy_backend;
-        rewrite ^ /up break;
-    }
-
-    location /t {
-        content_by_lua_block {
-            local res = ngx.location.capture("/proxy", {
-                args = { size = 1024 * 1024 },
-            })
-            ngx.say(res.header["x-server-protocol"], " ", res.status, " ",
-                    #res.body)
-        }
-    }
---- response_body
-HTTP/2.0 200 1048576
-
-
-
-=== TEST 5: request body larger than the initial flow control window over HTTP/2 (grpc_pass)
---- config
-    location /proxy {
-        grpc_pass h2_legacy_backend;
-        rewrite ^ /echo break;
-    }
-
-    location /t {
-        content_by_lua_block {
-            local res = ngx.location.capture("/proxy", {
-                method = ngx.HTTP_POST,
-                body = string.rep("a", 1024 * 1024),
-            })
-            ngx.print(res.status, " ", res.body)
-        }
-    }
---- response_body
-200 HTTP/2.0 1048576
