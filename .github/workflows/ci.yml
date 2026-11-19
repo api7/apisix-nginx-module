@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, release/1.19 ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, release/1.19 ]
 
 jobs:
   build:
@@ -12,20 +12,15 @@ jobs:
       fail-fast: false
       matrix:
         runtime:
-          - name: apisix-runtime
-            script_url: "https://raw.githubusercontent.com/api7/apisix-build-tools/master/build-apisix-runtime.sh"
-            script_name: "build-apisix-runtime.sh"
-            # These assert stream-lua internal buffer-allocation debug logs that
-            # changed in OpenResty 1.29.2.4 (stream-lua 0.0.19); they still run on
-            # api7ee-runtime (OR 1.21, stream-lua 0.0.16) for functional coverage.
-            exclude_tests: "t/stream/xrpc/downstream.t t/stream/xrpc/upstream.t"
+          # 1.19.x only serves api7ee-runtime (OpenResty 1.21.4). apisix-runtime
+          # on build-tools master builds OpenResty 1.31.8.1, which needs 1.20.x.
           - name: api7ee-runtime
             script_url: "https://raw.githubusercontent.com/api7/apisix-build-tools/release/api7ee-runtime/build-api7ee-runtime.sh"
             script_name: "build-api7ee-runtime.sh"
             # Tests requiring nginx features not available in OR 1.21 (nginx 1.21)
             exclude_tests: "t/pipe.t t/upstream_pass_trailers.t"
 
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     name: build (${{ matrix.runtime.name }})
 
     env:
