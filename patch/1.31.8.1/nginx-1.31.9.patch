@@ -1,3 +1,10 @@
+# nginx release-1.31.8..release-1.31.9 diff of src/, auto/ and conf/, unmodified,
+# so the nginx core bundled in OpenResty 1.31.8.1 becomes nginx 1.31.9.
+# The only manual change: src/core/nginx.h only bumps nginx_version and
+# NGINX_VERSION and keeps OpenResty's NGINX_VER line, whose context OpenResty's
+# server_header patch changes. Changes: https://nginx.org/en/CHANGES
+# Drop this file once OpenResty ships nginx >= 1.31.9.
+
 diff --git src/core/nginx.c src/core/nginx.c
 --- src/core/nginx.c
 +++ src/core/nginx.c
