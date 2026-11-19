@@ -1,0 +1,102 @@
+--- src/event/ngx_event_openssl.h
++++ src/event/ngx_event_openssl.h
+@@ -183,6 +183,12 @@
+     unsigned                    shared:1;
+ } ngx_ssl_ticket_key_t;
+ 
++#if (NGX_HTTP_APISIX && NGX_HTTP_SSL && defined(SSL_READ_EARLY_DATA_SUCCESS))
++#define NGX_HTTP_APISIX_SSL_SESSION_TICKET  1
++ngx_int_t ngx_http_apisix_ssl_session_ticket_key(ngx_ssl_conn_t *ssl_conn,
++    u_char *name, int enc, ngx_ssl_ticket_key_t **key, int *renew);
++#endif
++
+ 
+ typedef struct {
+     ngx_rbtree_t                session_rbtree;
+--- src/event/ngx_event_openssl.c
++++ src/event/ngx_event_openssl.c
+@@ -4759,13 +4759,13 @@
+     ngx_ssl_ticket_key_t  *key;
+     const EVP_MD          *digest;
+     const EVP_CIPHER      *cipher;
++    int                    renew = 0;
++#if (NGX_HTTP_APISIX_SSL_SESSION_TICKET)
++    ngx_int_t              apisix_rc;
++#endif
+ 
+     c = ngx_ssl_get_connection(ssl_conn);
+     ssl_ctx = c->ssl->session_ctx;
+-
+-    if (ngx_ssl_rotate_ticket_keys(ssl_ctx, c->log) != NGX_OK) {
+-        return -1;
+-    }
+ 
+ #ifdef OPENSSL_NO_SHA256
+     digest = EVP_sha1();
+@@ -4773,12 +4773,32 @@
+     digest = EVP_sha256();
+ #endif
+ 
++#if (NGX_HTTP_APISIX_SSL_SESSION_TICKET)
++    apisix_rc = ngx_http_apisix_ssl_session_ticket_key(ssl_conn, name, enc,
++                                                     &key, &renew);
++    if (apisix_rc == NGX_ERROR) {
++        return 0;
++    }
++
++    if (apisix_rc == NGX_OK) {
++        goto apisix_key;
++    }
++#endif
++
++    if (ngx_ssl_rotate_ticket_keys(ssl_ctx, c->log) != NGX_OK) {
++        return -1;
++    }
++
+     keys = SSL_CTX_get_ex_data(ssl_ctx, ngx_ssl_ticket_keys_index);
+     if (keys == NULL) {
+         return -1;
+     }
+ 
+     key = keys->elts;
++
++#if (NGX_HTTP_APISIX_SSL_SESSION_TICKET)
++apisix_key:
++#endif
+ 
+     if (enc == 1) {
+         /* encrypt session ticket */
+@@ -4824,8 +4844,16 @@
+     } else {
+         /* decrypt session ticket */
+ 
++#if (NGX_HTTP_APISIX_SSL_SESSION_TICKET)
++        if (apisix_rc == NGX_OK) {
++            i = 0;
++            goto found;
++        }
++#endif
++
+         for (i = 0; i < keys->nelts; i++) {
+             if (ngx_memcmp(name, key[i].name, 16) == 0) {
++                renew = i != 0 && key[i].expire;
+                 goto found;
+             }
+         }
+@@ -4840,7 +4868,7 @@
+ 
+         ngx_log_debug3(NGX_LOG_DEBUG_EVENT, c->log, 0,
+                        "ssl ticket decrypt, key: \"%*xs\"%s",
+-                       (size_t) 16, key[i].name, (i == 0) ? " (default)" : "");
++                       (size_t) 16, key[i].name, (i == 0 && !renew) ? " (default)" : "");
+ 
+         if (key[i].size == 48) {
+             cipher = EVP_aes_128_cbc();
+@@ -4876,7 +4904,7 @@
+ 
+         /* renew if non-default key */
+ 
+-        if (i != 0 && key[i].expire) {
++        if (renew) {
+             return 2;
+         }
