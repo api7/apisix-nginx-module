@@ -1,0 +1,120 @@
+diff --git src/http/ngx_http_copy_filter_module.c src/http/ngx_http_copy_filter_module.c
+--- src/http/ngx_http_copy_filter_module.c
++++ src/http/ngx_http_copy_filter_module.c
+@@ -91,6 +91,13 @@ ngx_http_copy_filter(ngx_http_request_t
+     ngx_output_chain_ctx_t       *ctx;
+     ngx_http_core_loc_conf_t     *clcf;
+     ngx_http_copy_filter_conf_t  *conf;
++#if (NGX_HAVE_FILE_AIO)
++    ngx_output_chain_aio_pt       aio_handler;
++#endif
++#if (NGX_THREADS)
++    ngx_int_t                   (*thread_handler)(ngx_thread_task_t *task,
++                                                  ngx_file_t *file);
++#endif
+ 
+     c = r->connection;
+ 
+@@ -147,10 +154,39 @@ ngx_http_copy_filter(ngx_http_request_t
+ 
+ #if (NGX_HAVE_FILE_AIO || NGX_THREADS)
+     ctx->aio = r->aio;
++
++#if (NGX_HAVE_FILE_AIO)
++    aio_handler = ctx->aio_handler;
++#endif
++#if (NGX_THREADS)
++    thread_handler = ctx->thread_handler;
++#endif
++
++    /*
++     * each pending operation holds a reference in r->main->blocked;
++     * with the counter close to its limit the file is read
++     * synchronously instead, so that it cannot overflow
++     */
++
++    if (r->main->blocked >= NGX_HTTP_MAX_BLOCKED) {
++#if (NGX_HAVE_FILE_AIO)
++        ctx->aio_handler = NULL;
++#endif
++#if (NGX_THREADS)
++        ctx->thread_handler = NULL;
++#endif
++    }
+ #endif
+ 
+     rc = ngx_output_chain(ctx, in);
+ 
++#if (NGX_HAVE_FILE_AIO)
++    ctx->aio_handler = aio_handler;
++#endif
++#if (NGX_THREADS)
++    ctx->thread_handler = thread_handler;
++#endif
++
+     if (ctx->in == NULL) {
+         r->buffered &= ~NGX_HTTP_COPY_BUFFERED;
+ 
+diff --git src/http/ngx_http_file_cache.c src/http/ngx_http_file_cache.c
+--- src/http/ngx_http_file_cache.c
++++ src/http/ngx_http_file_cache.c
+@@ -440,6 +440,10 @@ ngx_http_file_cache_lock(ngx_http_reques
+         return NGX_HTTP_CACHE_SCARCE;
+     }
+ 
++    if (r->main->blocked >= NGX_HTTP_MAX_BLOCKED) {
++        return NGX_HTTP_CACHE_SCARCE;
++    }
++
+     c->waiting = 1;
+ 
+     if (c->wait_time == 0) {
+@@ -677,7 +681,9 @@ ngx_http_file_cache_aio_read(ngx_http_re
+ 
+ #if (NGX_HAVE_FILE_AIO)
+ 
+-    if (clcf->aio == NGX_HTTP_AIO_ON && ngx_file_aio) {
++    if (clcf->aio == NGX_HTTP_AIO_ON && ngx_file_aio
++        && r->main->blocked < NGX_HTTP_MAX_BLOCKED)
++    {
+         n = ngx_file_aio_read(&c->file, c->buf->pos, c->body_start, 0, r->pool);
+ 
+         if (n != NGX_AGAIN) {
+@@ -700,7 +706,9 @@ ngx_http_file_cache_aio_read(ngx_http_re
+ 
+ #if (NGX_THREADS)
+ 
+-    if (clcf->aio == NGX_HTTP_AIO_THREADS) {
++    if (clcf->aio == NGX_HTTP_AIO_THREADS
++        && r->main->blocked < NGX_HTTP_MAX_BLOCKED)
++    {
+         c->file.thread_task = c->thread_task;
+         c->file.thread_handler = ngx_http_cache_thread_handler;
+         c->file.thread_ctx = r;
+diff --git src/http/ngx_http_request.h src/http/ngx_http_request.h
+--- src/http/ngx_http_request.h
++++ src/http/ngx_http_request.h
+@@ -11,6 +11,7 @@
+ 
+ #define NGX_HTTP_MAX_URI_CHANGES           10
+ #define NGX_HTTP_MAX_SUBREQUESTS           50
++#define NGX_HTTP_MAX_BLOCKED               250
+ 
+ /* must be 2^n */
+ #define NGX_HTTP_LC_HEADER_LEN             32
+diff --git src/http/ngx_http_upstream.c src/http/ngx_http_upstream.c
+--- src/http/ngx_http_upstream.c
++++ src/http/ngx_http_upstream.c
+@@ -3900,6 +3900,12 @@ ngx_http_upstream_thread_handler(ngx_thr
+     task->event.data = r;
+     task->event.handler = ngx_http_upstream_thread_event_handler;
+ 
++    if (r->main->blocked >= NGX_HTTP_MAX_BLOCKED) {
++        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
++                      "too many operations pending");
++        return NGX_ERROR;
++    }
++
+     if (ngx_thread_task_post(tp, task) != NGX_OK) {
+         return NGX_ERROR;
+     }

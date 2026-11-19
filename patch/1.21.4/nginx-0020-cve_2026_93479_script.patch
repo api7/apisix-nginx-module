@@ -1,0 +1,46 @@
+diff --git src/http/ngx_http_script.c src/http/ngx_http_script.c
+--- src/http/ngx_http_script.c
++++ src/http/ngx_http_script.c
+@@ -643,7 +643,7 @@ ngx_http_script_run(ngx_http_request_t *
+     e.request = r;
+     e.flushed = 1;
+ 
+-    n = len;
++    n = 0;
+ 
+     while (*(uintptr_t *) e.ip) {
+         lcode = *(ngx_http_script_len_code_pt *) e.ip;
+@@ -651,8 +651,8 @@ ngx_http_script_run(ngx_http_request_t *
+     }
+ 
+ 
+-    value->len = n;
+-    value->data = ngx_pnalloc(r->pool, n);
++    value->len = n + len;
++    value->data = ngx_pnalloc(r->pool, n + len);
+     if (value->data == NULL) {
+         return NULL;
+     }
+diff --git src/stream/ngx_stream_script.c src/stream/ngx_stream_script.c
+--- src/stream/ngx_stream_script.c
++++ src/stream/ngx_stream_script.c
+@@ -519,7 +519,7 @@ ngx_stream_script_run(ngx_stream_session
+     e.session = s;
+     e.flushed = 1;
+ 
+-    n = len;
++    n = 0;
+ 
+     while (*(uintptr_t *) e.ip) {
+         lcode = *(ngx_stream_script_len_code_pt *) e.ip;
+@@ -527,8 +527,8 @@ ngx_stream_script_run(ngx_stream_session
+     }
+ 
+ 
+-    value->len = n;
+-    value->data = ngx_pnalloc(s->connection->pool, n);
++    value->len = n + len;
++    value->data = ngx_pnalloc(s->connection->pool, n + len);
+     if (value->data == NULL) {
+         return NULL;
+     }

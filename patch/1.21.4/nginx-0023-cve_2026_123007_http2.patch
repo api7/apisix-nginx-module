@@ -17,17 +17,6 @@ diff --git src/http/v2/ngx_http_v2.c src/http/v2/ngx_http_v2.c
  
          return ngx_http_v2_connection_error(h2c, NGX_HTTP_V2_FLOW_CTRL_ERROR);
      }
-diff --git src/http/v2/ngx_http_v2.h src/http/v2/ngx_http_v2.h
---- src/http/v2/ngx_http_v2.h
-+++ src/http/v2/ngx_http_v2.h
-@@ -132,6 +132,7 @@ struct ngx_http_v2_connection_s {
-     ngx_uint_t                       concurrent_pushes;
- 
-     size_t                           send_window;
-+    size_t                           send_queued;
-     size_t                           recv_window;
-     size_t                           init_window;
- 
 diff --git src/http/v2/ngx_http_v2_filter_module.c src/http/v2/ngx_http_v2_filter_module.c
 --- src/http/v2/ngx_http_v2_filter_module.c
 +++ src/http/v2/ngx_http_v2_filter_module.c
@@ -54,4 +43,15 @@ diff --git src/http/v2/ngx_http_v2_filter_module.c src/http/v2/ngx_http_v2_filte
 +    h2c->send_queued -= window;
  }
  
+ 
+diff --git src/http/v2/ngx_http_v2.h src/http/v2/ngx_http_v2.h
+--- src/http/v2/ngx_http_v2.h
++++ src/http/v2/ngx_http_v2.h
+@@ -132,6 +132,7 @@ struct ngx_http_v2_connection_s {
+     ngx_uint_t                       concurrent_pushes;
+ 
+     size_t                           send_window;
++    size_t                           send_queued;
+     size_t                           recv_window;
+     size_t                           init_window;
  
