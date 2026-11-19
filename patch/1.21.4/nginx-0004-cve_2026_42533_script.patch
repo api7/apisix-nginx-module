@@ -101,8 +101,8 @@ diff --git src/http/modules/ngx_http_grpc_module.c src/http/modules/ngx_http_grp
      /* :method header */
  
      if (r->method == NGX_HTTP_GET || r->method == NGX_HTTP_POST) {
-@@ -827,8 +831,8 @@ ngx_http_grpc_create_request(ngx_http_re
-             return NGX_ERROR;
+@@ -797,8 +801,8 @@ ngx_http_grpc_create_request(ngx_http_re
+             continue;
          }
  
 -        len += 1 + NGX_HTTP_V2_INT_OCTETS + key_len
@@ -112,7 +112,7 @@ diff --git src/http/modules/ngx_http_grpc_module.c src/http/modules/ngx_http_grp
  
          if (tmp_len < key_len) {
              tmp_len = key_len;
-@@ -839,6 +843,8 @@ ngx_http_grpc_create_request(ngx_http_re
+@@ -809,6 +813,8 @@ ngx_http_grpc_create_request(ngx_http_re
          }
      }
  
@@ -121,7 +121,7 @@ diff --git src/http/modules/ngx_http_grpc_module.c src/http/modules/ngx_http_grp
      if (glcf->upstream.pass_request_headers) {
          part = &r->headers_in.headers.part;
          header = part->elts;
-@@ -1035,6 +1041,8 @@ ngx_http_grpc_create_request(ngx_http_re
+@@ -991,6 +997,8 @@ ngx_http_grpc_create_request(ngx_http_re
  
      le.ip = glcf->headers.lengths->elts;
  
@@ -130,7 +130,7 @@ diff --git src/http/modules/ngx_http_grpc_module.c src/http/modules/ngx_http_grp
      while (*(uintptr_t *) le.ip) {
  
          lcode = *(ngx_http_script_len_code_pt *) le.ip;
-@@ -1059,16 +1067,38 @@ ngx_http_grpc_create_request(ngx_http_re
+@@ -1015,16 +1023,38 @@ ngx_http_grpc_create_request(ngx_http_re
              continue;
          }
  
@@ -169,7 +169,7 @@ diff --git src/http/modules/ngx_http_grpc_module.c src/http/modules/ngx_http_grp
  
          while (*(uintptr_t *) e.ip) {
              code = *(ngx_http_script_code_pt *) e.ip;
-@@ -1076,6 +1106,20 @@ ngx_http_grpc_create_request(ngx_http_re
+@@ -1032,6 +1062,20 @@ ngx_http_grpc_create_request(ngx_http_re
          }
          e.ip += sizeof(uintptr_t);
  
@@ -1136,7 +1136,7 @@ diff --git src/http/ngx_http_script.c src/http/ngx_http_script.c
              p = e->pos;
              e->pos = ngx_copy(p, value->data, value->len);
  
-@@ -1192,6 +1237,7 @@ ngx_http_script_regex_start_code(ngx_htt
+@@ -1186,6 +1231,7 @@ ngx_http_script_regex_start_code(ngx_htt
      e->quote = code->redirect;
  
      e->pos = e->buf.data;
@@ -1144,7 +1144,7 @@ diff --git src/http/ngx_http_script.c src/http/ngx_http_script.c
  
      e->ip += sizeof(ngx_http_script_regex_code_t);
  }
-@@ -1229,6 +1275,11 @@ ngx_http_script_regex_end_code(ngx_http_
+@@ -1223,6 +1269,11 @@ ngx_http_script_regex_end_code(ngx_http_
          e->pos = dst;
  
          if (code->add_args && r->args.len) {
@@ -1156,7 +1156,7 @@ diff --git src/http/ngx_http_script.c src/http/ngx_http_script.c
              *e->pos++ = (u_char) (code->args ? '&' : '?');
              e->pos = ngx_copy(e->pos, r->args.data, r->args.len);
          }
-@@ -1261,6 +1312,11 @@ ngx_http_script_regex_end_code(ngx_http_
+@@ -1255,6 +1306,11 @@ ngx_http_script_regex_end_code(ngx_http_
          e->buf.len = e->args - e->buf.data;
  
          if (code->add_args && r->args.len) {
@@ -1168,7 +1168,7 @@ diff --git src/http/ngx_http_script.c src/http/ngx_http_script.c
              *e->pos++ = '&';
              e->pos = ngx_copy(e->pos, r->args.data, r->args.len);
          }
-@@ -1342,6 +1398,7 @@ ngx_http_script_copy_capture_len_code(ng
+@@ -1336,6 +1392,7 @@ ngx_http_script_copy_capture_len_code(ng
  {
      int                                  *cap;
      u_char                               *p;
@@ -1176,7 +1176,7 @@ diff --git src/http/ngx_http_script.c src/http/ngx_http_script.c
      ngx_uint_t                            n;
      ngx_http_request_t                   *r;
      ngx_http_script_copy_capture_code_t  *code;
-@@ -1357,17 +1414,17 @@ ngx_http_script_copy_capture_len_code(ng
+@@ -1351,17 +1408,17 @@ ngx_http_script_copy_capture_len_code(ng
      if (n < r->ncaptures) {
  
          cap = r->captures;
@@ -1199,7 +1199,7 @@ diff --git src/http/ngx_http_script.c src/http/ngx_http_script.c
          }
      }
  
-@@ -1380,6 +1437,8 @@ ngx_http_script_copy_capture_code(ngx_ht
+@@ -1374,6 +1431,8 @@ ngx_http_script_copy_capture_code(ngx_ht
  {
      int                                  *cap;
      u_char                               *p, *pos;
@@ -1208,7 +1208,7 @@ diff --git src/http/ngx_http_script.c src/http/ngx_http_script.c
      ngx_uint_t                            n;
      ngx_http_request_t                   *r;
      ngx_http_script_copy_capture_code_t  *code;
-@@ -1397,16 +1456,27 @@ ngx_http_script_copy_capture_code(ngx_ht
+@@ -1391,16 +1450,27 @@ ngx_http_script_copy_capture_code(ngx_ht
      if (n < r->ncaptures) {
  
          cap = r->captures;
@@ -1241,7 +1241,7 @@ diff --git src/http/ngx_http_script.c src/http/ngx_http_script.c
          }
      }
  
-@@ -1483,6 +1553,8 @@ ngx_http_script_full_name_code(ngx_http_
+@@ -1477,6 +1547,8 @@ ngx_http_script_full_name_code(ngx_http_
      }
  
      e->buf = value;
@@ -1250,7 +1250,7 @@ diff --git src/http/ngx_http_script.c src/http/ngx_http_script.c
  
      ngx_log_debug1(NGX_LOG_DEBUG_HTTP, e->request->connection->log, 0,
                     "http script fullname: \"%V\"", &value);
-@@ -1789,8 +1861,19 @@ ngx_http_script_complex_value_code(ngx_h
+@@ -1783,8 +1855,19 @@ ngx_http_script_complex_value_code(ngx_h
      }
  
      e->pos = e->buf.data;
