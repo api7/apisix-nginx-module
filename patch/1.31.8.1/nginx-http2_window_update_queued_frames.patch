@@ -1,0 +1,57 @@
+diff --git src/http/v2/ngx_http_v2.c src/http/v2/ngx_http_v2.c
+--- src/http/v2/ngx_http_v2.c
++++ src/http/v2/ngx_http_v2.c
+@@ -2561,13 +2561,13 @@ ngx_http_v2_state_window_update(ngx_http
+         return ngx_http_v2_state_complete(h2c, pos, end);
+     }
+ 
+-    if (window > NGX_HTTP_V2_MAX_WINDOW - h2c->send_window) {
++    if (window > NGX_HTTP_V2_MAX_WINDOW - h2c->send_window - h2c->send_queued) {
+         ngx_log_error(NGX_LOG_INFO, h2c->connection->log, 0,
+                       "client violated connection flow control: "
+                       "received WINDOW_UPDATE frame "
+                       "with window increment %uz "
+                       "not allowed for window %uz",
+-                      window, h2c->send_window);
++                      window, h2c->send_window + h2c->send_queued);
+ 
+         return ngx_http_v2_connection_error(h2c, NGX_HTTP_V2_FLOW_CTRL_ERROR);
+     }
+diff --git src/http/v2/ngx_http_v2.h src/http/v2/ngx_http_v2.h
+--- src/http/v2/ngx_http_v2.h
++++ src/http/v2/ngx_http_v2.h
+@@ -135,6 +135,7 @@ struct ngx_http_v2_connection_s {
+     ngx_uint_t                       refused_streams;
+ 
+     size_t                           send_window;
++    size_t                           send_queued;
+     size_t                           recv_window;
+     size_t                           init_window;
+ 
+diff --git src/http/v2/ngx_http_v2_filter_module.c src/http/v2/ngx_http_v2_filter_module.c
+--- src/http/v2/ngx_http_v2_filter_module.c
++++ src/http/v2/ngx_http_v2_filter_module.c
+@@ -1239,6 +1239,7 @@ ngx_http_v2_send_chain(ngx_connection_t
+             ngx_http_v2_queue_frame(h2c, frame);
+ 
+             h2c->send_window -= frame_size;
++            h2c->send_queued += frame_size;
+ 
+             stream->send_window -= frame_size;
+             stream->queued++;
+@@ -1631,6 +1632,7 @@ done:
+     stream->request->header_size += NGX_HTTP_V2_FRAME_HEADER_SIZE;
+ 
+     h2c->payload_bytes += frame->length;
++    h2c->send_queued -= frame->length;
+ 
+     ngx_http_v2_handle_frame(stream, frame);
+ 
+@@ -1765,6 +1767,7 @@ ngx_http_v2_filter_cleanup(void *data)
+     }
+ 
+     h2c->send_window += window;
++    h2c->send_queued -= window;
+ }
+ 
+ 
