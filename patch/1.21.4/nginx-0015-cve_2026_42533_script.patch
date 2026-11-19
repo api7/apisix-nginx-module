@@ -300,6 +300,15 @@ diff --git src/http/modules/ngx_http_log_module.c src/http/modules/ngx_http_log_
  
  
  static void *ngx_http_log_create_main_conf(ngx_conf_t *cf);
+@@ -253,7 +256,7 @@ static ngx_http_log_var_t  ngx_http_log_
+     { ngx_string("bytes_sent"), NGX_OFF_T_LEN, ngx_http_log_bytes_sent },
+     { ngx_string("body_bytes_sent"), NGX_OFF_T_LEN,
+                           ngx_http_log_body_bytes_sent },
+-    { ngx_string("request_length"), NGX_SIZE_T_LEN,
++    { ngx_string("request_length"), NGX_OFF_T_LEN,
+                           ngx_http_log_request_length },
+ 
+     { ngx_null_string, 0, NULL }
 @@ -263,7 +266,7 @@ static ngx_http_log_var_t  ngx_http_log_
  static ngx_int_t
  ngx_http_log_handler(ngx_http_request_t *r)
