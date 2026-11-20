@@ -2,50 +2,50 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ release/1.15 ]
   pull_request:
-    branches: [ main ]
+    branches: [ release/1.15 ]
 
 jobs:
   build:
-    strategy:
-      matrix:
-        op_version:
-          - "1.21.4.1"
-          - "1.21.4.2"
-
-    runs-on: "ubuntu-20.04"
+    # The 1.15 line is built into apisix-base 1.21.4.2.x (OpenResty 1.21.4.2).
+    # Build it with the apisix-base script outside its "latest" mode, so the
+    # other modules have the versions apisix-base pins, and this checkout is
+    # used for apisix-nginx-module.
+    runs-on: "ubuntu-22.04"
 
     env:
-      OPENRESTY_VERSION: ${{ matrix.op_version }}
       OPENRESTY_PREFIX: "/usr/local/openresty"
+      BUILD_SCRIPT_URL: "https://raw.githubusercontent.com/api7/apisix-build-tools/apisix-base/1.21.4.2.3/build-apisix-base.sh"
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Clang
         uses: egor-tensin/setup-clang@v1
 
       - name: Get dependencies
         run: |
+          sudo apt update
           sudo apt install -y cpanminus build-essential libncurses5-dev libreadline-dev libssl-dev perl luarocks
           sudo luarocks install lua-resty-http > build.log 2>&1 || (cat build.log && exit 1)
 
       - name: Before install
         run: |
-          sudo cpanm --notest Test::Nginx > build.log 2>&1 || (cat build.log && exit 1)
-          git clone https://github.com/iresty/test-nginx.git test-nginx
+          sudo cpanm --notest Test::Nginx@0.30 > build.log 2>&1 || (cat build.log && exit 1)
+          git clone --depth 1 -b v0.30 https://github.com/openresty/test-nginx.git test-nginx
 
       - name: Install
         run: |
-          wget https://raw.githubusercontent.com/api7/apisix-build-tools/master/build-apisix-base.sh
+          wget "$BUILD_SCRIPT_URL"
           chmod +x build-apisix-base.sh
-          OR_PREFIX=$OPENRESTY_PREFIX CC="clang -fsanitize=address -fcolor-diagnostics -Qunused-arguments" \
-              cc_opt="-Werror" ./build-apisix-base.sh latest
-
+          OR_PREFIX=$OPENRESTY_PREFIX debug_args=--with-debug \
+              CC="clang -fsanitize=address -fcolor-diagnostics -Qunused-arguments" \
+              cc_opt="-Werror" ./build-apisix-base.sh
 
       - name: Script
         run: |
           export PATH=$OPENRESTY_PREFIX/nginx/sbin:$PATH
+          nginx -V
           prove -I. -Itest-nginx/lib -r t/
