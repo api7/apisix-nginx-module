@@ -1,0 +1,46 @@
+diff --git config config
+--- config
++++ config
+@@ -58,6 +58,11 @@ fi
+ 
+ have=NDK . auto/have
+ 
++# Security fixes may backport this interface without changing nginx_version.
++if grep -F -q 'ngx_http_script_complex_value_end_code_t' src/http/ngx_http_script.h; then
++    have=NDK_HAVE_HTTP_SCRIPT_COMPLEX_VALUE_END_CODE . auto/have
++fi
++
+ ##############
+ ## INCLUDES ##
+ ##############
+diff --git src/ndk_rewrite.c src/ndk_rewrite.c
+--- src/ndk_rewrite.c
++++ src/ndk_rewrite.c
+@@ -17,6 +17,9 @@ ndk_http_rewrite_value (ngx_conf_t *cf,
+     ngx_http_script_compile_t              sc;
+     ngx_http_script_value_code_t          *val;
+     ngx_http_script_complex_value_code_t  *complex;
++#ifdef NDK_HAVE_HTTP_SCRIPT_COMPLEX_VALUE_END_CODE
++    ngx_http_script_complex_value_end_code_t  *complex_end;
++#endif
+ 
+     n = ngx_http_script_variables_count(value);
+ 
+@@ -63,6 +66,17 @@ ndk_http_rewrite_value (ngx_conf_t *cf,
+         return NGX_CONF_ERROR;
+     }
+ 
++#ifdef NDK_HAVE_HTTP_SCRIPT_COMPLEX_VALUE_END_CODE
++    complex_end = ngx_http_script_add_code(lcf->codes,
++                              sizeof(ngx_http_script_complex_value_end_code_t),
++                              &complex);
++    if (complex_end == NULL) {
++        return NGX_CONF_ERROR;
++    }
++
++    complex_end->code = ngx_http_script_complex_value_end_code;
++#endif
++
+     return NGX_CONF_OK;
+ }
+ 
