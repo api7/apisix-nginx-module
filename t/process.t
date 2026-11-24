@@ -46,3 +46,37 @@ __DATA__
     }
 --- response_body
 ok
+
+
+
+=== TEST 3: generation and identity of a single process
+--- config
+    location /t {
+        content_by_lua_block {
+            local process = require("resty.apisix.process")
+            ngx.say("generation: ", process.get_generation())
+
+            local id = assert(process.get_identity())
+            ngx.say(id.type, " worker_id=", id.worker_id, " slot=", id.slot,
+                    " count=", id.worker_count, " pid=",
+                    id.pid == ngx.worker.pid(), " generation=", id.generation)
+        }
+    }
+--- response_body
+generation: 1
+single worker_id=0 slot=0 count=1 pid=true generation=1
+
+
+
+=== TEST 4: no generation before the first configuration is committed
+--- http_config
+    init_by_lua_block {
+        local process = require("resty.apisix.process")
+        ngx.log(ngx.WARN, "generation in init: ", process.get_generation())
+    }
+--- config
+    location /t {
+        return 200;
+    }
+--- error_log
+generation in init: 0
