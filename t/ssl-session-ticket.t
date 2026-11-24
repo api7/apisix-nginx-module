@@ -25,6 +25,20 @@ repeat_each(1);
 add_block_preprocessor(sub {
     my ($block) = @_;
 
+    # the callback logs its key choices at debug level, which only a build
+    # --with-debug has: without it, check the rest only
+    my $debug_log = qr/ssl ticket (en|de)crypt(,| refused)/;
+    my $error_log = $block->error_log;
+    if ($NoDebug && defined $error_log) {
+        if (ref $error_log) {
+            $block->set_value("error_log", undef) if "$error_log" =~ $debug_log;
+
+        } else {
+            my @lines = grep { $_ !~ $debug_log } split /\n/, $error_log;
+            $block->set_value("error_log", @lines ? join("\n", @lines) . "\n" : undef);
+        }
+    }
+
     # nodes A and B stand for two gateways of a cluster: the same
     # certificate, nothing else in common
     if (!$block->http_config) {

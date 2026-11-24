@@ -23,6 +23,20 @@ repeat_each(1);
 add_block_preprocessor(sub {
     my ($block) = @_;
 
+    # the callback logs its key choices at debug level, which only a build
+    # --with-debug has: without it, check the rest only
+    my $debug_log = qr/ssl ticket (en|de)crypt(,| refused)/;
+    my $error_log = $block->error_log;
+    if ($NoDebug && defined $error_log) {
+        if (ref $error_log) {
+            $block->set_value("error_log", undef) if "$error_log" =~ $debug_log;
+
+        } else {
+            my @lines = grep { $_ !~ $debug_log } split /\n/, $error_log;
+            $block->set_value("error_log", @lines ? join("\n", @lines) . "\n" : undef);
+        }
+    }
+
     # Nodes A and B stand for two gateways of a cluster, with the stream
     # defaults: no session cache at all. The client side and the control of
     # the stream contexts run in the http subsystem, see t/lib.
@@ -203,8 +217,8 @@ apisix ssl ticket
             local a = "unix:$TEST_NGINX_HTML_DIR/a.sock"
             local b = "unix:$TEST_NGINX_HTML_DIR/b.sock"
 
-            h.stream(ctl, "enable 1 1")
-            h.stream(ctl, "enable 2 1")
+            h.stream_ok(ctl, "enable 1 1")
+            h.stream_ok(ctl, "enable 2 1")
 
             local r = assert(h.connect(a))
             ngx.say(r.protocol, " first key: ", r.ticket == h.name(1),
@@ -242,8 +256,8 @@ apisix ssl ticket decrypt, key: "01010101010101010101010101010101" (default)
             local a = "unix:$TEST_NGINX_HTML_DIR/a.sock"
             local b = "unix:$TEST_NGINX_HTML_DIR/b.sock"
 
-            h.stream(ctl, "enable 1 1")
-            h.stream(ctl, "enable 2 1")
+            h.stream_ok(ctl, "enable 1 1")
+            h.stream_ok(ctl, "enable 2 1")
 
             local r = assert(h.connect(a))
             ngx.say(r.protocol, " first key: ", r.ticket == h.name(1),
@@ -285,8 +299,8 @@ apisix ssl ticket encrypt, key: "01010101010101010101010101010101" (reused sessi
                 assert(h.stream(ctl, "set_keys 2 " .. keys) == "ok")
             end
 
-            h.stream(ctl, "enable 1 1")
-            h.stream(ctl, "enable 2 1")
+            h.stream_ok(ctl, "enable 1 1")
+            h.stream_ok(ctl, "enable 2 1")
             local s1 = assert(h.connect(a))
 
             set("2 1")
@@ -337,8 +351,8 @@ apisix ssl ticket decrypt, key: "01010101010101010101010101010101" not found
                 assert(h.stream(ctl, "set_keys 2 " .. keys) == "ok")
             end
 
-            h.stream(ctl, "enable 1 1")
-            h.stream(ctl, "enable 2 1")
+            h.stream_ok(ctl, "enable 1 1")
+            h.stream_ok(ctl, "enable 2 1")
             local s1 = assert(h.connect(a))
 
             set("2 1")
@@ -384,7 +398,7 @@ apisix ssl ticket decrypt, key: "01010101010101010101010101010101" not found
             local a = "unix:$TEST_NGINX_HTML_DIR/a.sock"
             local b = "unix:$TEST_NGINX_HTML_DIR/b.sock"
 
-            h.stream(ctl, "enable 1 1")
+            h.stream_ok(ctl, "enable 1 1")
             ngx.say(h.stream(ctl, "contexts"))
 
             ngx.say("A: ", assert(h.connect(a)).ticket == h.name(1))
@@ -411,13 +425,13 @@ B: nil
             local a = "unix:$TEST_NGINX_HTML_DIR/a.sock"
 
             for _, sync in ipairs({"on", "off"}) do
-                h.stream(ctl, "sync " .. sync)
-                h.stream(ctl, "hold client_hello on")
+                h.stream_ok(ctl, "sync " .. sync)
+                h.stream_ok(ctl, "hold client_hello on")
                 local th = ngx.thread.spawn(h.connect, a)
                 h.stream_wait_held(ctl, "client_hello")
 
-                h.stream(ctl, "enable 1 1")
-                h.stream(ctl, "hold client_hello off")
+                h.stream_ok(ctl, "enable 1 1")
+                h.stream_ok(ctl, "hold client_hello off")
 
                 local ok, r, err = ngx.thread.wait(th)
                 assert(ok and r, err)
@@ -425,7 +439,7 @@ B: nil
                         r.ticket == h.name(1),
                         ", connection tickets: ", r.conn_tickets)
 
-                h.stream(ctl, "disable 1")
+                h.stream_ok(ctl, "disable 1")
             end
         }
     }
@@ -447,27 +461,27 @@ ticket, then a ticket of the keys is refused at the next client hello.
             local ctl = "unix:$TEST_NGINX_HTML_DIR/ctl.sock"
             local a = "unix:$TEST_NGINX_HTML_DIR/a.sock"
 
-            h.stream(ctl, "enable 1 1")
+            h.stream_ok(ctl, "enable 1 1")
             local s = assert(h.connect(a))
 
-            h.stream(ctl, "hold certificate on")
+            h.stream_ok(ctl, "hold certificate on")
             local th = ngx.thread.spawn(h.connect, a)
             h.stream_wait_held(ctl, "certificate")
-            h.stream(ctl, "disable_tickets 1")
-            h.stream(ctl, "hold certificate off")
+            h.stream_ok(ctl, "disable_tickets 1")
+            h.stream_ok(ctl, "hold certificate off")
 
             local ok, r, err = ngx.thread.wait(th)
             assert(ok and r, err)
             ngx.say("encrypt: ticket ", r.ticket,
                     ", connection tickets: ", r.conn_tickets)
 
-            h.stream(ctl, "enable_tickets 1")
-            h.stream(ctl, "sync off")
-            h.stream(ctl, "hold client_hello on")
+            h.stream_ok(ctl, "enable_tickets 1")
+            h.stream_ok(ctl, "sync off")
+            h.stream_ok(ctl, "hold client_hello on")
             th = ngx.thread.spawn(h.connect, a, {session = s.session})
             h.stream_wait_held(ctl, "client_hello")
-            h.stream(ctl, "disable_tickets 1")
-            h.stream(ctl, "hold client_hello off")
+            h.stream_ok(ctl, "disable_tickets 1")
+            h.stream_ok(ctl, "hold client_hello off")
 
             ok, r, err = ngx.thread.wait(th)
             assert(ok and r, err)
@@ -506,7 +520,7 @@ apisix ssl ticket decrypt refused, tickets are off
             assert(sock:tlshandshake({server_name = "test.com"}))
             ngx.say("open: ", line(sock))
 
-            h.stream(ctl, "enable 3 1")
+            h.stream_ok(ctl, "enable 3 1")
             ngx.say("open: ", line(sock))
 
             local new = ngx.socket.tcp()
@@ -514,7 +528,7 @@ apisix ssl ticket decrypt refused, tickets are off
             assert(new:tlshandshake({server_name = "test.com"}))
             ngx.say("new: ", line(new))
 
-            h.stream(ctl, "disable 3")
+            h.stream_ok(ctl, "disable 3")
             ngx.say(h.stream(ctl, "contexts"):match("3 [^\n]+"))
             ngx.say("open: ", line(sock))
             ngx.say("new: ", line(new))
@@ -544,7 +558,7 @@ new: . TLSv1.3 1
             local ctl = "unix:$TEST_NGINX_HTML_DIR/ctl.sock"
             local a = "unix:$TEST_NGINX_HTML_DIR/a.sock"
 
-            h.stream(ctl, "enable 1 51")
+            h.stream_ok(ctl, "enable 1 51")
 
             local r, err = h.connect(a)
             ngx.say("connected: ", r ~= nil)
@@ -568,7 +582,7 @@ apisix ssl ticket encrypt with key "33333333333333333333333333333333" failed for
             local a = "unix:$TEST_NGINX_HTML_DIR/a.sock"
             local native = "unix:$TEST_NGINX_HTML_DIR/native.sock"
 
-            h.stream(ctl, "enable 1 1")
+            h.stream_ok(ctl, "enable 1 1")
 
             local n = assert(h.connect(native))
             ngx.say("native ticket: ", n.ticket ~= nil

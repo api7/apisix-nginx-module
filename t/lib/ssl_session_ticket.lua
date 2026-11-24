@@ -151,8 +151,12 @@ function _M.connect(addr, opts)
     end
 
     -- the session after the response carries what TLSv1.3 sends late
-    local session = sock:getsslsession()
+    local session, sess_err = sock:getsslsession()
     sock:close()
+    -- "not resumable" is what a session without a ticket nor an id gets
+    if not session and sess_err and sess_err ~= "not resumable" then
+        return nil, "getsslsession: " .. sess_err
+    end
 
     local name, bytes = ticket_of(session)
 
@@ -390,6 +394,15 @@ function _M.stream(ctl, cmd)
     sock:close()
 
     return (data:gsub("\n$", ""))
+end
+
+
+-- _M.stream() for a command that changes the stream side: it must succeed
+function _M.stream_ok(ctl, cmd)
+    local res = _M.stream(ctl, cmd)
+    if res ~= "ok" then
+        error("stream command \"" .. cmd .. "\" failed: " .. res)
+    end
 end
 
 
